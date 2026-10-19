@@ -128,6 +128,13 @@ CREATE TABLE attention_items (
 );
 `,
   },
+  {
+    version: 2,
+    sql: `
+ALTER TABLE attempts ADD COLUMN stdout_text TEXT;
+ALTER TABLE attempts ADD COLUMN log_path TEXT;
+`,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;

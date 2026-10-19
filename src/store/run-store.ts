@@ -225,6 +225,13 @@ export class RunStore {
       );
   }
 
+  listAttempts(runId: string): AttemptRow[] {
+    const rows = this.database
+      .prepare("SELECT * FROM attempts WHERE run_id = ? ORDER BY sequence_no")
+      .all(runId) as Raw[];
+    return rows.map(toAttempt);
+  }
+
   listTasks(runId: string): TaskRow[] {
     const rows = this.database
       .prepare("SELECT * FROM tasks WHERE run_id = ? ORDER BY source_order")
@@ -262,6 +269,32 @@ export class RunStore {
   }
 
   /** Attempts of one step within one task (or without a task), including settled ones. */
+  /** Records bounded stdout and the log location for an attempt that has finished running. */
+  setAttemptOutput(attemptId: string, output: { stdout: string; logPath: string | null }): void {
+    this.database
+      .prepare("UPDATE attempts SET stdout_text = ?, log_path = ? WHERE attempt_id = ?")
+      .run(output.stdout, output.logPath, attemptId);
+  }
+
+  /** stdout of the latest attempt of `stepId` whose outcome was `complete` (spec §3.4). */
+  latestSuccessfulStdout(runId: string, stepId: string): string | undefined {
+    const row = this.database
+      .prepare(
+        "SELECT a.stdout_text AS stdout FROM attempts a JOIN transitions t ON t.attempt_id = a.attempt_id WHERE a.run_id = ? AND a.step_id = ? AND t.outcome = 'complete' ORDER BY a.sequence_no DESC LIMIT 1",
+      )
+      .get(runId, stepId) as { stdout: string | null } | undefined;
+    return row?.stdout ?? undefined;
+  }
+
+  /** Marks every open attention item of the run resolved. Items are kept, never deleted. */
+  resolveOpenAttention(runId: string, resolution: string): void {
+    this.database
+      .prepare(
+        "UPDATE attention_items SET resolution = ?, resolved_at = ? WHERE run_id = ? AND resolved_at IS NULL",
+      )
+      .run(resolution, this.clock(), runId);
+  }
+
   countAttempts(runId: string, stepId: string, taskId: string | null): number {
     const row = this.database
       .prepare(

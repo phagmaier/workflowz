@@ -38,13 +38,13 @@
 
 ## Phase 3 — Sequential runner + fake executor + command executor
 
-- [ ] 3.1 Implement a single active-run scheduler and the common executor/adapter interfaces.
+- [x] 3.1 Implement a single active-run scheduler and the common executor/adapter interfaces.
 - [ ] 3.2 Implement fake harness as a child process or equivalent process-boundary fixture that can report, crash, hang, and resume for a correction turn.
-- [ ] 3.3 Implement command executor using argv and cwd, bounded logging, exit-code normalization, stdout capture, and optional timeouts.
-- [ ] 3.4 Implement process start/settle handling with no stage overlap, process-group ownership and termination/reaping on stop.
-- [ ] 3.5 Add pause-after-current, stop-now, resume and manual cursor/task override operations with durable history.
-- [ ] 3.6 Test command failure, cancellation, timeout, bad paths, wrong working directory, and output interpolation; no network required.
-- [ ] 3.7 Define the adapter conformance suite every harness adapter must pass offline (launch, stream parse, settle detection, report accept/reject/duplicate, correction-once, crash/timeout mapping, stop/terminate, no-resume fallback), reusing the fake-harness fixtures.
+- [x] 3.3 Implement command executor using argv and cwd, bounded logging, exit-code normalization, stdout capture, and optional timeouts.
+- [x] 3.4 Implement process start/settle handling with no stage overlap, process-group ownership and termination/reaping on stop.
+- [x] 3.5 Add pause-after-current, stop-now, resume and manual cursor/task override operations with durable history.
+- [x] 3.6 Test command failure, cancellation, timeout, bad paths, wrong working directory, and output interpolation; no network required.
+- [x] 3.7 Define the adapter conformance suite every harness adapter must pass offline (launch, stream parse, settle detection, report accept/reject/duplicate, correction-once, crash/timeout mapping, stop/terminate, no-resume fallback), reusing the fake-harness fixtures.
 
 **Gate:** A headless fake workflow with command steps follows deterministic branches and can be paused/stopped/restarted without concurrent stages.
 

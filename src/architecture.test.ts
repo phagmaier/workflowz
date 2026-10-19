@@ -79,17 +79,32 @@ describe("module boundaries", () => {
     }
   });
 
-  it("only the adapter probe, the store, and the app layer may touch processes or the filesystem", () => {
+  it("only adapters, the runner, the store, and the app layer may touch processes or the filesystem", () => {
     for (const file of productionFiles()) {
       if (
         file.relative.startsWith("app/") ||
         file.relative.startsWith("store/") ||
-        file.relative === path.join("adapters", "probe.ts")
+        file.relative.startsWith("adapters/") ||
+        file.relative.startsWith("runner/")
       ) {
         continue;
       }
       for (const specifier of file.imports) {
         assert.ok(!PROCESS_OR_IO.test(specifier), `${file.relative} imports '${specifier}'`);
+      }
+    }
+  });
+
+  it("adapters know nothing about workflows: they never import the engine, store, or runner", () => {
+    for (const file of productionFiles().filter((f) => f.relative.startsWith("adapters/"))) {
+      for (const specifier of file.imports) {
+        const forbidden = ["engine/", "store/", "runner/"].some((layer) =>
+          specifier.includes(layer),
+        );
+        assert.ok(
+          !forbidden,
+          `${file.relative} imports '${specifier}'; adapters must stay workflow-agnostic`,
+        );
       }
     }
   });

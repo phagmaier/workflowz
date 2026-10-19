@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Approved architecture for a personal-use MVP. Phases 0–2 of [`todo.md`](todo.md) are implemented: project tooling, the strict YAML parser, the typed v1 schema, the policy compiler, and the SQLite store with a transactional run coordinator. The simulated task loop runs end to end without any harness. No process execution or harness adapter exists yet (Phase 3 onward).
+**Status:** Approved architecture for a personal-use MVP. Phases 0–3 of [`todo.md`](todo.md) are implemented: project tooling, the strict YAML parser, the typed v1 schema, the policy compiler, the SQLite store, the transactional run coordinator, and a sequential runner that executes command steps and fake agents. Harness adapters for real CLIs and the `wf report` channel are not written yet (phases 4 and 6).
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -53,6 +53,8 @@ npm run format               # Biome auto-fix
 npm test                     # build to dist/, then node:test over dist/**/*.test.js
 npm run validate -- examples/overnight.yaml   # strict parse, compile, and path checks
 npm run probe:harnesses      # offline version and help-text probe of codex, pi, omp, opencode, claude
+
+Process tests start real children: `sh`, `sleep`, and `node`. They need a POSIX system.
 ```
 
 `npm run validate` exits 0 for a runnable workflow (warnings allowed), 1 when it has errors, and 2 when the file cannot be read. Diagnostics are printed as `file:line:column: severity [code] path: message`.
@@ -64,9 +66,11 @@ npm run probe:harnesses      # offline version and help-text probe of codex, pi,
 | `src/contracts/` | Strict YAML loader, typed v1 schema, diagnostics, placeholder grammar. No engine or process imports. |
 | `src/engine/` | Pure compiler, routing, and reducer, plus the run coordinator. The coordinator is the only writer of run state; it has no process or filesystem access. |
 | `src/store/` | SQLite migrations (`user_version`), transaction wrapper, and the run repository. The only module that opens the database. |
-| `src/adapters/` | Harness registry (data only) and the offline harness probe, the only module that starts child processes. |
+| `src/adapters/` | Process supervision (process groups, timeouts, reaping), command executor, agent adapter contract, environment allowlist, harness registry (data only), and the offline harness probe. Adapters never import the engine. |
+| `src/runner/` | `RunService`: drives one attempt at a time, prepares attempts, maps process results to settlements, handles pause, stop, and recovery. |
 | `src/app/` | Command-line entry points. |
 | `src/architecture.test.ts` | Fails the build if an import crosses one of these boundaries. |
+| `test/fixtures/fake-agent.mjs` | Test-only stand-in for a harness: report, crash, hang, and child-process modes. |
 | `test/fixtures/workflows/` | Invalid and warning-only workflow fixtures. Every invalid fixture must be listed with its expected code. |
 | `docs/` | [Harness compatibility note](docs/harness-compatibility.md) and [schema v1 decisions](docs/schema-v1.md). |
 

@@ -1,23 +1,32 @@
 /**
  * The run coordinator: the only code that changes a run's persisted state (architecture §2.1).
  *
- * Each step has the same shape. Read the run, decide with the pure reducer, then write the
- * decision together with its event, all in one transaction. A failed write therefore leaves
- * nothing half-applied. Settlement is rejected before any write when the outcome is not declared,
- * so a bad report never changes state (spec §4.2).
+ * Each change follows the same shape. Read the run, decide with the pure reducer, then write the
+ * decision together with its event, all in one transaction, so a failed write leaves nothing
+ * half-applied. A settlement with an undeclared outcome is refused before any write (spec §4.2).
  *
- * This module does not start processes. An agent or command attempt is handed to the caller as
- * `attempt`, and the caller reports back with `settle`. Process ownership arrives in phase 3.
+ * The coordinator never starts a process. An agent or command attempt is handed to the caller as
+ * `attempt`, and the caller reports back with `settle`. The runner (src/runner) owns processes.
  */
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { Diagnostic } from "../contracts/diagnostics.js";
 import { hasErrors } from "../contracts/diagnostics.js";
 import { isReservedName, isSystemOutcome, type SystemOutcome } from "../contracts/identifiers.js";
-import type { AttemptStatus, RunStatus } from "../contracts/run-state.js";
-import { ACTIVE_ATTEMPT_STATUSES } from "../contracts/run-state.js";
+import {
+  ACTIVE_ATTEMPT_STATUSES,
+  type AttemptStatus,
+  type AttentionSeverity,
+  type RunStatus,
+} from "../contracts/run-state.js";
 import type { WorkflowDatabase } from "../store/database.js";
-import { type AttemptRow, type NewTask, type RunRow, RunStore } from "../store/run-store.js";
+import {
+  type AttemptRow,
+  type NewTask,
+  type RunRow,
+  RunStore,
+  type TaskRow,
+} from "../store/run-store.js";
 import { checkWorkflowText } from "./check.js";
 import type { CompiledWorkflow } from "./model.js";
 import {
@@ -30,6 +39,8 @@ import {
 
 /** Upper bound on consecutive engine-only steps in one `advance` call. Beyond it the run pauses. */
 export const MAX_ENGINE_STEPS_PER_ADVANCE = 10_000;
+
+const USER_PAUSE_MESSAGE = "the run was paused by request; it stops before the next step";
 
 export class WorkflowInvalidError extends Error {
   constructor(readonly diagnostics: readonly Diagnostic[]) {
@@ -91,11 +102,16 @@ export type AdvanceResult =
 /** What the caller observed about an attempt. A system settlement comes from the runner, never an agent. */
 export type Settlement =
   | { readonly kind: "outcome"; readonly outcome: string }
-  | { readonly kind: "system"; readonly code: SystemOutcome };
+  | { readonly kind: "system"; readonly code: SystemOutcome; readonly detail?: string };
 
 export interface SettleResult {
   readonly outcome: string;
   readonly decision: Decision;
+}
+
+export interface AttemptOutput {
+  readonly stdout: string;
+  readonly logPath: string | null;
 }
 
 export interface CoordinatorOptions {
@@ -135,8 +151,9 @@ export class RunCoordinator {
     if (!checked.compiled || hasErrors(checked.diagnostics)) {
       throw new WorkflowInvalidError(checked.diagnostics);
     }
+    const compiled = checked.compiled;
     const tasks = input.tasks ?? [];
-    if (tasks.length > 0 && checked.compiled.tasksSourcePath === undefined) {
+    if (tasks.length > 0 && compiled.tasksSourcePath === undefined) {
       throw new RunStateError("tasks were supplied, but the workflow declares no tasks.source");
     }
     const sourceDir = path.resolve(input.workflowDir);
@@ -150,11 +167,11 @@ export class RunCoordinator {
       this.store.createRun({
         runId,
         revisionId,
-        projectRoot: checked.compiled?.projectRoot ?? sourceDir,
-        startStepId: checked.compiled?.start ?? "",
+        projectRoot: compiled.projectRoot,
+        startStepId: compiled.start,
         tasks,
       });
-      this.compiledByRevision.set(revisionId, checked.compiled as CompiledWorkflow);
+      this.compiledByRevision.set(revisionId, compiled);
       return runId;
     });
   }
@@ -172,9 +189,9 @@ export class RunCoordinator {
   }
 
   /**
-   * Runs engine-only steps in place until the cursor reaches an agent or command step (which
-   * becomes an attempt), the run finishes, or the run stops. Only one attempt may be active at a
-   * time, so an active attempt is returned as `in_progress` without starting another.
+   * Runs engine-only steps in place until the cursor reaches an agent or command step (which becomes
+   * an attempt), the run finishes, or the run stops. An active attempt is returned as `in_progress`,
+   * so a second one never starts while the first is unsettled.
    */
   advance(runId: string): AdvanceResult {
     for (let steps = 0; steps < this.maxEngineSteps; steps += 1) {
@@ -196,7 +213,7 @@ export class RunCoordinator {
 
   /**
    * Records what happened to an attempt and routes it. Exactly one transition is committed per
-   * attempt. A second settlement, or one for an attempt that already settled, is refused.
+   * attempt, and a second settlement is refused.
    */
   settle(attemptId: string, settlement: Settlement): SettleResult {
     return this.database.transaction(() => {
@@ -208,7 +225,7 @@ export class RunCoordinator {
         throw new AttemptNotActiveError(attemptId, attempt.status);
       }
       const run = this.store.getRun(attempt.runId);
-      if (run.status !== "running") {
+      if (run.status !== "running" && run.status !== "pausing") {
         throw new RunStateError(
           `run ${run.runId} is ${run.status}; attempts settle only while running`,
         );
@@ -224,10 +241,11 @@ export class RunCoordinator {
         outcome = settlement.code;
       } else {
         outcome = settlement.outcome;
-        if (isSystemOutcome(outcome) || isReservedName(outcome)) {
-          throw new UndeclaredOutcomeError(outcome, step.id, step.outcomes);
-        }
-        if (!step.outcomes.includes(outcome)) {
+        if (
+          isSystemOutcome(outcome) ||
+          isReservedName(outcome) ||
+          !step.outcomes.includes(outcome)
+        ) {
           throw new UndeclaredOutcomeError(outcome, step.id, step.outcomes);
         }
       }
@@ -245,18 +263,247 @@ export class RunCoordinator {
         attemptId,
         revisionId: run.revisionId,
         type: "attempt_settled",
-        data: { outcome, status: finalStatus },
+        data: {
+          outcome,
+          status: finalStatus,
+          ...(settlement.kind === "system" && settlement.detail !== undefined
+            ? { detail: settlement.detail }
+            : {}),
+        },
       });
       this.commitRouting(run, step.id, outcome, attemptId, decision, `attempt ${attemptId}`);
       return { outcome, decision };
     });
   }
 
+  /** Stores bounded stdout and the log location for an attempt. Called before it settles. */
+  recordOutput(attemptId: string, output: AttemptOutput): void {
+    this.store.setAttemptOutput(attemptId, output);
+  }
+
+  /**
+   * Pause after the current step (spec §2.3). With no attempt running, the run pauses now. With one
+   * running, it pauses as soon as that attempt has settled and been routed.
+   */
+  requestPause(runId: string): void {
+    this.database.transaction(() => {
+      const run = this.store.getRun(runId);
+      if (run.status === "pausing") {
+        return;
+      }
+      if (run.status !== "running") {
+        throw new RunStateError(`run ${runId} is ${run.status}; only a running run can be paused`);
+      }
+      if (this.store.activeAttempt(runId)) {
+        this.store.updateRun(runId, { status: "pausing" });
+        this.store.appendEvent({ runId, revisionId: run.revisionId, type: "pause_requested" });
+      } else {
+        this.pauseRun(run, USER_PAUSE_MESSAGE, "user_pause", null, "info");
+      }
+    });
+  }
+
+  /** `paused` or `interrupted` → `running`. The cursor step runs again from its beginning. */
+  resume(runId: string, note?: string): void {
+    this.database.transaction(() => {
+      const run = this.store.getRun(runId);
+      if (run.status !== "paused" && run.status !== "interrupted") {
+        throw new RunStateError(
+          `run ${runId} is ${run.status}; only a paused or interrupted run can resume`,
+        );
+      }
+      this.store.updateRun(runId, { status: "running" });
+      this.store.resolveOpenAttention(runId, note ?? "resumed");
+      this.store.appendEvent({
+        runId,
+        revisionId: run.revisionId,
+        type: "run_resumed",
+        data: note === undefined ? {} : { note },
+      });
+    });
+  }
+
+  /**
+   * Stop now (spec §6). The caller must have terminated any running process first; this method
+   * records the outcome, so no completed step is reported for the stopped one.
+   */
+  recordStop(runId: string, reason: string): void {
+    this.database.transaction(() => {
+      const run = this.store.getRun(runId);
+      if (run.status === "completed" || run.status === "stopped") {
+        throw new RunStateError(`run ${runId} is already ${run.status}`);
+      }
+      const active = this.store.activeAttempt(runId);
+      if (active) {
+        this.store.setAttemptStatus(active.attemptId, "interrupted", { errorCode: "stopped" });
+        this.store.appendEvent({
+          runId,
+          attemptId: active.attemptId,
+          revisionId: run.revisionId,
+          type: "attempt_settled",
+          data: { status: "interrupted", reason: "stopped" },
+        });
+      }
+      this.store.updateRun(runId, { status: "stopped", endTime: this.now() });
+      this.store.appendEvent({
+        runId,
+        revisionId: run.revisionId,
+        type: "run_stopped",
+        data: { reason },
+      });
+    });
+  }
+
+  /**
+   * Startup reconciliation (todo 7.1 will refine it). An attempt still marked active after a restart
+   * may or may not have finished its side effects, so it is never replayed. The attempt is marked
+   * interrupted, the run is marked interrupted, and a blocking attention item asks the user to decide.
+   */
+  reconcileAfterRestart(runId: string): boolean {
+    return this.database.transaction(() => {
+      const run = this.store.getRun(runId);
+      if (run.status !== "running" && run.status !== "pausing") {
+        return false;
+      }
+      const active = this.store.activeAttempt(runId);
+      if (!active) {
+        return false;
+      }
+      this.store.setAttemptStatus(active.attemptId, "interrupted", {
+        errorCode: "uncertain_after_restart",
+      });
+      this.store.updateRun(runId, { status: "interrupted" });
+      this.store.appendEvent({
+        runId,
+        attemptId: active.attemptId,
+        revisionId: run.revisionId,
+        type: "run_interrupted",
+        data: { stepId: active.stepId },
+      });
+      this.store.insertAttention({
+        runId,
+        attemptId: active.attemptId,
+        category: "uncertain_attempt",
+        severity: "blocking",
+        message: `step '${active.stepId}' was running when the runner stopped, so its result is unknown. Check its log before resuming; resuming runs the step again.`,
+      });
+      return true;
+    });
+  }
+
+  /** Manual override: move the cursor to a declared step. Requires a paused or interrupted run and a reason. */
+  jumpTo(runId: string, stepId: string, reason: string): void {
+    this.database.transaction(() => {
+      const run = this.requireManualEdit(runId, reason);
+      const compiled = this.compiledFor(run.revisionId);
+      if (!compiled.steps.has(stepId)) {
+        throw new RunStateError(`cannot jump to '${stepId}': the workflow declares no such step`);
+      }
+      this.store.updateRun(runId, { cursorStepId: stepId });
+      this.store.appendEvent({
+        runId,
+        revisionId: run.revisionId,
+        type: "manual_override",
+        data: { action: "jump", from: run.cursorStepId, to: stepId, reason },
+      });
+    });
+  }
+
+  /**
+   * Manual override: skip the cursor step by taking one of its declared outcomes without running it.
+   * The transition is recorded with no attempt, so it is distinguishable from a real result.
+   */
+  skipCurrentStep(runId: string, outcome: string, reason: string): void {
+    this.database.transaction(() => {
+      const run = this.requireManualEdit(runId, reason);
+      const compiled = this.compiledFor(run.revisionId);
+      const step = compiled.steps.get(run.cursorStepId);
+      if (!step) {
+        throw new RunStateError(
+          `run ${runId} has cursor '${run.cursorStepId}', which the workflow does not declare`,
+        );
+      }
+      if (!step.outcomes.includes(outcome)) {
+        throw new UndeclaredOutcomeError(outcome, step.id, step.outcomes);
+      }
+      this.store.appendEvent({
+        runId,
+        revisionId: run.revisionId,
+        type: "manual_override",
+        data: { action: "skip", stepId: step.id, outcome, reason },
+      });
+      this.commitRouting(
+        run,
+        step.id,
+        outcome,
+        null,
+        routeEngineStep(compiled, step.id, outcome),
+        `manual skip of '${step.id}'`,
+      );
+    });
+  }
+
+  /** Manual override: mark a task complete without running its steps. Requires a reason. */
+  markTaskComplete(runId: string, taskId: string, reason: string): void {
+    this.database.transaction(() => {
+      const run = this.requireManualEdit(runId, reason);
+      const task = this.store.listTasks(runId).find((row) => row.taskId === taskId);
+      if (!task) {
+        throw new RunStateError(`run ${runId} has no task ${taskId}`);
+      }
+      if (task.state === "completed") {
+        throw new RunStateError(`task ${taskId} is already completed`);
+      }
+      this.store.setTaskState(taskId, "completed");
+      if (run.activeTaskId === taskId) {
+        this.store.updateRun(runId, { activeTaskId: null });
+      }
+      this.store.appendEvent({
+        runId,
+        revisionId: run.revisionId,
+        type: "manual_override",
+        data: { action: "mark_task_complete", taskId, reason },
+      });
+      this.store.appendEvent({
+        runId,
+        revisionId: run.revisionId,
+        type: "task_completed",
+        data: { taskId, manual: true },
+      });
+    });
+  }
+
+  /** The attempt currently marked active for a run, if any. */
+  activeAttempt(runId: string): AttemptRow | undefined {
+    return this.store.activeAttempt(runId);
+  }
+
+  /** The run row, without its event history. Cheap enough to read before every step. */
+  run(runId: string): RunRow {
+    return this.store.getRun(runId);
+  }
+
+  /** The compiled workflow a run was started from. Read-only; used by the runner to prepare attempts. */
+  workflowFor(runId: string): CompiledWorkflow {
+    return this.compiledFor(this.store.getRun(runId).revisionId);
+  }
+
+  /** Task rows for a run, in source order. */
+  tasks(runId: string): TaskRow[] {
+    return this.store.listTasks(runId);
+  }
+
+  /** stdout of the latest successful run of a command step, for `{{steps.<id>.stdout}}`. */
+  latestStdout(runId: string, stepId: string): string | undefined {
+    return this.store.latestSuccessfulStdout(runId, stepId);
+  }
+
   /** Read-only view of a run's persisted state, for inspection and tests. */
   inspect(runId: string): {
     run: RunRow;
-    tasks: ReturnType<RunStore["listTasks"]>;
+    tasks: TaskRow[];
     activeAttempt: AttemptRow | undefined;
+    attempts: AttemptRow[];
     transitions: ReturnType<RunStore["listTransitions"]>;
     events: ReturnType<RunStore["listEvents"]>;
     attention: ReturnType<RunStore["listAttention"]>;
@@ -265,20 +512,38 @@ export class RunCoordinator {
       run: this.store.getRun(runId),
       tasks: this.store.listTasks(runId),
       activeAttempt: this.store.activeAttempt(runId),
+      attempts: this.store.listAttempts(runId),
       transitions: this.store.listTransitions(runId),
       events: this.store.listEvents(runId),
       attention: this.store.listAttention(runId),
     }));
   }
 
+  private requireManualEdit(runId: string, reason: string): RunRow {
+    if (reason.trim().length === 0) {
+      throw new RunStateError("a manual override needs a reason; none was given");
+    }
+    const run = this.store.getRun(runId);
+    if (run.status !== "paused" && run.status !== "interrupted") {
+      throw new RunStateError(
+        `run ${runId} is ${run.status}; manual overrides apply only to a paused or interrupted run`,
+      );
+    }
+    return run;
+  }
+
   private advanceOnce(runId: string): AdvanceResult | "continue" {
     const run = this.store.getRun(runId);
-    if (run.status !== "running") {
+    if (run.status !== "running" && run.status !== "pausing") {
       return { kind: "not_running", status: run.status };
     }
     const active = this.store.activeAttempt(runId);
     if (active) {
       return { kind: "in_progress", attemptId: active.attemptId, stepId: active.stepId };
+    }
+    if (run.status === "pausing") {
+      this.pauseRun(run, USER_PAUSE_MESSAGE, "user_pause", null, "info");
+      return { kind: "not_running", status: "paused" };
     }
 
     const compiled = this.compiledFor(run.revisionId);
@@ -308,9 +573,8 @@ export class RunCoordinator {
       }
       case "agent":
       case "command": {
-        const attemptId = this.newId("attempt");
         const attempt = this.store.insertAttempt({
-          attemptId,
+          attemptId: this.newId("attempt"),
           runId,
           stepId: step.id,
           taskId: run.activeTaskId,
@@ -318,7 +582,7 @@ export class RunCoordinator {
         });
         this.store.appendEvent({
           runId,
-          attemptId,
+          attemptId: attempt.attemptId,
           revisionId: run.revisionId,
           type: "attempt_started",
           data: { stepId: step.id, kind: step.kind },
@@ -459,6 +723,7 @@ export class RunCoordinator {
     message: string,
     category: string,
     attemptId: string | null = null,
+    severity: AttentionSeverity = "blocking",
   ): void {
     this.store.updateRun(run.runId, { status: "paused" });
     this.store.appendEvent({
@@ -468,19 +733,13 @@ export class RunCoordinator {
       type: "run_paused",
       data: { reason: category },
     });
-    this.store.insertAttention({
-      runId: run.runId,
-      attemptId,
-      category,
-      severity: "blocking",
-      message,
-    });
+    this.store.insertAttention({ runId: run.runId, attemptId, category, severity, message });
     this.store.appendEvent({
       runId: run.runId,
       attemptId,
       revisionId: run.revisionId,
       type: "attention_raised",
-      data: { category },
+      data: { category, severity },
     });
   }
 

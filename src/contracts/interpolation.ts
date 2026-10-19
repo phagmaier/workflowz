@@ -63,7 +63,8 @@ export function scanPlaceholders(text: string): ScannedPlaceholder[] {
   return results;
 }
 
-function parsePlaceholder(inner: string): ScannedPlaceholder {
+/** Parses the text between `{{` and `}}`. Exported so the runner can resolve placeholders in place. */
+export function parsePlaceholder(inner: string): ScannedPlaceholder {
   const raw = `{{${inner}}}`;
   const body = inner.trim();
   if (body.length === 0) {

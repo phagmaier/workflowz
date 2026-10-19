@@ -38,3 +38,16 @@ The reference fixture is [`examples/overnight.yaml`](../examples/overnight.yaml)
 ## Identifiers
 
 Step IDs, outcome names, and tags match `^[a-z][a-z0-9_]{0,63}$`. Dots are excluded so that placeholders and `system.*` names cannot collide with user names.
+
+## Runtime decisions (phase 3)
+
+These cover how workflow values are resolved and processes are run. They don't change the file format.
+
+18. **Placeholders resolve at run time from fixed values.** `{{task.id}}` is the task's internal run-local ID. `{{task.text}}` is its title. `{{task.index}}` is 1-based in source order. `{{project.root}}` and `{{run.cwd}}` are both the project root, because runs have no separate working directory yet. `{{run.id}}` is the run ID. `{{steps.<id>.stdout}}` is the head of the latest run of that command step whose outcome was `complete`, capped at 64 KiB. `{{reports.<id>.*}}` has no value until the report channel exists (phase 4), so a prompt that uses it pauses with `system.internal_error` before any process starts.
+19. **A placeholder with no value is a pre-execution error.** The attempt settles as `system.internal_error` and no process starts, so a broken argument can never run half a command.
+20. **Command environment is an allowlist plus `env`.** Children get `PATH`, `HOME`, `LANG`, `LC_ALL`, `TERM`, `TMPDIR`, `USER`, `LOGNAME`, and the XDG base directories, plus the workflow's `env` entries. Nothing else is inherited. A step that needs another variable must name it in `env`, and the value is stored in the workflow file. Keep secrets out of workflow files.
+21. **Command `cwd` defaults to the project root.** A relative `cwd` resolves against the project root. A missing directory is a `system.spawn_error`.
+22. **Phase 3 reports are an `OUTCOME <name>` line on stdout.** This is a stand-in for `wf report` (phase 4). It is only used by the test fixture. A clean exit without a report is `system.report_error`. Phase 4 adds the one correction turn in the same session (spec §4.3) before that happens.
+23. **Pause-after-current, stop, and resume.** A pause request while an attempt runs sets `pausing`. The attempt settles and routes normally, and the run pauses before the next step. A stop terminates the attempt's process group, waits until it has been reaped, and then records the stop. The stopped attempt routes nothing. Resume starts the cursor step again from the beginning, so the user chooses the next step explicitly.
+24. **Startup reconciliation never replays.** An attempt still active after a restart is marked interrupted and the run is marked interrupted, with a blocking item. Resuming runs the cursor step again only on explicit user action. Process-identity checks come with todo 7.1.
+25. **Manual overrides are audited and need a reason.** `jump`, `skip` (take a declared outcome without running the step), and `mark_task_complete` apply only to a paused or interrupted run. Each one writes a `manual_override` event with the reason. A skip records its transition with no attempt, so it can be told apart from a real result.

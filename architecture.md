@@ -287,6 +287,15 @@ An optional later enhancement can provide automated recovery for proven side-eff
 - Stop-now: kill active process tree; record potential filesystem side effects; no rollback.
 - Unexpected daemon kill/power loss: reconcile as interrupted on next launch; never promise unattended continuation through a power outage without a service manager that restarts the daemon. Provide optional user-level systemd guidance later, not required for engine correctness.
 
+### 7.4 Phase 3 process notes
+
+- **Ownership by group.** Every child starts as the leader of its own process group. A stop or timeout signals the group, so a descendant the harness started in the background ends with its attempt. `completed` resolves only after the group has been reaped. After the leader exits normally, leftovers in its group are ended too, so an attempt never settles while its tree is still running.
+- **Escalation.** SIGTERM first, then SIGKILL after a grace period (1 s by default). A process that ignores TERM is still ended.
+- **Known limit.** Signals go to the group id, which is the leader's pid. If a leader exits and its pid is reused while members remain, the wrong group could be signalled. Process-start identity checks (todo 7.1) close this gap; until then the window is accepted.
+- **Bounded output.** The head of stdout (64 KiB) stays in memory for `{{steps.<id>.stdout}}`. Full output goes to a per-attempt log file, capped at 16 MiB.
+- **One process at a time.** `RunService.drive` awaits each attempt before it asks the coordinator for the next step. Control requests (pause, stop) are recorded or terminate the in-flight process and never start another one.
+- **Adapters are workflow-agnostic.** Adapters launch processes and report what happened. The runner, not an adapter, maps results to settlements (`src/runner/settlement.ts`), so the same precedence rules apply to every harness.
+
 ## 8. Local API and UI boundary
 
 HTTP over `127.0.0.1` only by default. Use REST actions or lightweight RPC plus SSE for state/events. Minimum operations:
