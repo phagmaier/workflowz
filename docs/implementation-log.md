@@ -296,3 +296,27 @@ Typecheck and lint passed; **697 tests passed, 75 suites, zero failures/cancella
 Updated current README/compatibility/milestone status and added superseding acceptance notes to spec/architecture without changing their contracts or rewriting historical verification. `git diff --check` passed for the six-file documentation-only change set.
 
 **The Phase 6 gate is satisfied** by the complete live Codex/Pi evidence and current all-adapter offline gate. **Milestone 0.5 remains unchecked**: Claude Code, OpenCode and omp were not authenticated/executed against providers, and their successful live persistence/resume remains unverified. The exercised Codex/Pi paths do not establish arbitrary tool/resource/managed-config behavior or a billing cap. No credential files were inspected by the developer, no login/logout was performed, no global harness configuration changed and no Phase 7, daemon, management CLI or UI work was introduced. Future provider usage requires new authorization; further development beyond this scope requires direction.
+
+## Remaining milestone 0.5 — compatibility preparation only
+
+Started from clean `main` at `247fe13`, following `c7153c3` and `1e739a6`. After the account owner said to continue, clarified the remaining scope because Phase 7 was explicitly excluded and the previous live authorization covered only Codex/Pi. The owner selected **Finish compatibility preparation**: prepare the remaining proposal with no additional provider calls until approval. No subagents or handoff document were used.
+
+Consulted current official Claude model/effort documentation, OpenCode v2 model/variant documentation and versioned omp 18.12.2 model/CLI documentation, linked in the [remaining live proposal](harness-compatibility.md#remaining-milestone-05-pass--proposal-only-not-authorized). Context7 rejected its configured API key; official documentation supplied the evidence. Proposed pinned `claude-haiku-5-5`/low for Claude and `openai/gpt-6-luna`/low for OpenCode/omp. Explicitly documented that normal native configuration can substitute models and the smoke evidence records requested settings, not an attestation of every provider request. No fallback, provider switch or config workaround is proposed.
+
+Offline verification using Node.js **v26.8.2**:
+
+- `npm run probe:harnesses` with `TMPDIR` set to a newly created disposable `.tmp-compat-preparation-*` directory under this checkout: all five isolated factories passed. Codex `0.163.0`, Pi `1.3.0`, omp `18.12.2`, OpenCode `2.0.32`, Claude Code `2.1.303`; all advertise resume/model/reasoning, OpenCode event-stream false. The temporary scratch directory was removed by the shell exit trap. Version/help probes only, no authentication checks.
+- Exercised all six actual plan-only command paths with this exact sequence:
+
+  ```bash
+  export PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH
+  for scenario in report correction; do
+    npm run smoke:harnesses -- --harness claude --model claude-haiku-5-5 --reasoning-effort low --scenario "$scenario" --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-0.5 || exit $?
+    npm run smoke:harnesses -- --harness opencode --model openai/gpt-6-luna --reasoning-effort low --scenario "$scenario" --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-0.5 || exit $?
+    npm run smoke:harnesses -- --harness omp --model openai/gpt-6-luna --reasoning-effort low --scenario "$scenario" --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-0.5 || exit $?
+  done
+  ```
+
+  All six built and printed `execute: false`, the requested model, low reasoning, 60-second original timeout, maximum one/report or two/correction invocations and a 30-second correction bound. No authentication/provider execution or smoke artifact creation occurred.
+
+Documented the unapproved six-workflow proposal: at most nine sequential invocations, stop at first failure, at most 450 seconds configured agent execution plus probes/status/build/cleanup, no enforceable dollar cap, no Codex/Pi repeats and no additional paid diagnostics/retries. Local model/catalog/variant availability and account entitlement remain unverified; milestone 0.5 remains unchecked. Phase 6's completed acceptance evidence is unchanged. No runtime code/tests, credential files, login/logout, global harness configuration, Phase 7, daemon management, management CLI or UI changed.

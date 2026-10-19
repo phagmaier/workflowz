@@ -188,6 +188,8 @@ Each execution retains private `evidence.json`, SQLite and existing bounded scru
 
 The offline smoke tests exercise all five actual factories through synthetic CLIs. **The authorized Codex/Pi Luna/low live pass succeeded on 2026-10-19, satisfying the Phase 6 gate alongside the passing all-adapter offline suite. Milestone 0.5 remains open for other harnesses' authentication/live-session compatibility.** See [live evidence and failure interpretation](docs/harness-compatibility.md#authorized-live-pass--lunalow-execution-evidence). Future provider usage still requires explicit authorization.
 
+For the remaining milestone 0.5 checks, see the [Claude/OpenCode/omp proposal](docs/harness-compatibility.md#remaining-milestone-05-pass--proposal-only-not-authorized): preparation is verified offline, but authentication/provider execution is **not authorized**. Requested model selectors are not a guarantee against native harness/configuration substitution.
+
 ### Layout
 
 | Path | Contents |

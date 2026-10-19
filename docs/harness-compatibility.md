@@ -302,3 +302,52 @@ Retained artifact parent: `/home/phagmaier/.local/state/workflowz/live-smoke-6.8
 | Pi | correction | 2 | 1 | passed / complete | `wf-pi-correction-TeHAIg` |
 
 Each retained `evidence.json` records authentication `available`, helper acknowledgment, durable reopen and target removal. Both correction runs have matching original/correction session fingerprints; their SQLite histories show original settlement, correction request, correction start, report acceptance and correction settlement in that order, with both exits zero. Original logs show `READY` without a report; correction logs show the helper invocation and clean terminal framing. Status admission alone is not entitlement evidence; the subsequent successful provider execution supplies evidence for these selected models on this account.
+
+### Remaining milestone 0.5 pass — proposal only, not authorized
+
+The account owner authorized **compatibility preparation only**, not additional authentication checks or provider execution. The completed Codex/Pi pass above is unchanged. The following selections are proposed for the remaining harnesses; plan-only checks do not establish local catalog availability, credentials, provider entitlement or successful execution.
+
+| Harness | Installed offline version | Proposed explicit model | Reasoning effort |
+| --- | --- | --- | --- |
+| Claude Code | `2.1.303` | `claude-haiku-5-5` | `low` |
+| OpenCode | `2.0.32` | `openai/gpt-6-luna` | `low` (named variant) |
+| omp | `18.12.2` | `openai/gpt-6-luna` | `low` |
+
+Selection evidence and remaining risks:
+
+- [Claude's model overview](https://platform.claude.com/docs/en/models/overview) identifies `claude-haiku-5-5` as a pinned snapshot, not a moving family alias. [Claude Code model configuration](https://code.claude.com/docs/en/model-config) documents Haiku 5.5 support from version 2.1.293 and `low` effort. This proposes a small model for a reporting-only task; it does not claim access on this account.
+- [OpenCode v2 model documentation](https://opencode.ai/v2/docs/models) defines provider/model selection and named reasoning variants. The adapter maps the existing effort field to the `low` variant. Local Luna catalog/variant availability remains unverified; do not create custom model/config entries or switch providers to force success.
+- [omp 18.12.2 CLI reference](https://github.com/can1357/oh-my-pi/blob/v18.12.2/docs/cli-reference.md) documents provider/model selection and `--thinking low`; its [model documentation](https://github.com/can1357/oh-my-pi/blob/v18.12.2/docs/models.md) describes configured catalog/resolution behavior. The proposed explicit provider-qualified selector preserves the account's Luna/low preference, but normal configuration and fuzzy resolution are not an exact-model guarantee. Local availability remains unverified.
+- No runner retry, fallback model, provider switch, reasoning increase, login/logout, global config change or additional paid diagnostic run is included. If a selection is unavailable, stop and report the incompatibility.
+- **Native substitution is not prevented by this smoke tool.** Claude documents that a restricted `--model` can be replaced by the default; normal harness configuration/resources may also alter model behavior or make auxiliary requests. Evidence records requested settings, not an attestation of every provider request. Review available actual-model evidence before claiming the selected model passed; any observed substitution invalidates that claim and stops the pass, but may already have incurred usage. OpenCode's current transport has no provider event stream, so do not invent actual-model evidence from the requested selector alone.
+
+Exact proposed execution, **only after explicit approval of these selections and bounds**:
+
+```bash
+export PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH
+export TMPDIR=/home/phagmaier/.local/state/workflowz/live-smoke-0.5/scratch
+mkdir -p "$TMPDIR"
+```
+
+Run the following commands **one at a time**, in this order; do not paste them as an unattended batch. After each command settles, inspect its scrubbed evidence/logs/SQLite before starting the next. Stop at the first failed smoke, uncertain cleanup or observed model substitution; do not add a diagnostic provider call.
+
+```bash
+npm run smoke:harnesses -- --execute --harness claude --model claude-haiku-5-5 --reasoning-effort low --scenario report --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-0.5
+npm run smoke:harnesses -- --execute --harness opencode --model openai/gpt-6-luna --reasoning-effort low --scenario report --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-0.5
+npm run smoke:harnesses -- --execute --harness omp --model openai/gpt-6-luna --reasoning-effort low --scenario report --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-0.5
+npm run smoke:harnesses -- --execute --harness claude --model claude-haiku-5-5 --reasoning-effort low --scenario correction --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-0.5
+npm run smoke:harnesses -- --execute --harness opencode --model openai/gpt-6-luna --reasoning-effort low --scenario correction --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-0.5
+npm run smoke:harnesses -- --execute --harness omp --model openai/gpt-6-luna --reasoning-effort low --scenario correction --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-0.5
+```
+
+Bounds and acceptance:
+
+- Six standalone workflows, in the shown order, at most **nine sequential harness invocations**, stop at the first failure. No repeat of Codex/Pi.
+- Six originals at most 60 seconds each; three corrections at most 30 seconds each: **450 seconds maximum configured agent execution**, plus builds, version/help probes, status checks and process cleanup. This is neither a provider-request count nor a total wall-clock bound.
+- Claude status admission uses the existing output-discarding `claude auth status` check (at most 15 seconds each execution). OpenCode/omp retain `status_unsupported`; successful provider execution, not that classification, would establish usable authentication for the exercised path.
+- Normal HOME/auth/config/resources and existing unrestricted permission selections stay enabled. Targets are unique `wf-*/project` children under the named artifact parent, never this checkout. Retain private evidence/logs/SQLite and harness-owned state; remove only settled generated targets. Preserve uncertain targets and stop.
+- **No enforceable dollar cap.** Native retries, tool turns, hooks/resources, auxiliary models or provider-side behavior can add requests/cost; an unavailable selection or failure does not authorize switching models or trying again.
+- Each report workflow must complete through the real helper acknowledgment; each correction must prove exactly one clean same-session follow-up after the original omitted its report. Require one logical attempt, one exact accepted report, sequential settlement and durable SQLite reopen. Inspect scrubbed evidence before recording compatibility, and distinguish requested model from observed model.
+- Milestone 0.5 remains unchecked until its per-harness evidence is reviewed against the acceptance criteria. Plan-only output, help flags, unsupported auth status or partial success cannot close it. Phase 7, daemon management, management CLI, UI and subagent delegation remain outside this preparation.
+
+Preparation verification on 2026-10-19: all five isolated installed factories passed again with the versions above (Codex/Pi unchanged). All six smoke selections built and printed `execute: false`, the proposed exact model and `reasoningEffort: low`; report plans allowed one invocation and correction plans two with a 30-second correction bound. No authentication checks, provider calls or smoke artifact writes occurred. The temporary offline-probe scratch directory was removed. Context7 lookup rejected its configured API key; the linked official sources supplied documentation instead.

@@ -10,6 +10,8 @@
 - [x] 0.4 Add smoke tests that can run entirely offline, and a CI-friendly `test`/`lint`/`typecheck` script.
 - [ ] 0.5 Probe the installed harness binaries — `codex`, `pi`, `omp`, `opencode`, and `claude` — for versions, supported flags, authentication availability (without exposing secrets), and session/resume behavior. Record a per-harness compatibility note; **do not** modify the user's global harness configuration.
 
+  Remaining Claude Code/OpenCode/omp checks have a [bounded live proposal](docs/harness-compatibility.md#remaining-milestone-05-pass--proposal-only-not-authorized), verified through offline factories and six plan-only commands. Authentication/provider execution still requires explicit approval; milestone 0.5 is not complete.
+
 **Gate:** Fresh clone installs, typechecks, tests, and has a short local development README; version probe works or explains missing binaries.
 
 ## Phase 1 — Workflow data contract and compiler
