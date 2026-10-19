@@ -84,7 +84,7 @@
 
 **Gate:** One real Codex step and one real Pi step can each return `complete` through the common reporting contract, and every registered adapter (including Claude Code, OpenCode, and omp) passes the offline conformance suite; session correction behavior is verified or incompatibility is documented clearly.
 
-**Live gate still pending:** 6.8 checks tooling and offline synthetic coverage only. No provider-backed smoke has been authorized/executed; real Codex/Pi completion and correction remain unverified. Milestone 0.5 remains open. The exact proposed commands, model choices, invocation/time bounds and absence of a dollar cap are in [`docs/harness-compatibility.md`](docs/harness-compatibility.md#proposed-live-pass--authorization-still-required).
+**Live gate passed (2026-10-19):** The explicitly authorized Codex `gpt-6-luna` and Pi `openai/gpt-6-luna` pass, both at low reasoning, completed all four report/correction workflows through actual `wf report`. Both exact-session corrections, acknowledgment, sequential settlement, SQLite reopen and settled-target cleanup passed. The current offline gate passed all 697 tests, including every registered adapter's conformance suite. Milestone **0.5 remains open**: Claude Code, OpenCode and omp authentication/live-session compatibility was not exercised. Exact commands, retained artifacts, bounds and limits are in [`docs/harness-compatibility.md`](docs/harness-compatibility.md#authorized-live-pass--lunalow-execution-evidence) and [`docs/implementation-log.md`](docs/implementation-log.md#phase-6-live-acceptance--authorized-lunalow-pass). Phase 7 remains out of scope without new authorization.
 
 ## Phase 7 — Crash recovery, management CLI, and reliability
 

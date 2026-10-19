@@ -38,9 +38,13 @@ These selections come from installed help or the versioned API contract linked b
 
 Offline inventory does not check authentication. Earlier unverified status-command exits are not authentication evidence. The opt-in Phase 6.8 tool uses documented Codex/Pi/Claude status checks, discards all status output, and retains only the classification below. No credential files are inspected or copied; no login/logout or global configuration change is performed.
 
-## Live verification (not yet done)
+## Live verification — Codex and Pi passed
 
-No provider-backed smoke has been authorized or executed. Phase 6.8 tooling is implemented and verified offline; actual authentication, provider framing, session/resume and tool propagation remain unverified until explicit live execution succeeds. The Phase 6 live gate and milestone 0.5 remain open.
+The account owner explicitly authorized the revised Luna/low pass on 2026-10-19. Codex `0.163.0` with `gpt-6-luna` and Pi `1.3.0` with `openai/gpt-6-luna` each completed both report and exact-session correction scenarios. All four workflows returned `complete`, acknowledged actual `wf report`, reopened SQLite successfully and removed their settled targets. No alternate model, higher reasoning or runner retry was used.
+
+This verifies the exercised Codex/Pi authentication, provider framing, helper tool/report environment and persisted-session correction paths—not arbitrary tools, managed settings or every provider. Together with the current 697-test offline gate, including all registered adapters' conformance suites, it satisfies the Phase 6 gate. Claude Code, OpenCode and omp were not executed against providers; milestone 0.5 remains open. Detailed artifacts and gate evidence are recorded below and in [implementation verification](implementation-log.md#phase-6-live-acceptance--authorized-lunalow-pass).
+
+The Phase 6.1–6.7 implementation sections below preserve their implementation-time evidence and limitations. Their Codex/Pi live-pending and Phase 6 gate statements are superseded by the authorized pass above; synthetic evidence alone still does not establish live compatibility.
 
 
 ## Codex adapter implementation (Phase 6.1)
@@ -250,7 +254,7 @@ Current official and installed documentation consulted:
 - [Codex CLI reference](https://learn.chatgpt.com/docs/developer-commands?surface=cli#codex-login), plus installed `codex login --help`: status exits zero when credentials are present.
 - [Pi v1.3.0 CLI credential commands](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/cli.md#credential-commands), plus the installed bundled `docs/cli.md`: `check` exit semantics, model selection and `--no-refresh`. No authentication check was run against the user's account during offline implementation.
 - [Claude CLI reference](https://code.claude.com/docs/en/cli-reference), plus installed `claude auth status --help`: status JSON/exit semantics.
-- [Codex model guidance](https://learn.chatgpt.com/docs/models) and installed Pi `docs/models.md` / `docs/providers.md`: explicit selectors and normal provider auth. Proposed model entitlement remains unverified. Context7 lookup was attempted but rejected its configured API key; official sources supplied the evidence.
+- [Codex model guidance](https://learn.chatgpt.com/docs/models) and installed Pi `docs/models.md` / `docs/providers.md`: explicit selectors and normal provider auth. Model entitlement was unverified during tooling implementation; the authorized Luna/low execution below now establishes success for these selections on this account. Context7 lookup was attempted but rejected its configured API key; official sources supplied the evidence.
 
 ### Scenarios and retained evidence
 
@@ -264,9 +268,11 @@ Every admitted execution creates a mode-0700 `wf-<harness>-<scenario>-*` directo
 
 Settled success/failure removes only its generated `project/`, preserving evidence/logs/SQLite for local review. `cleanup_uncertain` preserves the target too and never reports success. SIGINT/SIGTERM request the existing service stop and await settlement. Failure categories distinguish unsupported capability/probe, unavailable authentication, failed authentication check, adapter-signaled provider/protocol failure, execution failure, smoke assertion failure and uncertain cleanup. `provider_failure` reflects adapter `providerError` evidence (which can include protocol/transport errors), not proof that a billable request reached a provider. Inspect the scrubbed logs/SQLite for technical details; do not publish them without review.
 
-### Proposed live pass — authorization still required
+<a id="proposed-live-pass--authorization-still-required"></a>
 
-The following is a proposal, **not execution evidence**. Per the account owner's cost preference, use Codex `gpt-6-luna` and Pi `openai/gpt-6-luna`, both at `low` reasoning. Keep GPT smoke usage on Luna/low unless explicitly instructed otherwise; do not automatically upgrade models, increase reasoning or change providers. The [public Pi catalog](https://pi.dev/models/openai/gpt-6-luna) lists this selector, but local model/account availability remains unverified. The user paused execution while changing this selection; no provider-backed smoke has run.
+### Authorized live pass — Luna/low execution evidence
+
+The account owner explicitly approved resuming these exact selections and bounds on 2026-10-19. Codex `gpt-6-luna` and Pi `openai/gpt-6-luna`, both at `low` reasoning, passed all four workflows below. Keep GPT smoke usage on Luna/low unless explicitly instructed otherwise; do not automatically upgrade models, increase reasoning or change providers. This supersedes the previously paused proposal, not its historical plan-only evidence.
 
 ```bash
 export PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH
@@ -284,4 +290,15 @@ done
 
 Four standalone workflows; at most **six harness invocations** (two direct reports plus two pairs of original/correction), sequential, stop on the first failure. These are invocation bounds, not provider-request bounds: harness-native recovery, normal hooks/resources and multi-turn tool use may make additional requests. Four original invocations are each bounded to 60 seconds; two corrections to 30 seconds each: at most 300 seconds of configured agent execution, plus factory/status checks, build and process cleanup. Status checks are at most 15 seconds each; existing version/help probes have their own 15-second limits. This is not a total wall-clock deadline.
 
-Targets are unique children of the named artifact parent (`wf-*/project`), never this checkout. Probe scratch stays in the named non-`/tmp` scratch directory to avoid the previously observed extraction quota issue. Normal auth HOME/config remains unchanged. Artifact/scratch retention is deliberate; the program removes settled targets, not harness-owned state. **There is no enforceable dollar cap in this tool**; time and invocation bounds do not guarantee a spend limit. Approve these exact selections/bounds before adding/executing `--execute`. Claude/OpenCode/omp provider execution is not part of this proposed pass.
+Targets were unique children of the named artifact parent (`wf-*/project`), never this checkout. Probe scratch used the named non-`/tmp` scratch directory. Normal auth HOME/config and unrestricted permission selections were retained; no credential files were inspected by the developer, no login/logout was performed and no global configuration was edited. The program removed all four settled targets while retaining evidence, logs, SQLite and harness-owned state. **There is no enforceable dollar cap in this tool**; time and invocation bounds do not guarantee a spend limit. Claude/OpenCode/omp provider execution was not authorized or performed.
+
+Retained artifact parent: `/home/phagmaier/.local/state/workflowz/live-smoke-6.8`.
+
+| Harness | Scenario | Invocations | Corrections | Result | Artifact directory |
+| --- | --- | --- | --- | --- | --- |
+| Codex | report | 1 | 0 | passed / complete | `wf-codex-report-blA2nZ` |
+| Pi | report | 1 | 0 | passed / complete | `wf-pi-report-xGYhJE` |
+| Codex | correction | 2 | 1 | passed / complete | `wf-codex-correction-6aUv2k` |
+| Pi | correction | 2 | 1 | passed / complete | `wf-pi-correction-TeHAIg` |
+
+Each retained `evidence.json` records authentication `available`, helper acknowledgment, durable reopen and target removal. Both correction runs have matching original/correction session fingerprints; their SQLite histories show original settlement, correction request, correction start, report acceptance and correction settlement in that order, with both exits zero. Original logs show `READY` without a report; correction logs show the helper invocation and clean terminal framing. Status admission alone is not entitlement evidence; the subsequent successful provider execution supplies evidence for these selected models on this account.

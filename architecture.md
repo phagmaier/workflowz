@@ -175,6 +175,8 @@ Adapter responsibilities are uniform across harnesses; only the four harness-spe
 
 Every adapter must pass the offline **adapter conformance suite** (see §9) before it is registered as supported. Adapters must also pass the child process only a deliberate environment allowlist, never the daemon's full environment, so nested-harness variables and credentials cannot leak between harnesses.
 
+**Current acceptance (2026-10-19):** Authorized Codex/Pi Luna/low live report and exact-session correction passed, including real helper acknowledgment, process settlement and durable SQLite reopen. All registered adapters passed the current offline conformance gate (697 total tests). This satisfies the Phase 6 gate and supersedes Codex/Pi live-pending statements in the historical phase implementation notes below. Milestone 0.5 stays open for other harnesses; this does not verify arbitrary tools/resources or managed settings. No architecture, session/report contract, migration or Phase 7 behavior changed. Exact evidence is in `docs/harness-compatibility.md`.
+
 ### 4.1 Codex integration
 
 Start with the **non-interactive Codex CLI**, not direct API calls. Capture JSONL events and CLI exit status; extract/persist the session ID from documented events; support normal work and same-session follow-up for correction. Check locally installed flags/version at integration time.

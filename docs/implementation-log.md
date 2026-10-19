@@ -269,3 +269,30 @@ PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run sm
 ```
 
 Both commands built successfully and printed the requested Luna selector, `reasoningEffort: low`, `execute: false`, maximum two invocations and a 30-second correction bound. No harness/authentication/provider execution or smoke artifacts. The [official Codex model guidance](https://learn.chatgpt.com/docs/models) and [public Pi catalog](https://pi.dev/models/openai/gpt-6-luna) list Luna; account availability remains unverified. Live execution remains paused at the user's request, with zero provider-backed smoke calls.
+
+## Phase 6 live acceptance — authorized Luna/low pass
+
+Verified the requested clean checkout at `c7153c3`, following `1e739a6` and `e31ae75`, and read repository guidance in the requested order. No subagents or handoff document were used. The account owner explicitly selected **Resume Luna pass** after reviewing the revised model selections, four-workflow/six-invocation bound, stop-on-first-failure policy, execution timeouts, normal unrestricted resources and absence of an enforceable dollar cap. The earlier paused Sol approval was not used as authorization.
+
+Executed the exact shell sequence recorded in [live compatibility evidence](harness-compatibility.md#authorized-live-pass--lunalow-execution-evidence), with Node.js **v26.8.2**, the named non-`/tmp` scratch directory and unchanged normal authentication/configuration discovery. All four workflows passed, in order: Codex report, Pi report, Codex correction, Pi correction. Models were `gpt-6-luna` and `openai/gpt-6-luna`, both with `--reasoning-effort low`; no alternative model, provider, increased reasoning or runner retry was used. Exactly six sequential harness invocations occurred; no failure required diagnosis or another paid run.
+
+Reviewed all four retained `evidence.json` files under `/home/phagmaier/.local/state/workflowz/live-smoke-6.8`:
+
+- `wf-codex-report-blA2nZ`: Codex `0.163.0`, one invocation, no correction.
+- `wf-pi-report-xGYhJE`: Pi `1.3.0`, one invocation, no correction.
+- `wf-codex-correction-6aUv2k`: Codex `0.163.0`, two invocations, exactly one correction, identical session fingerprints.
+- `wf-pi-correction-TeHAIg`: Pi `1.3.0`, two invocations, exactly one correction, identical session fingerprints.
+
+Every result records `passed`, authentication `available`, outcome `complete`, real helper acknowledgment, durable SQLite reopen and removed settled target. The smoke's assertions require one logical attempt and one exact accepted report, acknowledged before final process settlement. Independent SQLite review confirmed both direct reports and both correction histories: original exit zero/settlement, correction request/start, report acceptance, correction exit zero/settlement, then committed transition/completion. Reviewed scrubbed original/correction logs: originals returned `READY` without reporting; corrections ran the generated helper successfully and ended with clean terminal evidence. Codex retained `dangerously-bypass-approvals-and-sandbox`; Pi retained `default-unrestricted-tools`. Private evidence, logs, databases and scratch remain outside this checkout; harness-owned state was not copied, rewritten or removed.
+
+Current offline verification after the live pass:
+
+```bash
+PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run check
+```
+
+Typecheck and lint passed; **697 tests passed, 75 suites, zero failures/cancellations/skips**. Biome checked **113 files**, with **115 informational suggestions** and no errors. This includes every registered adapter's full offline conformance suite; ordinary checks made no provider calls. No runtime code or tests changed in this acceptance-only update.
+
+Updated current README/compatibility/milestone status and added superseding acceptance notes to spec/architecture without changing their contracts or rewriting historical verification. `git diff --check` passed for the six-file documentation-only change set.
+
+**The Phase 6 gate is satisfied** by the complete live Codex/Pi evidence and current all-adapter offline gate. **Milestone 0.5 remains unchecked**: Claude Code, OpenCode and omp were not authenticated/executed against providers, and their successful live persistence/resume remains unverified. The exercised Codex/Pi paths do not establish arbitrary tool/resource/managed-config behavior or a billing cap. No credential files were inspected by the developer, no login/logout was performed, no global harness configuration changed and no Phase 7, daemon, management CLI or UI work was introduced. Future provider usage requires new authorization; further development beyond this scope requires direction.
