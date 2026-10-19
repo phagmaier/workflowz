@@ -189,6 +189,7 @@ export class CodexAdapter implements AgentAdapter {
     });
     return {
       pid: running.pid,
+      processIdentity: running.processIdentity,
       secrets,
       sessionId: input.priorSessionId,
       launchInfo: {

@@ -153,15 +153,19 @@ export function describeAdapterConformance(
       assert.equal(f.inspect().attempts.length, 1);
       assert.equal(f.inspect().attempts[0]?.correctionCount, 1);
       assert.equal(f.corrections(), 1);
-      const events = f.inspect().events.filter((e) => e.type.startsWith("invocation_"));
-      assert.deepEqual(
-        events.map((e) => e.type),
-        ["invocation_started", "invocation_settled", "invocation_started", "invocation_settled"],
-      );
-      assert.equal(events[1]?.data["sessionId"], events[2]?.data["sessionId"]);
-      assert.notEqual(events[0]?.data["pid"], events[2]?.data["pid"]);
-      assert.notEqual(events[0]?.data["logPath"], events[2]?.data["logPath"]);
-      assert.match(f.notes(), /start .* silent\nend .*\nstart .* report\ncorrection/);
+      const starts = f.inspect().events.filter((e) => e.type === "invocation_started");
+      const settled = f.inspect().events.filter((e) => e.type === "invocation_settled");
+      assert.equal(starts.length, 2);
+      assert.equal(settled.length, 2);
+      const [originalStart, correctionStart] = starts;
+      const [originalEnd, correctionEnd] = settled;
+      assert.ok(originalStart && correctionStart && originalEnd && correctionEnd);
+      assert.ok(originalStart.eventId < originalEnd.eventId);
+      assert.ok(originalEnd.eventId < correctionStart.eventId);
+      assert.ok(correctionStart.eventId < correctionEnd.eventId);
+      assert.equal(originalEnd.data.sessionId, correctionStart.data.sessionId);
+      assert.notEqual(originalStart.data.pid, correctionStart.data.pid);
+      assert.notEqual(originalStart.data.logPath, correctionStart.data.logPath);
       assert.equal(f.report()?.outcome, "complete");
     });
 

@@ -6,6 +6,7 @@
  * Reports arrive independently through wf report. Process output has no reporting authority.
  */
 import type { AgentContext } from "../contracts/agent-context.js";
+import type { ProcessIdentity } from "../contracts/process-identity.js";
 import type { HarnessCapabilities } from "./harness-registry.js";
 
 /** Only adapter-authored, credential-free explanations may cross the preflight boundary. */
@@ -65,6 +66,7 @@ export interface AgentRunResult {
 
 export interface AgentHandle {
   readonly pid: number | null;
+  readonly processIdentity?: ProcessIdentity | null;
   /** Known injected authorization for runner-side rejection/scrubbing; never persisted. */
   readonly secrets?: readonly string[];
   readonly sessionId?: string | undefined;

@@ -137,7 +137,7 @@ describe("private reporting endpoint and CLI", () => {
   it("acknowledges durable acceptance, rejects duplicates and preserves the cursor", async () =>
     fixture(async (f) => {
       assert.equal((await send(f.access)).status, 201);
-      const observer = new WorkflowDatabase(path.join(f.root, "state.sqlite"));
+      const observer = new WorkflowDatabase(path.join(f.root, "state.sqlite"), { readOnly: true });
       try {
         assert.equal(new RunCoordinator(observer).reportFor(f.attemptId)?.summary, "done");
       } finally {
@@ -210,11 +210,11 @@ describe("private reporting endpoint and CLI", () => {
       });
       f.coordinator.requestCorrection(f.attemptId);
       const before = f.coordinator.inspect(f.runId);
-      const observer = new WorkflowDatabase(path.join(f.root, "state.sqlite"));
+      const observer = new WorkflowDatabase(path.join(f.root, "state.sqlite"), { readOnly: true });
       try {
         const reopened = new RunCoordinator(observer);
         assert.equal(reopened.activeAttempt(f.runId)?.correctionCount, 1);
-        assert.throws(() => reopened.requestCorrection(f.attemptId), /already requested/);
+        assert.throws(() => f.coordinator.requestCorrection(f.attemptId), /already requested/);
         assert.deepEqual(reopened.inspect(f.runId), before);
       } finally {
         observer.close();

@@ -322,6 +322,9 @@ steps:
       });
       service.coordinator.start(runId);
       const driving = service.drive(runId);
+      const peer = new RunService(database, { agents: new Map(), logDir: path.join(root, "logs") });
+      await assert.rejects(peer.drive(runId));
+      assert.throws(() => peer.reconcile(runId));
       await assert.rejects(service.drive(runId), /already driving/);
       assert.throws(() => service.reconcile(runId), /while this runner is driving/);
       assert.deepEqual(await driving, { kind: "completed" });
@@ -386,7 +389,7 @@ describe("RunService: restart, recovery, and overrides", () => {
     second.database.close();
   });
 
-  it("marks an attempt left active by a dead process as interrupted, and never replays it on its own", async () => {
+  it("keeps unidentified dispatch uncertainty interrupted and blocks replay or another run", async () => {
     const { root, database, service } = fixture([{ mode: "report", outcome: "complete" }]);
     const runId = service.coordinator.createRun({
       workflowText: HEADLESS,
@@ -398,19 +401,19 @@ describe("RunService: restart, recovery, and overrides", () => {
     assert.equal(service.coordinator.advance(runId).kind, "attempt");
 
     assert.equal(service.reconcile(runId), true);
-    let state = service.coordinator.inspect(runId);
+    const state = service.coordinator.inspect(runId);
     assert.equal(state.run.status, "interrupted");
     assert.equal(state.attempts[0]?.status, "interrupted");
     assert.equal(state.attention.at(-1)?.category, "uncertain_attempt");
     assert.deepEqual(await service.drive(runId), { kind: "not_running", status: "interrupted" });
 
-    service.coordinator.resume(runId, "operator reviewed the log");
-    assert.deepEqual(await service.drive(runId), { kind: "completed" });
-    state = service.coordinator.inspect(runId);
-    assert.equal(
-      state.attempts.length,
-      1 + state.transitions.filter((t) => t.attemptId !== null).length,
-    );
+    assert.equal(state.attempts[0]?.recoveryState, "unknown");
+    assert.throws(() => service.coordinator.resume(runId, "operator reviewed the log"));
+    const other = service.coordinator.createRun({ workflowText: oneAgent(""), workflowDir: root });
+    assert.throws(() => service.coordinator.start(other));
+    assert.deepEqual(service.coordinator.inspect(runId), state);
+    assert.equal(service.coordinator.inspect(other).run.status, "ready");
+    assert.equal(existsSync(path.join(root, "agent.log")), false);
     database.close();
   });
 

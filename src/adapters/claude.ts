@@ -171,6 +171,7 @@ export class ClaudeAdapter implements AgentAdapter {
     });
     return {
       pid: running.pid,
+      processIdentity: running.processIdentity,
       secrets,
       sessionId: prior,
       launchInfo: {

@@ -54,6 +54,8 @@ export const EVENT_TYPES = [
   "attempt_settled",
   "report_accepted",
   "correction_requested",
+  "invocation_dispatching",
+  "process_reconciled",
   "invocation_started",
   "invocation_settled",
   "tasks_imported",

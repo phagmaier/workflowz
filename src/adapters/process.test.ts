@@ -195,18 +195,23 @@ describe("startProcess", () => {
     }
   });
 
-  it("rejects settlement when the process group is still present after SIGKILL", async (t) => {
+  it("refuses to signal a group that exists but has no verifiable member identity", async (t) => {
     const running = sh("exit 0");
     const originalKill = process.kill.bind(process);
-    const mock = t.mock.method(process, "kill", (pid: number, signal?: string | number) =>
-      pid === -(running.pid as number) ? true : originalKill(pid, signal),
-    );
+    const signals: (string | number | undefined)[] = [];
+    const mock = t.mock.method(process, "kill", (pid: number, signal?: string | number) => {
+      if (pid !== -(running.pid ?? 0)) return originalKill(pid, signal);
+      signals.push(signal);
+      return true;
+    });
     try {
-      await assert.rejects(
-        running.completed,
-        /still exists after SIGKILL; settlement is uncertain/,
+      await assert.rejects(running.completed);
+      await assert.rejects(running.terminate());
+      assert.deepEqual(
+        [...new Set(signals)],
+        [0],
+        "unverified groups receive only liveness probes",
       );
-      await assert.rejects(running.terminate(), /settlement is uncertain/);
     } finally {
       mock.mock.restore();
     }

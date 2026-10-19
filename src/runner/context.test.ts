@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { RunCoordinator } from "../engine/run-coordinator.js";
 import { WorkflowDatabase } from "../store/database.js";
 import { ScriptedAgentAdapter } from "../test-support/scripted-agent.js";
 import { RunService } from "./run-service.js";
@@ -123,13 +124,10 @@ describe("explicit agent context and immutable attempt inputs", () => {
         f.service.coordinator.attemptInput(firstReview.attemptId)?.context.instructions[0]?.content,
         "Global guidance with literal {{braces}}",
       );
-      const observer = new WorkflowDatabase(path.join(f.root, "state.sqlite"));
+      const observer = new WorkflowDatabase(path.join(f.root, "state.sqlite"), { readOnly: true });
       try {
-        const reopened = new RunService(observer, {
-          agents: new Map(),
-          logDir: path.join(f.root, "logs"),
-        });
-        assert.deepEqual(reopened.coordinator.attemptInput(firstReview.attemptId), review);
+        const reopened = new RunCoordinator(observer);
+        assert.deepEqual(reopened.attemptInput(firstReview.attemptId), review);
       } finally {
         observer.close();
       }

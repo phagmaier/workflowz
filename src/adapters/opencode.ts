@@ -184,6 +184,7 @@ export class OpenCodeAdapter implements AgentAdapter {
     });
     return {
       pid: running.pid,
+      processIdentity: running.processIdentity,
       secrets,
       sessionId: prior,
       launchInfo: {

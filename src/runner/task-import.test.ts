@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { RunCoordinator } from "../engine/run-coordinator.js";
 import { WorkflowDatabase } from "../store/database.js";
 import { ScriptedAgentAdapter } from "../test-support/scripted-agent.js";
 import { workflowText } from "../test-support/workflows.js";
@@ -98,13 +99,10 @@ describe("immutable Markdown import through the headless runner", () => {
         after.tasks.map((t) => t.taskId),
       );
       assert.equal(readFileSync(taskFile, "utf8"), "- [ ] external edit after import\n");
-      const observer = new WorkflowDatabase(f.file);
+      const observer = new WorkflowDatabase(f.file, { readOnly: true });
       try {
-        const reopened = new RunService(observer, {
-          agents: new Map(),
-          logDir: path.join(f.root, "logs"),
-        });
-        assert.deepEqual(reopened.coordinator.inspect(runId), after);
+        const reopened = new RunCoordinator(observer);
+        assert.deepEqual(reopened.inspect(runId), after);
       } finally {
         observer.close();
       }

@@ -373,9 +373,8 @@ await setTimeout(200);
       return evidence;
     }
     operationSettled = true;
-    const invocations = state.events.filter((event) => event.type.startsWith("invocation_"));
-    const starts = invocations.filter((event) => event.type === "invocation_started");
-    const settled = invocations.filter((event) => event.type === "invocation_settled");
+    const starts = state.events.filter((event) => event.type === "invocation_started");
+    const settled = state.events.filter((event) => event.type === "invocation_settled");
     evidence.invocationCount = starts.length;
     evidence.correctionCount = state.attempts[0]?.correctionCount ?? 0;
     evidence.permissionModes = starts.flatMap((event) =>
@@ -404,10 +403,14 @@ await setTimeout(200);
     assert.equal(state.events.filter((event) => event.type === "report_accepted").length, 1);
     assert.equal(evidence.correctionCount, expected - 1);
     assert.equal(starts.length, expected);
-    assert.deepEqual(
-      invocations.map((event) => event.type),
-      Array.from({ length: expected }, () => ["invocation_started", "invocation_settled"]).flat(),
-    );
+    assert.equal(settled.length, expected);
+    for (let index = 0; index < expected; index++) {
+      const start = starts[index];
+      const end = settled[index];
+      assert.ok(start && end && start.eventId < end.eventId);
+      const previous = settled[index - 1];
+      if (previous) assert.ok(previous.eventId < start.eventId);
+    }
     for (const event of settled) {
       assert.equal(event.data.exitCode, 0);
       assert.equal(event.data.timedOut, false);

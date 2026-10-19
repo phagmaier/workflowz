@@ -641,7 +641,7 @@ describe("RunCoordinator: guards", () => {
         coordinator.requestPause(first);
       } else {
         assert.equal(coordinator.advance(first).kind, "attempt");
-        assert.equal(coordinator.reconcileAfterRestart(first), true);
+        assert.equal(coordinator.reconcileAfterRestart(first, "gone"), true);
       }
       coordinator.start(second);
       assert.equal(coordinator.advance(second).kind, "attempt");
@@ -649,10 +649,13 @@ describe("RunCoordinator: guards", () => {
       const before = coordinator.inspect(first);
       assert.equal(before.run.status, status);
       assert.equal(coordinator.run(second).status, "pausing");
-      assert.throws(() => coordinator.resume(first), /only one run can run at a time/);
+      assert.throws(
+        () => coordinator.resume(first, "reviewed interrupted effects"),
+        /only one run can run at a time/,
+      );
       assert.deepEqual(coordinator.inspect(first), before, "rejected resume changes nothing");
       coordinator.recordStop(second, "release the synthetic execution slot");
-      coordinator.resume(first);
+      coordinator.resume(first, "reviewed interrupted effects");
       assert.equal(coordinator.run(first).status, "running");
       database.close();
     });

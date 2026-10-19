@@ -6,13 +6,19 @@
  * an attempt that the runner has already settled. Termination escalates from SIGTERM to SIGKILL
  * after a grace period, and `completed` resolves only after the group has been reaped.
  *
- * Known limit: the group id is the leader's pid. If the leader is gone and its pid is reused while
- * group members still exist, signals could reach the wrong group. Phase 7 adds process-start
- * identity checks; until then this window is documented, not hidden.
+ * Numeric group IDs are checked against the captured Linux boot/start identity before signalling.
+ * Identity mismatch/unavailability leaves settlement uncertain rather than killing an unrelated PID.
  */
 import { type ChildProcess, spawn } from "node:child_process";
 import { createWriteStream, statSync, type WriteStream } from "node:fs";
+import type { ProcessIdentity } from "../contracts/process-identity.js";
 import { boundedText, OutputCapture } from "./output.js";
+import {
+  captureProcessIdentity,
+  processGroupState,
+  requireProcessIdentitySupport,
+  signalOwnedGroup,
+} from "./process-identity.js";
 import { SecretFilter } from "./secrets.js";
 
 export interface ProcessSpec {
@@ -53,6 +59,7 @@ export interface ProcessResult {
 
 export interface RunningProcess {
   readonly pid: number | null;
+  readonly processIdentity: ProcessIdentity | null;
   readonly completed: Promise<ProcessResult>;
   /**
    * Ends the process group with SIGTERM, then SIGKILL after the grace period. The returned promise
@@ -83,6 +90,11 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
   if (!isDirectory(spec.cwd)) {
     return finished({ spawnError: "cwd_not_found", pid: null });
   }
+  try {
+    requireProcessIdentitySupport();
+  } catch {
+    return finished({ spawnError: "process_identity_unavailable", pid: null });
+  }
 
   const log =
     spec.logPath === undefined
@@ -106,6 +118,7 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
   const stderr = new OutputCapture(spec.stderrLimit ?? DEFAULT_STDOUT_LIMIT);
   const pid = child.pid ?? null;
   const pgid = pid;
+  const processIdentity = captureProcessIdentity(pid);
 
   let terminated = false;
   let timedOut = false;
@@ -113,6 +126,10 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
   let escalation: ReturnType<typeof setTimeout> | undefined;
   let spawnError: string | null = null;
   let stdinError: string | undefined;
+  let failTermination: (error: unknown) => void = () => undefined;
+  const terminationFailed = new Promise<never>((_, reject) => {
+    failTermination = reject;
+  });
   child.stdin?.on("error", (error) => {
     stdinError = errorCode(error);
   });
@@ -151,8 +168,18 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
     if (pgid === null) {
       return;
     }
-    signalGroup(pgid, "SIGTERM");
-    escalation ??= setTimeout(() => signalGroup(pgid, "SIGKILL"), graceMs);
+    try {
+      signalOwnedGroup(pgid, processIdentity, "SIGTERM");
+      escalation ??= setTimeout(() => {
+        try {
+          signalOwnedGroup(pgid, processIdentity, "SIGKILL");
+        } catch (error) {
+          failTermination(error);
+        }
+      }, graceMs);
+    } catch (error) {
+      failTermination(error);
+    }
   };
 
   const timer =
@@ -164,11 +191,12 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
         }, spec.timeoutMs);
 
   const completed = (async (): Promise<ProcessResult> => {
-    const exit = await exited;
-    clearTimeout(timer);
+    let exit: Awaited<typeof exited>;
     try {
+      exit = await Promise.race([exited, terminationFailed]);
+      clearTimeout(timer);
       if (pgid !== null) {
-        await reapGroup(pgid, graceMs);
+        await reapGroup(pgid, processIdentity, graceMs);
       }
       await closeWithin(streamsClosed);
     } catch (error) {
@@ -176,6 +204,7 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
       child.stderr?.destroy();
       throw error;
     } finally {
+      clearTimeout(timer);
       clearTimeout(escalation);
       stdoutFilter.end();
       stderrFilter.end();
@@ -200,6 +229,7 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
 
   return {
     pid,
+    processIdentity,
     completed,
     terminate: async () => {
       beginTermination();
@@ -221,53 +251,44 @@ function finished(result: { spawnError: string; pid: number | null }): RunningPr
     stderr: "",
     stderrTruncated: false,
   };
-  return { pid: null, completed: Promise.resolve(completed), terminate: async () => undefined };
-}
-
-/** Sends `signal` to the group. A group that has already gone is not an error. */
-function signalGroup(pgid: number, signal: NodeJS.Signals): void {
-  try {
-    process.kill(-pgid, signal);
-  } catch (error) {
-    if (errorCode(error) !== "ESRCH") {
-      throw error;
-    }
-  }
-}
-
-function groupAlive(pgid: number): boolean {
-  try {
-    process.kill(-pgid, 0);
-    return true;
-  } catch (error) {
-    // EPERM means the group exists but belongs to someone else, so it still counts as alive.
-    return errorCode(error) === "EPERM";
-  }
+  return {
+    pid: null,
+    processIdentity: null,
+    completed: Promise.resolve(completed),
+    terminate: async () => undefined,
+  };
 }
 
 /** Waits for the group to disappear, up to `ms`. Returns whether it is gone. */
-async function waitForGroupGone(pgid: number, ms: number): Promise<boolean> {
+async function waitForGroupGone(
+  pgid: number,
+  identity: ProcessIdentity | null,
+  ms: number,
+): Promise<boolean> {
   const deadline = Date.now() + ms;
-  while (groupAlive(pgid)) {
+  for (;;) {
+    const state = processGroupState(pgid, identity);
+    if (state === "gone") return true;
+    if (state !== "alive")
+      throw new Error(`process group ${pgid} identity is ${state}; settlement is uncertain`);
     if (Date.now() >= deadline) {
       return false;
     }
     await sleep(POLL_MS);
   }
-  return true;
 }
 
 /** Ends whatever remains of the group: SIGTERM, a grace period, then SIGKILL. */
-async function reapGroup(pgid: number, graceMs: number): Promise<void> {
-  if (!groupAlive(pgid)) {
-    return;
-  }
-  signalGroup(pgid, "SIGTERM");
-  if (await waitForGroupGone(pgid, graceMs)) {
-    return;
-  }
-  signalGroup(pgid, "SIGKILL");
-  if (!(await waitForGroupGone(pgid, REAP_WAIT_MS))) {
+async function reapGroup(
+  pgid: number,
+  identity: ProcessIdentity | null,
+  graceMs: number,
+): Promise<void> {
+  if (processGroupState(pgid, identity) === "gone") return;
+  signalOwnedGroup(pgid, identity, "SIGTERM");
+  if (await waitForGroupGone(pgid, identity, graceMs)) return;
+  signalOwnedGroup(pgid, identity, "SIGKILL");
+  if (!(await waitForGroupGone(pgid, identity, REAP_WAIT_MS))) {
     throw new Error(`process group ${pgid} still exists after SIGKILL; settlement is uncertain`);
   }
 }

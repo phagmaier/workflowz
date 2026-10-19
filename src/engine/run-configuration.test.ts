@@ -396,7 +396,7 @@ describe("paused and pre-start immutable workflow revisions", () => {
     assert.deepEqual(f.coordinator.inspect(f.runId).transitions, before.transitions);
     assert.deepEqual(f.coordinator.attemptInput(firstWork), input);
     assert.deepEqual(f.coordinator.reportFor(firstWork), report);
-    const db = new WorkflowDatabase(f.file);
+    const db = new WorkflowDatabase(f.file, { readOnly: true });
     try {
       const c = new RunCoordinator(db);
       assert.equal(c.run(f.runId).revisionId, revisionId);
@@ -406,8 +406,8 @@ describe("paused and pre-start immutable workflow revisions", () => {
       );
       assert.deepEqual(c.attemptInput(firstWork), input);
       assert.deepEqual(c.reportFor(firstWork), report);
-      c.resume(f.runId);
-      dispatch(c, f.runId);
+      f.coordinator.resume(f.runId);
+      dispatch(f.coordinator, f.runId);
       const active = c.activeAttempt(f.runId);
       assert.ok(active);
       assert.equal(active.revisionId, revisionId);

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, describe, it } from "node:test";
-import { SchemaVersionError, WorkflowDatabase } from "./database.js";
+import { childEnvironment } from "../adapters/environment.js";
+import { InstanceLockError, SchemaVersionError, WorkflowDatabase } from "./database.js";
 import { LATEST_SCHEMA_VERSION, MIGRATIONS } from "./migrations.js";
 import { RunStore } from "./run-store.js";
 
@@ -199,5 +201,97 @@ describe("WorkflowDatabase", () => {
     db.transaction(() => seedRun(db, "next_transaction"));
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM runs").get()?.["n"], 1);
     db.close();
+  });
+
+  it("rejects a competing writer and symlink alias while allowing read-only committed inspection", () => {
+    const file = tempFile("owner.sqlite");
+    const owner = new WorkflowDatabase(file);
+    try {
+      seedRun(owner, "owned");
+      const alias = path.join(path.dirname(file), "alias.sqlite");
+      symlinkSync(file, alias);
+      assert.throws(() => new WorkflowDatabase(file), InstanceLockError);
+      assert.throws(() => new WorkflowDatabase(alias), InstanceLockError);
+      const observer = new WorkflowDatabase(alias, { readOnly: true });
+      try {
+        assert.equal(observer.prepare("SELECT run_id FROM runs").get()?.["run_id"], "owned");
+        assert.throws(() => seedRun(observer, "forbidden"));
+        assert.throws(() => observer.transaction(() => seedRun(observer, "forbidden")));
+        assert.equal(owner.prepare("SELECT COUNT(*) AS n FROM runs").get()?.["n"], 1);
+      } finally {
+        observer.close();
+      }
+      const peer = spawnSync(
+        process.execPath,
+        [
+          "--input-type=module",
+          "-e",
+          `
+        import { WorkflowDatabase, InstanceLockError } from ${JSON.stringify(new URL("./database.js", import.meta.url).href)};
+        try { const db = new WorkflowDatabase(process.argv[1]); db.close(); process.exit(2); }
+        catch (error) { if (!(error instanceof InstanceLockError)) throw error; }
+      `,
+          file,
+        ],
+        { env: childEnvironment(), timeout: 5000 },
+      );
+      assert.equal(
+        peer.status,
+        0,
+        "failed local contenders and observers must not release the owner's OS lock",
+      );
+    } finally {
+      owner.close();
+    }
+    const next = new WorkflowDatabase(file);
+    try {
+      seedRun(next, "next_owner");
+      assert.equal(next.prepare("SELECT COUNT(*) AS n FROM runs").get()?.["n"], 2);
+    } finally {
+      next.close();
+    }
+  });
+
+  it("releases ownership if opening an unsupported schema fails", () => {
+    const file = tempFile("failed-open.sqlite");
+    const raw = new DatabaseSync(file);
+    raw.exec(`PRAGMA user_version = ${LATEST_SCHEMA_VERSION + 1}`);
+    raw.close();
+    assert.throws(() => new WorkflowDatabase(file), SchemaVersionError);
+    const repair = new DatabaseSync(file);
+    repair.exec("PRAGMA user_version = 0");
+    repair.close();
+    const owner = new WorkflowDatabase(file);
+    try {
+      seedRun(owner, "after_failure");
+      assert.equal(owner.prepare("SELECT run_id FROM runs").get()?.["run_id"], "after_failure");
+    } finally {
+      owner.close();
+    }
+  });
+
+  it("migrates schema 6 interrupted attempts conservatively without rewriting historical identity", () => {
+    const file = tempFile("schema6.sqlite");
+    const old = new DatabaseSync(file);
+    for (const migration of MIGRATIONS.filter((m) => m.version <= 6)) old.exec(migration.sql);
+    old.exec(`PRAGMA user_version = 6;
+      INSERT INTO workflow_revisions VALUES (1, 'h', 'y', '/d', 't');
+      INSERT INTO runs (run_id, revision_id, project_root, status, cursor_step_id, created_at, updated_at) VALUES ('r', 1, '/p', 'interrupted', 's', 't', 't');
+      INSERT INTO attempts (attempt_id, run_id, step_id, revision_id, sequence_no, status, started_at, error_code, process_identity)
+      VALUES ('a', 'r', 's', 1, 1, 'interrupted', 't', 'uncertain_after_restart', 'legacy-identity');`);
+    old.close();
+    const owner = new WorkflowDatabase(file);
+    try {
+      const store = new RunStore(owner, () => "now");
+      assert.equal(store.pendingRecovery()?.attemptId, "a");
+      assert.equal(store.getAttempt("a")?.processIdentity, null);
+      assert.equal(
+        owner.prepare("SELECT process_identity FROM attempts").get()?.["process_identity"],
+        "legacy-identity",
+      );
+      assert.equal(store.getAttempt("a")?.recoveryState, "unknown");
+    } finally {
+      owner.close();
+    }
   });
 });

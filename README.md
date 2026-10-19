@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: project tooling, strict YAML/schema validation, policy compilation, SQLite persistence, transactional run coordination, a sequential runner for command steps and fake agents, mandatory CLI/HTTP reporting with one same-session correction, immutable Markdown task import, selected input context, run-local task parameters, paused workflow revisions, and offline-conformant Codex, Pi, Claude Code, OpenCode and omp adapters. All five harnesses passed authenticated reporting and exact-session correction with their selected smoke models; milestone 0.5 and the Phase 6 gate are complete. This is not a complete MVP: recovery, management CLI and UI remain on the [`todo.md`](todo.md) roadmap and require new authorization.
+**Status:** Implemented core: project tooling, strict YAML/schema validation, policy compilation, SQLite persistence, transactional run coordination, sequential command/agent execution, strict reporting with one same-session correction, immutable task import/context, run-local task parameters, paused revisions, and all five harness adapters. Milestone 0.5 and Phase 6 are complete. The separately authorized Phase 7.1 adds headless instance ownership, Linux process identity and conservative startup reconciliation. This is not a complete MVP: recovery-decision actions, daemon management, management CLI and UI remain on the [`todo.md`](todo.md) roadmap and require new authorization.
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -42,7 +42,7 @@ See [`spec.md`](spec.md) §2.4 for the supported harnesses and [`architecture.md
 
 ## Development
 
-Requirements: Node.js 26 or newer (verified with v26.8.2) and npm (verified with 11.19.1). Nothing else is needed. The test suite runs offline and makes no model calls.
+Requirements: Linux with `/proc`, Node.js 26 or newer (verified with v26.8.2) and npm (verified with 11.19.1). State databases require a local filesystem with reliable SQLite locks. The test suite runs offline and makes no model calls.
 
 ```bash
 npm ci                       # install the exact versions in package-lock.json
@@ -56,11 +56,12 @@ npm run smoke:reporting      # real wf report + SQLite + fake-session correction
 npm run smoke:tasks          # immutable Markdown import + fake task loop + persisted context
 npm run smoke:capabilities   # offline installed-feature preflight + real fixture reporting
 npm run smoke:boundaries     # synthetic credential/environment/log boundaries + real reporting
+npm run smoke:recovery       # real owner SIGKILL + process identity + no replay, offline
 npm run smoke:harnesses -- --help  # opt-in live tool; no provider execution without --execute
 npm run probe:harnesses      # isolated factory capability probes of codex, pi, omp, opencode, claude
 ```
 
-Process tests start real children: `sh`, `sleep`, and `node`. They need a POSIX system.
+Process tests start real children: `sh`, `sleep`, and `node`. Linux `/proc` is required for supervised process identity; unsupported identity environments fail before launch.
 
 `npm run validate` exits 0 for a runnable workflow (warnings allowed), 1 when it has errors, and 2 when the file cannot be read. Diagnostics are printed as `file:line:column: severity [code] path: message`.
 
@@ -97,6 +98,16 @@ service.reviseWorkflow(runId, {
 ```
 
 Settings may replace agent model/prompt, skip an existing executable step via a declared outcome, and override selected `on` entries. `{steps: {}}` clears task settings. Revisions retain imported task IDs/progress and all history, validate pending overrides, and require a compatible cursor. Each attempt freezes its settings. Session resume remains restricted to the same harness/run/task/revision; a new revision cannot reopen an older revision's session. See [schema decisions](docs/schema-v1.md) for the strict contracts and skip semantics.
+
+### Ownership and startup recovery (Phase 7.1)
+
+Opening a writable `WorkflowDatabase(file)` holds a single-owner lease until `close()` or process exit/crash. A competing writer fails before migrations or execution; symlink aliases resolve to the same lease. Inspect a live database with `new WorkflowDatabase(file, { readOnly: true })` and `RunCoordinator`, not a second runner. Read-only snapshots cannot write. Do not unlink the adjacent `.runner-lock` file or use hard-link aliases/network filesystems.
+
+The first `RunService` on a writer connection automatically reconciles persisted running/pausing runs and unresolved attempts into `interrupted`; it never resumes work or signals orphan processes. Linux boot ID, PID/PGID/session and start ticks are persisted for commands and every agent/correction invocation. Spawn intent clears the prior process identity before launch, so a correction spawn gap stays unknown rather than borrowing its original's settled identity.
+
+`service.reconcile(runId)` refreshes an interrupted attempt's process observation. `alive`, `mismatch` or `unknown` blocks execution across the state database; `gone` removes only that process barrier, not the interruption. Explicit interrupted resume requires a reason acknowledging possible side effects. Accepted reports are retained but cannot route an interrupted attempt. Between-step restarts preserve the committed cursor without replay.
+
+Unidentified operations remain blocked; the explicit recovery-decision surface is Phase 7.2, not implemented here. `/proc` inspection and signalling are not atomic, escaped descendants remain outside group ownership, and no isolation or rollback is claimed. See [recovery contracts and limits](architecture.md#75-phase-71-ownership-identity-and-reconciliation).
 
 ### Codex adapter (Phase 6.1)
 
@@ -186,7 +197,7 @@ Normal HOME/auth/config/resource discovery and existing unrestricted permissions
 
 Each execution retains private `evidence.json`, SQLite and existing bounded scrubbed adapter logs under a unique `wf-<harness>-<scenario>-*` artifact directory. Evidence includes version, capabilities, permissions, selected model/effort, authentication status, outcome, invocation/correction counts and session fingerprints—never raw handles/report access. Settled target projects are removed; uncertain cleanup preserves them and fails. SIGINT/SIGTERM stop through `RunService`. Harness-owned state/transcripts are not copied, rewritten or removed; known-value scrubbing cannot recognize unknown secrets.
 
-The offline smoke tests exercise all five actual factories through synthetic CLIs. **The Phase 6 gate passed with live Codex/Pi Luna/low reporting and exact-session correction. The later authorized Meta Contributor/low pass verified omp/OpenCode reporting and exact-session correction, and Claude Haiku/low correction closed milestone 0.5 after its earlier direct-report success. The current offline gate passes all 704 tests.** See [Claude completion evidence](docs/harness-compatibility.md#authorized-claude-correction--milestone-05-complete) and [Meta live evidence and limits](docs/harness-compatibility.md#authorized-meta-contributor-live-results).
+The offline smoke tests exercise all five actual factories through synthetic CLIs. **The Phase 6 gate passed with live Codex/Pi Luna/low reporting and exact-session correction. The later authorized Meta Contributor/low pass verified omp/OpenCode reporting and exact-session correction, and Claude Haiku/low correction closed milestone 0.5 after its earlier direct-report success. The offline gate at that milestone passed 704 tests.** See [Claude completion evidence](docs/harness-compatibility.md#authorized-claude-correction--milestone-05-complete), [Meta live evidence and limits](docs/harness-compatibility.md#authorized-meta-contributor-live-results) and the [implementation log](docs/implementation-log.md) for subsequent offline recovery verification.
 
 The earlier [Claude/OpenCode/omp pass](docs/harness-compatibility.md#remaining-milestone-05-results--stopped-at-omp-authentication) stopped at omp's missing OpenAI credential; that failure remains historical evidence, not a reason to ask for an OpenAI key again. Future paid execution still needs explicit bounded authorization. Requested selectors are not a guarantee against native substitution. OpenCode's earlier private diagnostic log exposed an unknown configured MCP credential; do not publish raw artifacts.
 

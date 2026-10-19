@@ -4,6 +4,7 @@
  * Failures to run map to `system.*` outcomes so they route as engine errors, not agent results.
  */
 import type { SystemOutcome } from "../contracts/identifiers.js";
+import type { ProcessIdentity } from "../contracts/process-identity.js";
 import { childEnvironment } from "./environment.js";
 import { type ProcessResult, type RunningProcess, startProcess } from "./process.js";
 
@@ -34,6 +35,7 @@ export type CommandOutcome =
 
 export interface RunningCommand {
   readonly pid: number | null;
+  readonly processIdentity: ProcessIdentity | null;
   readonly completed: Promise<CommandOutcome>;
   terminate(): Promise<void>;
 }
@@ -53,6 +55,7 @@ export function startCommand(spec: CommandSpec): RunningCommand {
         });
   return {
     pid: running.pid,
+    processIdentity: running.processIdentity,
     completed: running.completed.then(commandOutcome),
     terminate: running.terminate,
   };

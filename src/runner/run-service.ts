@@ -24,6 +24,7 @@ import {
   startCommand,
 } from "../adapters/command-executor.js";
 import { boundedText } from "../adapters/output.js";
+import { processGroupState } from "../adapters/process-identity.js";
 import { scrubSecrets } from "../adapters/secrets.js";
 import type { TaskOverrideEdit, WorkflowRevisionInput } from "../contracts/run-configuration.js";
 import type { RunStatus } from "../contracts/run-state.js";
@@ -58,6 +59,10 @@ interface Terminable {
   terminate(): Promise<void>;
 }
 
+/** Multiple service facades may share one owner connection; only its first facade is startup. */
+const initializedDatabases = new WeakSet<WorkflowDatabase>();
+const drivingDatabases = new WeakSet<WorkflowDatabase>();
+
 export class RunService {
   readonly coordinator: RunCoordinator;
   private readonly reports: ReportServer;
@@ -67,9 +72,10 @@ export class RunService {
   private drivingRunId: string | undefined;
 
   constructor(
-    database: WorkflowDatabase,
+    private readonly database: WorkflowDatabase,
     private readonly options: RunServiceOptions,
   ) {
+    if (database.readOnly) throw new Error("a read-only state connection cannot own a runner");
     mkdirSync(options.logDir, { recursive: true });
     this.coordinator = new RunCoordinator(database, options);
     this.reports = new ReportServer(this.coordinator);
@@ -80,6 +86,10 @@ export class RunService {
         options.correctionTimeoutMs > 30_000)
     )
       throw new Error("correction timeout must be between 0 and 30000 ms");
+    if (!initializedDatabases.has(database)) {
+      for (const runId of this.coordinator.recoveryRuns()) this.reconcile(runId);
+      initializedDatabases.add(database);
+    }
   }
 
   /** Preview and import read the checklist once each; createRun freezes the text it actually read. */
@@ -110,16 +120,18 @@ export class RunService {
 
   /** Drives one run until it completes, pauses, or its stopped process tree has been reaped. */
   async drive(runId: string): Promise<DriveResult> {
-    if (this.drivingRunId !== undefined) {
-      throw new Error(`this runner is already driving run ${this.drivingRunId}`);
+    if (drivingDatabases.has(this.database)) {
+      throw new Error("this state database is already driving a run");
     }
     this.drivingRunId = runId;
+    drivingDatabases.add(this.database);
     try {
       await this.reports.listen();
       return await this.driveRun(runId);
     } finally {
       await this.reports.close();
       this.drivingRunId = undefined;
+      drivingDatabases.delete(this.database);
     }
   }
 
@@ -171,12 +183,20 @@ export class RunService {
     this.coordinator.recordStop(runId, reason);
   }
 
-  /** Startup reconciliation. Returns true when an attempt left active by a previous process was found. */
+  /** Reconcile persisted state without signalling or replaying any uncertain operation. */
   reconcile(runId: string): boolean {
-    if (this.drivingRunId === runId) {
+    if (drivingDatabases.has(this.database)) {
       throw new Error(`cannot reconcile run ${runId} while this runner is driving it`);
     }
-    return this.coordinator.reconcileAfterRestart(runId);
+    const attempt = this.coordinator.recoveryAttempt(runId);
+    const identity = attempt?.processIdentity ?? null;
+    const observation =
+      attempt?.pid == null
+        ? "unknown"
+        : identity && (identity.pid !== attempt.pid || identity.pgid !== attempt.pgid)
+          ? "unknown"
+          : processGroupState(attempt.pid, identity);
+    return this.coordinator.reconcileAfterRestart(runId, observation);
   }
 
   private async runAttempt(runId: string, attemptId: string): Promise<void> {
@@ -228,6 +248,7 @@ export class RunService {
       return;
     }
     let running: RunningCommand;
+    this.coordinator.prepareInvocation(attemptId, 0);
     try {
       running = startCommand(prepared.spec);
     } catch {
@@ -239,6 +260,17 @@ export class RunService {
       return;
     }
     this.current = running;
+    try {
+      this.coordinator.recordInvocation(attemptId, 0, "started", {
+        pid: running.pid,
+        processIdentity: running.processIdentity,
+        logPath: prepared.spec.logPath,
+      });
+    } catch (error) {
+      await running.terminate();
+      this.current = undefined;
+      throw error;
+    }
     let result: CommandOutcome;
     try {
       result = await running.completed;
@@ -255,6 +287,14 @@ export class RunService {
       return;
     }
     this.current = undefined;
+    this.coordinator.recordInvocation(attemptId, 0, "settled", {
+      pid: running.pid,
+      processIdentity: running.processIdentity,
+      logPath: prepared.spec.logPath,
+      exitCode: result.kind === "outcome" ? result.exitCode : null,
+      timedOut: result.kind === "system" && result.code === "system.timeout",
+      failure: result.kind === "system" ? result.code : undefined,
+    });
     this.coordinator.recordOutput(attemptId, {
       stdout: result.stdout,
       logPath: prepared.spec.logPath ?? null,
@@ -327,6 +367,7 @@ export class RunService {
       prompt: `${prepared.input.prompt}\nReport through wf report <outcome> --summary <text>. Allowed outcomes: ${prepared.input.allowedOutcomes.join(", ")}. A report does not end this process.`,
     };
     try {
+      this.coordinator.prepareInvocation(attemptId, invocation);
       let running: AgentHandle;
       try {
         if (invocation === 1) {
@@ -376,6 +417,7 @@ export class RunService {
               }
             : {}),
           pid: running.pid,
+          processIdentity: running.processIdentity ?? null,
           sessionId,
           logPath: input.logPath,
         });
@@ -419,6 +461,7 @@ export class RunService {
       );
       this.coordinator.recordInvocation(attemptId, invocation, "settled", {
         pid: running.pid,
+        processIdentity: running.processIdentity ?? null,
         sessionId: wrongSession ? input.priorSessionId : finalSession,
         logPath: input.logPath,
         exitCode: result.exitCode,

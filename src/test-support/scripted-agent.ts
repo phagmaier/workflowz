@@ -129,6 +129,7 @@ export class ScriptedAgentAdapter implements AgentAdapter {
     });
     return {
       pid: running.pid,
+      processIdentity: running.processIdentity,
       sessionId,
       completed: running.completed.then((result) => ({
         ...toAgentResult(result),

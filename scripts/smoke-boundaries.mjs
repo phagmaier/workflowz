@@ -87,17 +87,14 @@ steps:
           state.events.filter((e) => e.type === "correction_requested").length,
           failure ? 0 : 1,
         );
-        assert.deepEqual(
-          state.events.filter((e) => e.type.startsWith("invocation_")).map((e) => e.type),
-          failure
-            ? ["invocation_started", "invocation_settled"]
-            : [
-                "invocation_started",
-                "invocation_settled",
-                "invocation_started",
-                "invocation_settled",
-              ],
-        );
+        const starts = state.events.filter((e) => e.type === "invocation_started");
+        const settled = state.events.filter((e) => e.type === "invocation_settled");
+        assert.equal(starts.length, failure ? 1 : 2);
+        assert.equal(settled.length, starts.length);
+        for (let index = 0; index < starts.length; index++) {
+          assert.ok(starts[index].eventId < settled[index].eventId);
+          if (index > 0) assert.ok(settled[index - 1].eventId < starts[index].eventId);
+        }
         const logs = readdirSync(logDir).filter(
           (f) => f.endsWith(".log") || f.endsWith(".log.correction"),
         );

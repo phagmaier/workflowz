@@ -450,3 +450,47 @@ PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run ch
 ```
 
 Typecheck/lint passed; **704 tests passed, 77 suites, zero failures/cancellations/skips**. Biome checked **116 files**, with **115 informational suggestions**, no fixes and no errors. Ordinary checks made no provider calls. No runtime or test changes were needed for this acceptance-only milestone completion.
+
+## Phase 7.1 — state ownership, Linux identity and conservative restart reconciliation
+
+Started from clean `main` at `ddb46bc`, following `9df2563` and `b2ec72e`. After milestone 0.5 completion, the owner explicitly selected **Authorize Phase 7.1**: implement the headless/offline lifecycle slice, verify it, update docs and commit/push. No Phase 7.2 decision surface, daemon manager, management CLI/UI, paid calls or subagents were authorized or added. Required guidance and the completed compatibility evidence remain in force; no handoff document was created.
+
+Graph-first discovery/coverage again reported source as `not_tracked`; source reads and installed TypeScript LSP references supplied the implementation evidence. Exported database/process/handle/invocation/recovery contracts and affected callers were inspected. The LSP returned stale imported declarations after edits; this was reported and the server reloaded. Import code actions were unavailable, so Biome's import-only safe organization was used, without applying unrelated informational suggestions.
+
+Implementation:
+
+- `WorkflowDatabase` takes an exclusive SQLite transaction on an adjacent canonical-path `.runner-lock` before main-database migration. Symlink aliases share ownership; peer writers fail with `InstanceLockError`. Close/crash releases the kernel lock without unlinking/reclaiming a stale PID file. Existing read observers now explicitly use `{readOnly: true}` and `RunCoordinator`. Deferred read transactions preserve consistent snapshots without allowing writes; failed opens release the lease.
+- The supervisor captures Linux boot UUID, PID/PGID/session and start ticks. Actual commands, every real adapter and the fake fixture carry that evidence into coordinator-owned transactional state/events. Group signals require matching current ownership evidence; unsupported identity environments fail before spawn. Reaped-leader descendants are checked against the retained group/session/start bounds, not trusted solely from numeric `kill(..., 0)`.
+- `invocation_dispatching` commits before every launch, including correction, and clears prior process identity. This preserves uncertainty in the spawn/persistence window instead of borrowing the original turn's settled identity.
+- The first service facade on an owner connection automatically reconciles running/pausing runs, between-step cursors and pending interrupted attempts. Only the coordinator mutates interruption state, attention and audit history. Append-only migration **7** adds `recovery_state`, conservatively backfilling existing uncertain interruptions; migrations **1–6 remain unchanged**.
+- `alive`, `mismatch` and `unknown` block new execution across that database. Reconciliation can establish `gone`, but never routes a retained report or automatically resumes/replays work. An interrupted resume requires a reason acknowledging uncertain effects. Unchanged observations are idempotent; changed observations append `process_reconciled`. Multiple facades on one connection cannot overlap drive or reconcile a live owner.
+
+Verification exercised with explicit Node.js **v26.8.2**:
+
+- `npm run smoke:recovery`: real owner SIGKILL during a command, a correction with accepted real `wf` report, the interval between committed steps, and the correction intent/spawn gap. Competing writers were refused; startup interrupted without replay or automatic signalling; report/transition history and SQLite reopen matched. Surviving process evidence blocked execution. Explicit smoke-owner cleanup established absence, and explicit continuation retried only the interrupted command or continued the committed cursor as selected. All owned processes, projects, sessions, leases and databases were removed; workspace scratch absence was independently checked.
+- Focused build plus `node --test dist/adapters/process-identity.test.js dist/adapters/process.test.js dist/adapters/probe.test.js dist/app/harness-smoke.test.js dist/runner/recovery.test.js`: **72 passed**, **8 suites**, zero failures/cancellations/skips. This includes all five synthetic smoke selections, real report acknowledgments, timeout/stop/descendant cleanup, observed PID mismatch, malformed identity, crash uncertainty, no report routing/replay, exact-session correction intent and interruption transaction rollback.
+
+Initial verification found and fixed concrete integration gaps: read-only inspection must permit snapshot transactions; kernel-thread `/proc` records legitimately have group/session ID zero; and smoke/conformance assertions must distinguish pre-spawn intent from actual invocation start/settlement. The snapshot reader also treats `ENOENT`/`ESRCH` as vanished processes, not ownership evidence. The host inspection found 152 zero-group/session records, explaining rejected descendant scans. The incidental exact event-type/log-text assertions were removed in favor of process ordering/session/count invariants, including the standalone boundary smoke consumer. The initial failed smoke's owned process identity was checked, its group was confirmed gone and its scratch explicitly removed before continuing. Known group IDs from the failing suite were also confirmed absent; no unrelated PID was signalled. Two earlier gates stopped on import ordering before tests, and the first full test gate exposed these integration failures; the focused passing results above follow the fixes.
+
+The independent smoke sends no provider requests and uses no installed harness authentication. No live account scenario was repeated, no real credential source was read, and no global harness configuration/dependencies/permission selections changed. Historical live compatibility remains scoped to its original evidence, not a new post-change account attestation. The unknown-MCP-secret warning remains intact.
+
+Limits are explicit: Linux `/proc` and a stable local SQLite filesystem are required; leases are per canonical state database, not isolation across arbitrary databases/projects. `/proc` checks and group signals are not atomic, escaped descendants remain outside ownership, and unknown launch windows stay blocked pending the Phase 7.2 decision surface. No automatic orphan termination, side-effect-success inference, workflow quality gate, hidden retry or rollback claim was added.
+
+Final verification, executed sequentially:
+
+```bash
+PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run check
+PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run smoke:recovery
+PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run smoke:reporting
+PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run validate -- examples/overnight.yaml
+PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run smoke:boundaries
+PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run lint
+```
+
+- Full gate: typecheck/lint passed; **717 tests passed, 79 suites, zero failures/cancellations/skips**. Biome checked **123 files**, with **121 informational suggestions**, no fixes and no errors. This retains all five adapters' complete offline conformance.
+- Final recovery smoke: all four crash boundaries passed again after the integration fixes, with durable reopen and confirmed scratch removal.
+- Reporting smoke: durable acceptance while active without routing, completed direct report, exactly one successful correction and exactly one failed correction routing `system.report_error` all passed; read-only observation and SQLite reopen passed; owned temporary artifacts removed.
+- Boundary smoke: OpenCode and Claude synthetic correction and provider-failure paths passed with real reporting, selected environment, scrubbed logs/diagnostics, sequential settlement and SQLite reopen. The updated standalone consumer preserves process-order invariants while allowing intent events. Lint passed afterward.
+- Canonical example: **valid, 8 steps, 0 warnings**. Workflow/report schemas and example configuration are intentionally unchanged.
+
+Only **7.1** is checked after these acceptance results. Milestone 0.5 and Phase 6 remain complete. Phase 7.2–7.5, daemon management, management CLI/UI and further paid execution remain outside this authorization.

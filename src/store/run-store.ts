@@ -7,6 +7,11 @@
  */
 
 import type { AgentInputSnapshot } from "../contracts/agent-context.js";
+import {
+  type ProcessIdentity,
+  type ProcessObservation,
+  processIdentitySchema,
+} from "../contracts/process-identity.js";
 import type { AgentReport } from "../contracts/report.js";
 import type { TaskOverrides } from "../contracts/run-configuration.js";
 import type {
@@ -63,6 +68,10 @@ export interface AttemptRow {
   readonly revisionId: number;
   readonly sequenceNo: number;
   readonly sessionId: string | null;
+  readonly pid: number | null;
+  readonly pgid: number | null;
+  readonly processIdentity: ProcessIdentity | null;
+  readonly recoveryState: ProcessObservation | null;
   readonly correctionCount: number;
   readonly status: AttemptStatus;
   readonly startedAt: string;
@@ -328,12 +337,55 @@ export class RunStore {
     return this.getReport(attemptId) as ReportRow;
   }
 
-  setProcess(attemptId: string, pid: number | null, sessionId: string | null): void {
+  setProcess(
+    attemptId: string,
+    pid: number | null,
+    identity: ProcessIdentity | null,
+    sessionId: string | null,
+  ): void {
     this.database
       .prepare(
-        "UPDATE attempts SET pid = ?, pgid = ?, session_id = COALESCE(?, session_id), status = 'running' WHERE attempt_id = ?",
+        "UPDATE attempts SET pid = ?, pgid = ?, process_identity = ?, session_id = COALESCE(?, session_id), status = 'running' WHERE attempt_id = ?",
       )
-      .run(pid, pid, sessionId, attemptId);
+      .run(
+        pid,
+        identity?.pgid ?? pid,
+        identity ? JSON.stringify(identity) : null,
+        sessionId,
+        attemptId,
+      );
+  }
+
+  clearProcess(attemptId: string): void {
+    this.database
+      .prepare(
+        "UPDATE attempts SET pid = NULL, pgid = NULL, process_identity = NULL, status = 'starting' WHERE attempt_id = ?",
+      )
+      .run(attemptId);
+  }
+
+  setRecoveryState(attemptId: string, state: ProcessObservation): void {
+    this.database
+      .prepare("UPDATE attempts SET recovery_state = ? WHERE attempt_id = ?")
+      .run(state, attemptId);
+  }
+
+  pendingRecovery(runId?: string): AttemptRow | undefined {
+    const row = this.database
+      .prepare(
+        "SELECT * FROM attempts WHERE recovery_state IN ('alive', 'mismatch', 'unknown') AND (? IS NULL OR run_id = ?) ORDER BY started_at LIMIT 1",
+      )
+      .get(runId ?? null, runId ?? null) as Raw | undefined;
+    return row ? toAttempt(row) : undefined;
+  }
+
+  recoveryRuns(): string[] {
+    return this.database
+      .prepare(
+        "SELECT run_id FROM runs WHERE status IN ('running', 'pausing') OR run_id IN (SELECT run_id FROM attempts WHERE recovery_state IN ('alive', 'mismatch', 'unknown'))",
+      )
+      .all()
+      .map((row) => String(row["run_id"]));
   }
 
   reserveCorrection(attemptId: string): void {
@@ -651,6 +703,10 @@ function toAttempt(row: Raw): AttemptRow {
     revisionId: row["revision_id"] as number,
     sequenceNo: row["sequence_no"] as number,
     sessionId: row["session_id"] as string | null,
+    pid: (row["pid"] as number | null) ?? null,
+    pgid: (row["pgid"] as number | null) ?? null,
+    processIdentity: storedIdentity(row["process_identity"]),
+    recoveryState: (row["recovery_state"] as ProcessObservation | null) ?? null,
     correctionCount: row["correction_count"] as number,
     status: row["status"] as AttemptStatus,
     startedAt: row["started_at"] as string,
@@ -658,4 +714,14 @@ function toAttempt(row: Raw): AttemptRow {
     exitCode: (row["exit_code"] as number | null) ?? null,
     errorCode: (row["error_code"] as string | null) ?? null,
   };
+}
+
+function storedIdentity(value: unknown): ProcessIdentity | null {
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = processIdentitySchema.safeParse(JSON.parse(value));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 }

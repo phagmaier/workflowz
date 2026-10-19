@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { it, type TestContext } from "node:test";
 import type { AgentInput } from "../adapters/agent-adapter.js";
+import { RunCoordinator } from "../engine/run-coordinator.js";
 import { WorkflowDatabase } from "../store/database.js";
 import { ScriptedAgentAdapter } from "../test-support/scripted-agent.js";
 import { RunService } from "./run-service.js";
@@ -166,15 +167,12 @@ it("imports, pauses, edits task parameters, revises, skips, completes manually a
   );
   assert.equal(state.events.filter((e) => e.type === "report_accepted").length, 3);
   assert.equal(state.events.filter((e) => e.type === "correction_requested").length, 0);
-  const observer = new WorkflowDatabase(f.file);
+  const observer = new WorkflowDatabase(f.file, { readOnly: true });
   try {
-    const reopened = new RunService(observer, {
-      agents: new Map(),
-      logDir: path.join(f.root, "logs"),
-    });
-    assert.deepEqual(reopened.coordinator.inspect(f.runId), state);
-    assert.deepEqual(reopened.coordinator.attemptInput(firstAttempt.attemptId), originalInput);
-    assert.deepEqual(reopened.coordinator.taskOverrides(f.runId, first), secondEdit);
+    const reopened = new RunCoordinator(observer);
+    assert.deepEqual(reopened.inspect(f.runId), state);
+    assert.deepEqual(reopened.attemptInput(firstAttempt.attemptId), originalInput);
+    assert.deepEqual(reopened.taskOverrides(f.runId, first), secondEdit);
   } finally {
     observer.close();
   }

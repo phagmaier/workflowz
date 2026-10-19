@@ -6,6 +6,8 @@
  * `BEGIN IMMEDIATE` takes the write lock at the start, so a read-decide-write sequence cannot
  * interleave with another writer.
  */
+import { closeSync, openSync, realpathSync } from "node:fs";
+import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { LATEST_SCHEMA_VERSION, MIGRATIONS } from "./migrations.js";
 
@@ -18,19 +20,46 @@ export class SchemaVersionError extends Error {
   }
 }
 
+export class InstanceLockError extends Error {
+  constructor() {
+    super("another runner owns this state database; close it before starting another writer");
+    this.name = "InstanceLockError";
+  }
+}
+
 export class WorkflowDatabase {
   private readonly db: DatabaseSync;
+  private readonly lease: DatabaseSync | undefined;
+  readonly readOnly: boolean;
   private transactionDepth = 0;
   private transactionFailure: { readonly error: unknown } | undefined;
 
   /** `location` is a file path, or `:memory:` for a throwaway database. */
-  constructor(location: string) {
-    this.db = new DatabaseSync(location);
-    this.db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
-    if (location !== ":memory:") {
-      this.db.exec("PRAGMA journal_mode = WAL;");
+  constructor(location: string, options: { readonly readOnly?: boolean } = {}) {
+    this.readOnly = options.readOnly ?? false;
+    const file = location === ":memory:" ? location : canonicalPath(location);
+    this.lease = file === ":memory:" || this.readOnly ? undefined : acquireLease(file);
+    let connection: DatabaseSync | undefined;
+    try {
+      connection = new DatabaseSync(file, { readOnly: this.readOnly });
+      this.db = connection;
+      this.db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+      if (this.readOnly) {
+        const version = this.schemaVersion();
+        if (version > LATEST_SCHEMA_VERSION) throw new SchemaVersionError(version);
+        if (version !== LATEST_SCHEMA_VERSION)
+          throw new Error(
+            "state database needs migration; open a writer before read-only inspection",
+          );
+      } else {
+        if (file !== ":memory:") this.db.exec("PRAGMA journal_mode = WAL;");
+        this.migrate();
+      }
+    } catch (error) {
+      connection?.close();
+      this.lease?.close();
+      throw error;
     }
-    this.migrate();
   }
 
   /** Prepares a statement against the connection. Callers keep the statement for reuse. */
@@ -51,7 +80,7 @@ export class WorkflowDatabase {
         throw error;
       }
     }
-    this.db.exec("BEGIN IMMEDIATE");
+    this.db.exec(this.readOnly ? "BEGIN" : "BEGIN IMMEDIATE");
     this.transactionDepth += 1;
     try {
       const result = work();
@@ -78,6 +107,7 @@ export class WorkflowDatabase {
 
   close(): void {
     this.db.close();
+    this.lease?.close();
   }
 
   private migrate(): void {
@@ -100,5 +130,43 @@ export class WorkflowDatabase {
         throw error;
       }
     }
+  }
+}
+
+/** Resolve symlink aliases before deriving the lease name, including a not-yet-created database. */
+function canonicalPath(location: string): string {
+  try {
+    return realpathSync(location);
+  } catch (error) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
+    return path.join(realpathSync(path.dirname(path.resolve(location))), path.basename(location));
+  }
+}
+
+/**
+ * Hold an exclusive SQLite lock on a separate, credential-free file for the connection lifetime.
+ * OS locks disappear on crash; never unlink a lease file (that could create two lock inodes).
+ * The main WAL database remains readable, and no heartbeat or stale-PID takeover race is needed.
+ */
+function acquireLease(file: string): DatabaseSync {
+  const lockPath = `${file}.runner-lock`;
+  try {
+    closeSync(openSync(lockPath, "wx", 0o600));
+  } catch (error) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") throw error;
+  }
+  const lease = new DatabaseSync(lockPath);
+  try {
+    lease.exec("PRAGMA busy_timeout = 0; BEGIN EXCLUSIVE;");
+    return lease;
+  } catch (error) {
+    lease.close();
+    if (
+      error instanceof Error &&
+      "errcode" in error &&
+      (error.errcode === 5 || error.errcode === 6)
+    )
+      throw new InstanceLockError();
+    throw error;
   }
 }

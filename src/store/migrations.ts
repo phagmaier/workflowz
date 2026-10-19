@@ -171,6 +171,12 @@ CREATE TABLE task_imports (
 );
 ALTER TABLE attempts ADD COLUMN task_overrides_json TEXT NOT NULL DEFAULT '{"steps":{}}';`,
   },
+  {
+    version: 7,
+    sql: `ALTER TABLE attempts ADD COLUMN recovery_state TEXT CHECK (recovery_state IN ('alive', 'gone', 'mismatch', 'unknown'));
+UPDATE attempts SET recovery_state = 'unknown'
+WHERE status = 'interrupted' AND error_code = 'uncertain_after_restart';`,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;

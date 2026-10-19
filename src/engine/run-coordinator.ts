@@ -15,6 +15,11 @@ import type { Diagnostic } from "../contracts/diagnostics.js";
 import { hasErrors } from "../contracts/diagnostics.js";
 import { isReservedName, isSystemOutcome, type SystemOutcome } from "../contracts/identifiers.js";
 import { parseWorkflowText } from "../contracts/parse-workflow.js";
+import {
+  type ProcessIdentity,
+  type ProcessObservation,
+  processIdentitySchema,
+} from "../contracts/process-identity.js";
 import { ReportRejected, validateReport } from "../contracts/report.js";
 import {
   type TaskOverrides,
@@ -216,6 +221,7 @@ export class RunCoordinator {
       if (run.status !== "ready") {
         throw new RunStateError(`run ${runId} is ${run.status}; only a ready run can start`);
       }
+      this.assertNoUnresolvedProcess();
       const activeRunId = this.store.activeRunId();
       if (activeRunId !== undefined) {
         throw new RunStateError(
@@ -233,6 +239,8 @@ export class RunCoordinator {
    * so a second one never starts while the first is unsettled.
    */
   advance(runId: string): AdvanceResult {
+    const status = this.store.getRun(runId).status;
+    if (status === "running" || status === "pausing") this.assertNoUnresolvedProcess();
     for (let steps = 0; ; steps += 1) {
       const result = this.database.transaction(() =>
         this.advanceOnce(runId, steps < this.maxEngineSteps),
@@ -511,12 +519,30 @@ export class RunCoordinator {
     });
   }
 
+  /** Commit invocation intent before spawn; a crash in the spawn/persist gap stays unidentified. */
+  prepareInvocation(attemptId: string, invocation: 0 | 1): void {
+    this.database.transaction(() => {
+      const attempt = this.store.getAttempt(attemptId);
+      if (!attempt || !ACTIVE_ATTEMPT_STATUSES.includes(attempt.status))
+        throw new RunStateError("invocation attempt is not active");
+      this.store.clearProcess(attemptId);
+      this.store.appendEvent({
+        runId: attempt.runId,
+        attemptId,
+        revisionId: attempt.revisionId,
+        type: "invocation_dispatching",
+        data: { invocation },
+      });
+    });
+  }
+
   recordInvocation(
     attemptId: string,
     invocation: 0 | 1,
     phase: "started" | "settled",
     details: {
       pid: number | null;
+      processIdentity?: ProcessIdentity | null;
       sessionId?: string | undefined;
       logPath?: string | undefined;
       exitCode?: number | null;
@@ -535,7 +561,18 @@ export class RunCoordinator {
       const attempt = this.store.getAttempt(attemptId);
       if (!attempt || !ACTIVE_ATTEMPT_STATUSES.includes(attempt.status))
         throw new RunStateError("invocation attempt is not active");
-      this.store.setProcess(attemptId, details.pid, details.sessionId ?? null);
+      const identity =
+        details.processIdentity == null
+          ? null
+          : processIdentitySchema.parse(details.processIdentity);
+      if (
+        identity &&
+        (identity.pid !== details.pid ||
+          identity.pgid !== identity.pid ||
+          identity.sid !== identity.pid)
+      )
+        throw new RunStateError("invocation process identity does not match its process group");
+      this.store.setProcess(attemptId, details.pid, identity, details.sessionId ?? null);
       this.store.appendEvent({
         runId: attempt.runId,
         attemptId,
@@ -582,6 +619,11 @@ export class RunCoordinator {
           `run ${runId} is ${run.status}; only a paused or interrupted run can resume`,
         );
       }
+      if (run.status === "interrupted" && !note?.trim())
+        throw new RunStateError(
+          "resuming an interrupted run requires a reason acknowledging uncertain side effects",
+        );
+      this.assertNoUnresolvedProcess();
       const activeRunId = this.store.activeRunId();
       if (activeRunId !== undefined) {
         throw new RunStateError(
@@ -609,6 +651,10 @@ export class RunCoordinator {
       if (run.status === "completed" || run.status === "stopped") {
         throw new RunStateError(`run ${runId} is already ${run.status}`);
       }
+      if (this.store.pendingRecovery(runId))
+        throw new RunStateError(
+          "the run has an unresolved process; reconcile it before recording a stop",
+        );
       const active = this.store.activeAttempt(runId);
       if (active) {
         this.store.setAttemptStatus(active.attemptId, "interrupted", { errorCode: "stopped" });
@@ -630,41 +676,62 @@ export class RunCoordinator {
     });
   }
 
-  /**
-   * Startup reconciliation (todo 7.1 will refine it). An attempt still marked active after a restart
-   * may or may not have finished its side effects, so it is never replayed. The attempt is marked
-   * interrupted, the run is marked interrupted, and a blocking attention item asks the user to decide.
-   */
-  reconcileAfterRestart(runId: string): boolean {
+  /** Startup observations are supplied by the runner; the coordinator performs no process I/O. */
+  reconcileAfterRestart(runId: string, observation: ProcessObservation = "unknown"): boolean {
     return this.database.transaction(() => {
       const run = this.store.getRun(runId);
-      if (run.status !== "running" && run.status !== "pausing") {
-        return false;
-      }
       const active = this.store.activeAttempt(runId);
-      if (!active) {
-        return false;
+      const pending = this.store.pendingRecovery(runId);
+      const attempt = active ?? pending;
+      const restarting = run.status === "running" || run.status === "pausing";
+      if (!restarting && !pending) return false;
+      if (!restarting && attempt?.recoveryState === observation) return false;
+      if (attempt) {
+        if (active)
+          this.store.setAttemptStatus(active.attemptId, "interrupted", {
+            errorCode: "uncertain_after_restart",
+          });
+        this.store.setRecoveryState(attempt.attemptId, observation);
       }
-      this.store.setAttemptStatus(active.attemptId, "interrupted", {
-        errorCode: "uncertain_after_restart",
-      });
-      this.store.updateRun(runId, { status: "interrupted" });
+      if (restarting) this.store.updateRun(runId, { status: "interrupted" });
       this.store.appendEvent({
         runId,
-        attemptId: active.attemptId,
-        revisionId: run.revisionId,
-        type: "run_interrupted",
-        data: { stepId: active.stepId },
+        attemptId: attempt?.attemptId ?? null,
+        revisionId: attempt?.revisionId ?? run.revisionId,
+        type: restarting ? "run_interrupted" : "process_reconciled",
+        data: {
+          stepId: attempt?.stepId ?? run.cursorStepId,
+          processState: attempt ? observation : "gone",
+        },
       });
-      this.store.insertAttention({
-        runId,
-        attemptId: active.attemptId,
-        category: "uncertain_attempt",
-        severity: "blocking",
-        message: `step '${active.stepId}' was running when the runner stopped, so its result is unknown. Check its log before resuming; resuming runs the step again.`,
-      });
+      if (restarting)
+        this.store.insertAttention({
+          runId,
+          attemptId: attempt?.attemptId ?? null,
+          category: attempt ? "uncertain_attempt" : "interrupted_run",
+          severity: "blocking",
+          message: attempt
+            ? `step '${attempt.stepId}' was interrupted; its side effects are unknown. Process state: ${observation}. Reconcile surviving or unidentified processes before explicitly resuming; resume runs the step again.`
+            : "the runner stopped between steps; no work was replayed. Review the committed history before explicitly resuming.",
+        });
       return true;
     });
+  }
+
+  recoveryRuns(): string[] {
+    return this.store.recoveryRuns();
+  }
+
+  recoveryAttempt(runId: string): AttemptRow | undefined {
+    return this.store.activeAttempt(runId) ?? this.store.pendingRecovery(runId);
+  }
+
+  private assertNoUnresolvedProcess(): void {
+    const pending = this.store.pendingRecovery();
+    if (pending)
+      throw new RunStateError(
+        `run ${pending.runId} has an unresolved process; reconcile it before starting or resuming work`,
+      );
   }
 
   /** Manual override: move the cursor to a declared step. Requires a paused or interrupted run and a reason. */

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { RunCoordinator } from "../dist/engine/run-coordinator.js";
 import { RunService } from "../dist/runner/run-service.js";
 import { WorkflowDatabase } from "../dist/store/database.js";
 import { ScriptedAgentAdapter } from "../dist/test-support/scripted-agent.js";
@@ -66,15 +67,9 @@ for (const [name, plan, expected] of [
     assert.equal(existsSync(path.join(root, "settled.marker")), expected === "completed");
     const notes = readFileSync(logFile, "utf8");
     if (reports) assert.match(notes, /ack 0/);
-    const observer = new WorkflowDatabase(path.join(root, "state.sqlite"));
+    const observer = new WorkflowDatabase(path.join(root, "state.sqlite"), { readOnly: true });
     try {
-      assert.equal(
-        new RunService(observer, {
-          agents: new Map(),
-          logDir: path.join(root, "logs"),
-        }).coordinator.inspect(runId).run.status,
-        expected,
-      );
+      assert.equal(new RunCoordinator(observer).inspect(runId).run.status, expected);
     } finally {
       observer.close();
     }
