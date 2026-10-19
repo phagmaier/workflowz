@@ -415,3 +415,38 @@ PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run ch
 Typecheck/lint passed; **704 tests passed, 77 suites, zero failures/cancellations/skips**. Biome checked **116 files**, with **115 informational suggestions** and no errors. No runtime code/tests changed during live acceptance; the subsequent changes synchronize current evidence/status in README, spec, architecture, checklist and these notes while preserving historical failures and earlier verification.
 
 The Meta key/source and Contributor selection are now both documented and exercised successfully. **Milestone 0.5 stays unchecked only for Claude's authenticated correction scenario**, which was not part of this authorization. Phase 6 remains complete. No further paid calls, global configuration changes, Phase 7, daemon/management CLI/UI work, subagents or handoff document were introduced or authorized.
+
+## Milestone 0.5 completion — authorized Claude exact-session correction
+
+Verified the requested clean checkout at `9df2563`, following `b2ec72e` and `fb2a0b9`. Read required guidance/evidence in order and reviewed the retained successful Claude direct-report evidence without repeating that scenario. No source gap required implementation; no subagents or handoff document were used.
+
+The exact plan-only command built successfully with Node.js **v26.8.2** and printed `execute: false`, `claude-haiku-5-5`, low reasoning, maximum two invocations, 60-second original and 30-second correction. It made no harness/authentication/provider execution or smoke artifact writes. After reviewing the selection, bounds, unrestricted resources and absence of an enforceable dollar cap, the owner explicitly selected **Authorize Claude correction**, including evidence review, documentation, offline verification and commit/push.
+
+Executed only the newly approved correction workflow:
+
+```bash
+env PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH TMPDIR=/home/phagmaier/.local/state/workflowz/live-smoke-0.5/scratch npm run smoke:harnesses -- --execute --harness claude --model claude-haiku-5-5 --reasoning-effort low --scenario correction --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-0.5
+```
+
+**Passed**, installed Claude Code `2.1.303`, authentication `available`, permission mode `bypassPermissions`, outcome `complete`, exactly two sequential invocations and one correction. Retained private artifact: `/home/phagmaier/.local/state/workflowz/live-smoke-0.5/wf-claude-correction-dHhE3e`.
+
+Reviewed retained evidence plus read-only SQLite and allowlisted derived log facts:
+
+- Original assistant returned `READY` without tools/reporting and settled exit zero. Correction request/start followed that settlement; no overlap.
+- Original settlement, correction start and correction settlement retain the exact same persisted identity; both recorded session fingerprints match.
+- Correction invoked the generated helper using actual `wf report`; acknowledgment, one exact accepted `complete` report, one logical attempt, completed run and durable SQLite close/reopen all passed.
+- Durable event IDs are original start **5**, original settlement **6**, correction request **7**, correction start **8**, report acceptance **9**, correction settlement **10**, attempt settlement **11**, transition **12**, run completion **13**. Both invocation exits are zero with no timeout; acceptance preceded final settlement.
+- Both logs contain successful terminal results. Every observed assistant model and terminal `modelUsage.canonicalModel` identifies `claude-haiku-5-5`, with no other model usage reported; requested effort is low.
+- Smoke assertions confirmed process/group/pipe settlement. Independent filesystem inspection confirmed generated `project/` is absent. Artifact directory is 0700; evidence/logs/SQLite are 0600, with runner-owned log/database modes tightened without rewriting contents. Private evidence and existing named scratch remain intentionally.
+
+No successful paid scenario was repeated, no fallback/reasoning increase/runner retry/extra paid diagnostic occurred, and the failed omp OpenAI path was not retried. No Meta key was loaded. No credential files, harness-owned transcripts/auth/config, login/logout or global configuration changes were involved in the developer review. Raw artifacts remain private; the earlier unknown MCP key exposure warning and recommendation to rotate/revoke it if valid are preserved. No all-secrets or isolation guarantee is claimed.
+
+Updated README, spec/architecture acceptance notes, compatibility results and checklist only; runtime, tests, schema, example configuration, migrations and reporting/session/state contracts are intentionally unchanged. Historical failures/pending statements remain dated implementation-time evidence, superseded by actual acceptance. **Milestone 0.5 is checked only after this final live evidence review.** Phase 6 remains satisfied; Phase 7, daemon management, management CLI, UI and further paid execution require new authorization.
+
+Post-live offline verification:
+
+```bash
+PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run check
+```
+
+Typecheck/lint passed; **704 tests passed, 77 suites, zero failures/cancellations/skips**. Biome checked **116 files**, with **115 informational suggestions**, no fixes and no errors. Ordinary checks made no provider calls. No runtime or test changes were needed for this acceptance-only milestone completion.
