@@ -112,6 +112,73 @@ describe("startProcess", () => {
     assert.equal(alive(childPid), false);
   });
 
+  it("does not signal an old process group when terminate is called after completion", async (t) => {
+    const running = sh("exit 0");
+    await running.completed;
+    const calls: unknown[][] = [];
+    const originalKill = process.kill.bind(process);
+    const mock = t.mock.method(process, "kill", (pid: number, signal?: string | number) => {
+      calls.push([pid, signal]);
+      return originalKill(pid, signal);
+    });
+    try {
+      await running.terminate();
+      await running.terminate();
+      assert.deepEqual(calls, []);
+    } finally {
+      mock.mock.restore();
+    }
+  });
+
+  it("rejects settlement when the process group is still present after SIGKILL", async (t) => {
+    const running = sh("exit 0");
+    const originalKill = process.kill.bind(process);
+    const mock = t.mock.method(process, "kill", (pid: number, signal?: string | number) =>
+      pid === -(running.pid as number) ? true : originalKill(pid, signal),
+    );
+    try {
+      await assert.rejects(
+        running.completed,
+        /still exists after SIGKILL; settlement is uncertain/,
+      );
+      await assert.rejects(running.terminate(), /settlement is uncertain/);
+    } finally {
+      mock.mock.restore();
+    }
+  });
+
+  it("rejects settlement if an escaped descendant keeps the streams open after a long execution", async () => {
+    // A real child and clock reproduce the old launch-relative drain deadline; fake timers cannot.
+    const pidFile = path.join(scratch(), "escaped.pid");
+    const running = startProcess({
+      command: process.execPath,
+      args: [
+        "-e",
+        `const { spawn } = require('node:child_process');
+         const { writeFileSync } = require('node:fs');
+         const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'],
+           { detached: true, stdio: ['ignore', 1, 2] });
+         writeFileSync(process.argv[1], String(child.pid));
+         child.unref();
+         setTimeout(() => process.exit(0), 1200);`,
+        pidFile,
+      ],
+      cwd: os.tmpdir(),
+      env: childEnvironment(),
+    });
+    try {
+      await assert.rejects(running.completed, /streams remain open.*settlement is uncertain/);
+    } finally {
+      if (existsSync(pidFile)) {
+        const pid = Number(readFileSync(pidFile, "utf8"));
+        if (alive(pid)) {
+          process.kill(-pid, "SIGKILL");
+          await eventually(() => !alive(pid));
+        }
+      }
+    }
+  });
+
   it("escalates to SIGKILL when a process ignores SIGTERM", async () => {
     const running = sh("trap '' TERM; while true; do sleep 0.05; done");
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -135,6 +202,32 @@ describe("startProcess", () => {
     assert.equal(result.stdout.length, 1024);
     assert.equal(result.stdoutTruncated, true);
     assert.equal(readFileSync(logPath, "utf8").length, 200_000);
+  });
+
+  it("keeps the log head up to its byte limit even when the first chunk exceeds it", async () => {
+    const logPath = path.join(scratch(), "capped.log");
+    await startProcess({
+      command: process.execPath,
+      args: ["-e", 'process.stdout.write("x".repeat(200))'],
+      cwd: os.tmpdir(),
+      env: childEnvironment(),
+      logPath,
+      logLimit: 100,
+    }).completed;
+    assert.equal(readFileSync(logPath, "utf8"), `${"x".repeat(100)}\n[log capped at 100 bytes]\n`);
+  });
+
+  it("captures stderr separately with its own byte bound", async () => {
+    const result = await startProcess({
+      command: process.execPath,
+      args: ["-e", 'process.stdout.write("out"); process.stderr.write("error")'],
+      cwd: os.tmpdir(),
+      env: childEnvironment(),
+      stderrLimit: 3,
+    }).completed;
+    assert.equal(result.stdout, "out");
+    assert.equal(result.stderr, "err");
+    assert.equal(result.stderrTruncated, true);
   });
 
   it("passes only the allowlisted environment to the child", async () => {

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { INVALID_FIXTURES, OVERNIGHT_WORKFLOW, REPO_ROOT } from "../test-support/paths.js";
@@ -28,5 +30,18 @@ describe("validate CLI (process boundary)", () => {
     const run = validate(path.join(INVALID_FIXTURES, "does-not-exist.yaml"));
     assert.equal(run.status, 2);
     assert.match(run.stderr, /cannot read/);
+  });
+
+  it("exits 1 when the project root is missing even without other path references", (context) => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), "wf-validate-"));
+    context.after(() => rmSync(directory, { recursive: true, force: true }));
+    const file = path.join(directory, "workflow.yaml");
+    writeFileSync(
+      file,
+      "version: 1\nname: x\nproject:\n  root: missing\nstart: done\nsteps:\n  done:\n    kind: end\n",
+    );
+    const run = validate(file);
+    assert.equal(run.status, 1, run.stderr);
+    assert.match(run.stdout, /workflow\.yaml:4:3: error \[missing_path\] project.root:/);
   });
 });

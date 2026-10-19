@@ -148,6 +148,75 @@ describe("overnight example", () => {
 });
 
 describe("compiler rules", () => {
+  it("requires an explicit transition for an outcome named constructor", () => {
+    const result = checkWorkflowText(
+      workflowText(
+        "start: a\nsteps:\n  a:\n    kind: agent\n    harness: codex\n    session: fresh\n    prompt: go\n    outcomes: [constructor]\n",
+      ),
+      { workflowDir: "/w" },
+    );
+    assert.equal(result.compiled, undefined);
+    assert.deepEqual(
+      result.diagnostics.map((diagnostic) => diagnostic.code),
+      ["incomplete_transition"],
+    );
+  });
+
+  it("rejects conflicting constructor policies instead of treating the prototype as an override", () => {
+    const result = checkWorkflowText(
+      workflowText(
+        "policies:\n  - match: { all: true }\n    on:\n      constructor: { pause: true }\n  - match: { all: true }\n    on:\n      constructor: { goto: done }\nstart: a\nsteps:\n  a:\n    kind: agent\n    harness: codex\n    session: fresh\n    prompt: go\n    outcomes: [constructor]\n  done:\n    kind: end\n",
+      ),
+      { workflowDir: "/w" },
+    );
+    assert.equal(result.compiled, undefined);
+    assert.ok(result.diagnostics.some((diagnostic) => diagnostic.code === "conflicting_policy"));
+  });
+
+  it("does not resolve an undeclared constructor step through the object prototype", () => {
+    const result = checkWorkflowText(
+      workflowText(
+        'start: a\nsteps:\n  a:\n    kind: agent\n    harness: codex\n    session: fresh\n    prompt: "{{reports.constructor.summary}}"\n    outcomes: [complete]\n    on:\n      complete: { pause: true }\n',
+      ),
+      { workflowDir: "/w" },
+    );
+    assert.equal(result.compiled, undefined);
+    assert.deepEqual(
+      result.diagnostics.map((diagnostic) => diagnostic.code),
+      ["unknown_step"],
+    );
+  });
+
+  it("follows step-local system routes when checking reachability and cycles", () => {
+    for (const outcome of ["system.timeout", "system.error"]) {
+      const result = checkWorkflowText(
+        workflowText(
+          `start: a\nsteps:\n  a:\n    kind: command\n    argv: [echo]\n    on:\n      complete: { pause: true }\n      failed: { pause: true }\n      ${outcome}: { goto: recovery }\n  recovery:\n    kind: command\n    argv: [echo]\n    on:\n      complete: { goto: a }\n      failed: { pause: true }\n`,
+        ),
+        { workflowDir: "/w" },
+      );
+      assert.ok(result.compiled);
+      assert.deepEqual(
+        result.diagnostics.map((diagnostic) => diagnostic.code),
+        ["unbounded_cycle"],
+      );
+    }
+  });
+
+  it("does not invent outgoing error edges from terminal steps", () => {
+    const result = checkWorkflowText(
+      workflowText(
+        "start: done\ndefaults:\n  on:\n    system.error: { goto: after }\nsteps:\n  done:\n    kind: end\n  after:\n    kind: end\n",
+      ),
+      { workflowDir: "/w" },
+    );
+    assert.ok(result.compiled);
+    assert.deepEqual(
+      result.diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path]),
+      [["unreachable_step", ["steps", "after"]]],
+    );
+  });
+
   it("accepts a harness that exists only in a supplied registry, proving the registry is data", () => {
     const registry: HarnessRegistry = new Map([
       [

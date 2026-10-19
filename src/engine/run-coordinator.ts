@@ -132,7 +132,7 @@ export class RunCoordinator {
   private readonly store: RunStore;
   private readonly now: () => string;
   private readonly newId: (prefix: string) => string;
-  private readonly compiledByRevision = new Map<number, CompiledWorkflow>();
+  private readonly compiledByRevision = new Map<string, CompiledWorkflow>();
   private readonly maxEngineSteps: number;
 
   constructor(
@@ -171,7 +171,7 @@ export class RunCoordinator {
         startStepId: compiled.start,
         tasks,
       });
-      this.compiledByRevision.set(revisionId, compiled);
+      this.compiledByRevision.set(JSON.stringify([checked.sourceSha256, sourceDir]), compiled);
       return runId;
     });
   }
@@ -182,6 +182,12 @@ export class RunCoordinator {
       const run = this.store.getRun(runId);
       if (run.status !== "ready") {
         throw new RunStateError(`run ${runId} is ${run.status}; only a ready run can start`);
+      }
+      const activeRunId = this.store.activeRunId();
+      if (activeRunId !== undefined) {
+        throw new RunStateError(
+          `run ${activeRunId} is already active; only one run can run at a time`,
+        );
       }
       this.store.updateRun(runId, { status: "running", startTime: this.now() });
       this.store.appendEvent({ runId, revisionId: run.revisionId, type: "run_started" });
@@ -194,21 +200,14 @@ export class RunCoordinator {
    * so a second one never starts while the first is unsettled.
    */
   advance(runId: string): AdvanceResult {
-    for (let steps = 0; steps < this.maxEngineSteps; steps += 1) {
-      const result = this.database.transaction(() => this.advanceOnce(runId));
+    for (let steps = 0; ; steps += 1) {
+      const result = this.database.transaction(() =>
+        this.advanceOnce(runId, steps < this.maxEngineSteps),
+      );
       if (result !== "continue") {
         return result;
       }
     }
-    this.database.transaction(() => {
-      const run = this.store.getRun(runId);
-      this.pauseRun(
-        run,
-        `engine-only steps ran more than ${this.maxEngineSteps} times without an agent or command; the workflow may loop without doing work`,
-        "engine_loop",
-      );
-    });
-    return { kind: "not_running", status: "paused" };
   }
 
   /**
@@ -272,6 +271,9 @@ export class RunCoordinator {
         },
       });
       this.commitRouting(run, step.id, outcome, attemptId, decision, `attempt ${attemptId}`);
+      if (run.status === "pausing" && decision.kind !== "pause") {
+        this.pauseRun(run, USER_PAUSE_MESSAGE, "user_pause", attemptId, "info");
+      }
       return { outcome, decision };
     });
   }
@@ -310,6 +312,12 @@ export class RunCoordinator {
       if (run.status !== "paused" && run.status !== "interrupted") {
         throw new RunStateError(
           `run ${runId} is ${run.status}; only a paused or interrupted run can resume`,
+        );
+      }
+      const activeRunId = this.store.activeRunId();
+      if (activeRunId !== undefined) {
+        throw new RunStateError(
+          `run ${activeRunId} is already active; only one run can run at a time`,
         );
       }
       this.store.updateRun(runId, { status: "running" });
@@ -532,7 +540,7 @@ export class RunCoordinator {
     return run;
   }
 
-  private advanceOnce(runId: string): AdvanceResult | "continue" {
+  private advanceOnce(runId: string, allowEngineStep: boolean): AdvanceResult | "continue" {
     const run = this.store.getRun(runId);
     if (run.status !== "running" && run.status !== "pausing") {
       return { kind: "not_running", status: run.status };
@@ -558,6 +566,14 @@ export class RunCoordinator {
       throw new RunStateError(
         `run ${runId} has cursor '${run.cursorStepId}', which the workflow does not declare`,
       );
+    }
+    if (!allowEngineStep && (step.kind === "task.next" || step.kind === "task.complete")) {
+      this.pauseRun(
+        run,
+        `engine-only steps ran ${this.maxEngineSteps} times without an agent or command; the workflow may loop without doing work`,
+        "engine_loop",
+      );
+      return { kind: "not_running", status: "paused" };
     }
 
     switch (step.kind) {
@@ -656,7 +672,7 @@ export class RunCoordinator {
       revisionId: run.revisionId,
       attemptId,
       fromStepId,
-      outcome,
+      outcome: decision.via.outcome,
       actionJson: JSON.stringify(decision.via.action),
       toStepId,
     });
@@ -667,7 +683,7 @@ export class RunCoordinator {
       type: "transition_committed",
       data: {
         from: fromStepId,
-        outcome,
+        outcome: decision.via.outcome,
         decision: decision.kind,
         to: toStepId,
         reason: decision.kind === "pause" ? decision.reason : null,
@@ -744,16 +760,18 @@ export class RunCoordinator {
   }
 
   private compiledFor(revisionId: number): CompiledWorkflow {
-    const cached = this.compiledByRevision.get(revisionId);
+    const revision = this.store.getRevision(revisionId);
+    // SQLite can reuse an uncommitted revision id after rollback; cache immutable content instead.
+    const key = JSON.stringify([revision.definitionSha256, revision.sourceDir]);
+    const cached = this.compiledByRevision.get(key);
     if (cached) {
       return cached;
     }
-    const revision = this.store.getRevision(revisionId);
     const checked = checkWorkflowText(revision.definitionYaml, { workflowDir: revision.sourceDir });
     if (!checked.compiled) {
       throw new WorkflowInvalidError(checked.diagnostics);
     }
-    this.compiledByRevision.set(revisionId, checked.compiled);
+    this.compiledByRevision.set(key, checked.compiled);
     return checked.compiled;
   }
 }

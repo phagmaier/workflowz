@@ -69,11 +69,11 @@ const UNRECOGNIZED_KEYS = "unrecognized_keys";
 export function parseWorkflowText(text: string): ParsedWorkflow {
   const sourceSha256 = createHash("sha256").update(text).digest("hex");
   const lineCounter = new LineCounter();
-  const doc = parseDocument(text, { lineCounter, uniqueKeys: true });
+  const doc = parseDocument(text, { lineCounter, uniqueKeys: true, schema: "core" });
   const locator = new Locator(doc, lineCounter);
   const locate = (path: DiagnosticPath) => locator.locate(path);
 
-  const issues: Issue[] = doc.errors.map((error) => ({
+  const issues: Issue[] = [...doc.errors, ...doc.warnings].map((error) => ({
     path: [],
     code: yamlErrorCode(error.code),
     message: yamlErrorMessage(error.code, error.message),
@@ -111,6 +111,9 @@ export function parseWorkflowText(text: string): ParsedWorkflow {
   const header = workflowHeaderSchema.safeParse(raw);
   if (!header.success) {
     issues.push(...header.error.issues.flatMap((issue) => mapZodIssue(issue, raw, [])));
+  }
+  if (header.success) {
+    checkRetainedKeys(raw, header.data, [], issues);
   }
 
   const steps = validateSteps(raw.steps, issues);
@@ -169,12 +172,42 @@ function validateSteps(rawSteps: unknown, issues: Issue[]): Record<string, Workf
     }
     const parsed = STEP_SCHEMAS[kind as keyof typeof STEP_SCHEMAS].safeParse(rawStep);
     if (parsed.success) {
+      checkRetainedKeys(rawStep, parsed.data, path, issues);
       steps[stepId] = parsed.data as WorkflowStep;
     } else {
       issues.push(...parsed.error.issues.flatMap((issue) => mapZodIssue(issue, rawStep, path)));
     }
   }
   return steps;
+}
+
+/**
+ * Some schema record keys are stripped for prototype safety before key validation. A strict
+ * workflow must reject those entries, not silently lose user-authored configuration.
+ */
+function checkRetainedKeys(
+  raw: unknown,
+  parsed: unknown,
+  path: DiagnosticPath,
+  issues: Issue[],
+): void {
+  if (isPlainObject(raw) && isPlainObject(parsed)) {
+    for (const key of Object.keys(raw)) {
+      if (!Object.hasOwn(parsed, key)) {
+        issues.push({
+          path: [...path, key],
+          code: "unknown_field",
+          message: `unsupported mapping key '${key}'`,
+        });
+      } else {
+        checkRetainedKeys(raw[key], parsed[key], [...path, key], issues);
+      }
+    }
+  } else if (Array.isArray(raw) && Array.isArray(parsed)) {
+    raw.forEach((value, index) => {
+      checkRetainedKeys(value, parsed[index], [...path, index], issues);
+    });
+  }
 }
 
 /**

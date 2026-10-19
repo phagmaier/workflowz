@@ -20,6 +20,7 @@ describe("checkReferencedPaths", () => {
       ),
     );
     const stat = fakeFs({
+      [compiled.projectRoot]: "directory",
       [path.join(compiled.projectRoot, "todo.md")]: "file",
       [path.join(compiled.projectRoot, "prompts", "go.md")]: "file",
       [path.join(compiled.projectRoot, "src")]: "directory",
@@ -33,7 +34,11 @@ describe("checkReferencedPaths", () => {
     );
     const result = checkWorkflowText(text, { workflowDir: "/elsewhere" });
     assert.ok(result.compiled, JSON.stringify(result.diagnostics));
-    const diagnostics = checkReferencedPaths(result.compiled, fakeFs({}), result.locate);
+    const diagnostics = checkReferencedPaths(
+      result.compiled,
+      fakeFs({ [result.compiled.projectRoot]: "directory" }),
+      result.locate,
+    );
     assert.deepEqual(
       diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path.join(".")]),
       [
@@ -51,7 +56,26 @@ describe("checkReferencedPaths", () => {
         'start: a\nsteps:\n  a:\n    kind: command\n    argv: [echo]\n    cwd: "{{project.root}}"\n    on:\n      complete: { goto: b }\n      failed: { pause: true }\n  b:\n    kind: end\n',
       ),
     );
-    assert.deepEqual(checkReferencedPaths(compiled, fakeFs({})), []);
+    assert.deepEqual(
+      checkReferencedPaths(compiled, fakeFs({ [compiled.projectRoot]: "directory" })),
+      [],
+    );
+  });
+
+  it("reports a missing project root or a root that is not a directory", () => {
+    const result = checkWorkflowText(
+      workflowText("start: done\nsteps:\n  done:\n    kind: end\n"),
+      { workflowDir: "/missing" },
+    );
+    assert.ok(result.compiled);
+    for (const stat of [fakeFs({}), fakeFs({ "/missing": "file" })]) {
+      const diagnostics = checkReferencedPaths(result.compiled, stat, result.locate);
+      assert.deepEqual(
+        diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path]),
+        [["missing_path", ["project", "root"]]],
+      );
+      assert.deepEqual(diagnostics[0]?.location, { line: 4, column: 3 });
+    }
   });
 
   it("accepts the example's instruction files and checklist when they exist", () => {

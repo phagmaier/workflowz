@@ -201,6 +201,14 @@ export class RunStore {
     };
   }
 
+  /** The globally running or pausing run, if any. Call within the caller's write transaction. */
+  activeRunId(): string | undefined {
+    const row = this.database
+      .prepare("SELECT run_id FROM runs WHERE status IN ('running', 'pausing') LIMIT 1")
+      .get() as { run_id: string } | undefined;
+    return row?.run_id;
+  }
+
   /** Writes the run's mutable fields. Unspecified fields keep their current value. */
   updateRun(
     runId: string,

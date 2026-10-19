@@ -40,6 +40,11 @@ describe("settlementForAgent (spec §4.4 precedence)", () => {
     assert.equal(result.kind === "system" && result.code, "system.process_error");
   });
 
+  it("does not accept a report when a terminated agent exits cleanly", () => {
+    const result = settlementForAgent({ ...clean, terminated: true }, ALLOWED);
+    assert.equal(result.kind === "system" && result.code, "system.process_error");
+  });
+
   it("gives spawn failures and timeouts their own codes, ahead of any report", () => {
     const spawn = settlementForAgent({ ...clean, spawnError: "ENOENT", exitCode: null }, ALLOWED);
     assert.equal(spawn.kind === "system" ? spawn.code : "", "system.spawn_error");

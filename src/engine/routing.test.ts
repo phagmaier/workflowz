@@ -74,6 +74,33 @@ steps:
 const PRECEDENCE = precedenceWorkflow(POLICY_BLOCKS);
 
 describe("outcome routing precedence", () => {
+  it("treats constructor as an ordinary outcome at every precedence level", () => {
+    const agent =
+      "start: a\nsteps:\n  a:\n    kind: agent\n    harness: codex\n    session: fresh\n    prompt: go\n    tags: [t]\n    outcomes: [constructor]\n";
+    const cases = [
+      ["step", `${agent}    on:\n      constructor: { pause: true }\n`],
+      [
+        "step_id_policy",
+        `policies:\n  - match: { step_ids: [a] }\n    on:\n      constructor: { pause: true }\n${agent}`,
+      ],
+      [
+        "tag_policy",
+        `policies:\n  - match: { tags: [t] }\n    on:\n      constructor: { pause: true }\n${agent}`,
+      ],
+      [
+        "all_policy",
+        `policies:\n  - match: { all: true }\n    on:\n      constructor: { pause: true }\n${agent}`,
+      ],
+      ["defaults", `defaults:\n  on:\n    constructor: { pause: true }\n${agent}`],
+    ] as const;
+    for (const [level, body] of cases) {
+      const compiled = compileOk(workflowText(body));
+      const rule = resolveOutcome(compiled, "a", "constructor", declared(compiled, "a"));
+      assert.deepEqual(rule.action, { kind: "pause" });
+      assert.equal(rule.source.level, level);
+    }
+  });
+
   const workflow = compileOk(PRECEDENCE);
 
   it("prefers the step's own transition over every policy and default", () => {

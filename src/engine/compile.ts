@@ -15,7 +15,12 @@ import type {
   SourceLocation,
 } from "../contracts/diagnostics.js";
 import { errorDiagnostic, warningDiagnostic } from "../contracts/diagnostics.js";
-import { isIdentifier, isReservedName, isSystemOutcome } from "../contracts/identifiers.js";
+import {
+  isIdentifier,
+  isReservedName,
+  isSystemOutcome,
+  SYSTEM_OUTCOMES,
+} from "../contracts/identifiers.js";
 import { scanPlaceholders } from "../contracts/interpolation.js";
 import type { WorkflowDocument, WorkflowStep } from "../contracts/workflow-schema.js";
 import { nodesOnCycles, reachableFrom } from "./graph.js";
@@ -438,13 +443,13 @@ class Compilation {
     for (const step of steps.values()) {
       const candidates = new Set([...step.outcomes, ...systemKeys]);
       for (const key of candidates) {
-        if (step.on[key] !== undefined) {
+        if (Object.hasOwn(step.on, key)) {
           continue;
         }
         for (const level of levels) {
           const matches = rules.policies.filter(
             (policy) =>
-              policy.on[key] !== undefined &&
+              Object.hasOwn(policy.on, key) &&
               policyLevel(policy) === level &&
               policyCovers(policy, step),
           );
@@ -475,7 +480,11 @@ class Compilation {
     const edges = new Map<string, Set<string>>();
     for (const step of steps.values()) {
       const targets = new Set<string>();
-      const candidates = new Set([...step.outcomes, ...systemKeysOf(rules)]);
+      if (step.kind === "end") {
+        edges.set(step.id, targets);
+        continue;
+      }
+      const candidates = [...step.outcomes, ...SYSTEM_OUTCOMES];
       for (const key of candidates) {
         const rule = isSystemOutcome(key)
           ? resolveOutcome(rules, step.id, key, new Set(step.outcomes))
@@ -557,7 +566,7 @@ class Compilation {
     raw: string,
     valuePath: DiagnosticPath,
   ): void {
-    const target = this.doc.steps[stepId];
+    const target = Object.hasOwn(this.doc.steps, stepId) ? this.doc.steps[stepId] : undefined;
     if (!target) {
       this.error("unknown_step", `${raw} refers to unknown step '${stepId}'`, valuePath);
     } else if (target.kind !== requiredKind) {
@@ -586,23 +595,6 @@ class Compilation {
     const location = this.options.locate?.(diagnostic.path);
     this.diagnostics.push(location ? { ...diagnostic, location } : diagnostic);
   }
-}
-
-function systemKeysOf(rules: RuleSet): string[] {
-  const keys = new Set<string>();
-  for (const policy of rules.policies) {
-    for (const key of Object.keys(policy.on)) {
-      if (isSystemOutcome(key)) {
-        keys.add(key);
-      }
-    }
-  }
-  for (const key of Object.keys(rules.defaults)) {
-    if (isSystemOutcome(key)) {
-      keys.add(key);
-    }
-  }
-  return [...keys];
 }
 
 function outcomesOf(spec: WorkflowStep): readonly string[] {

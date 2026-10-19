@@ -146,4 +146,29 @@ describe("WorkflowDatabase", () => {
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM runs").get()?.["n"], 0);
     db.close();
   });
+
+  it("rolls back the whole transaction even when an inner failure is caught", () => {
+    const db = new WorkflowDatabase(":memory:");
+    const failure = new Error("inner failure");
+    assert.throws(
+      () =>
+        db.transaction(() => {
+          seedRun(db, "outer");
+          assert.throws(
+            () =>
+              db.transaction(() => {
+                seedRun(db, "inner");
+                throw failure;
+              }),
+            (error) => error === failure,
+          );
+          seedRun(db, "after_catch");
+        }),
+      (error) => error === failure,
+    );
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM runs").get()?.["n"], 0);
+    db.transaction(() => seedRun(db, "next_transaction"));
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM runs").get()?.["n"], 1);
+    db.close();
+  });
 });

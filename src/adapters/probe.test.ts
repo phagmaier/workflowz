@@ -58,6 +58,30 @@ describe("harness probe", () => {
     assert.match(result.problem ?? "", /no longer advertises/);
   });
 
+  it("preserves failed version and help statuses even if all markers are present", async () => {
+    const markers = HELP_PROBES.claude?.markers.join(" ") ?? "";
+    const result = await probeHarness(CLAUDE, async (_binary, args) => ({
+      exitCode: args[0] === "--version" ? 7 : 9,
+      stdout: args[0] === "--version" ? "fatal: broken installation" : markers,
+      stderr: "",
+    }));
+    assert.equal(result.version, undefined);
+    assert.deepEqual(result.missingMarkers, []);
+    assert.match(result.problem ?? "", /version command exited with status 7/);
+    assert.match(result.problem ?? "", /help command exited with status 9/);
+  });
+
+  it("preserves a version timeout even when the help command succeeds", async () => {
+    const { run } = fakeRunner(HELP_PROBES.claude?.markers.join(" ") ?? "");
+    const result = await probeHarness(CLAUDE, (binary, args) =>
+      args[0] === "--version"
+        ? Promise.resolve({ exitCode: null, stdout: "", stderr: "", spawnError: "timed out" })
+        : run(binary, args),
+    );
+    assert.equal(result.version, undefined);
+    assert.match(result.problem ?? "", /version command failed: timed out/);
+  });
+
   it("runs only --version and the help probe, never a model call", async () => {
     const { run, calls } = fakeRunner(HELP_PROBES.claude?.markers.join(" ") ?? "");
     await probeHarness(CLAUDE, run);
@@ -78,5 +102,41 @@ describe("harness probe", () => {
   it("runs a binary that does not exist and reports ENOENT rather than throwing", async () => {
     const result = await runProbeCommand("workflowz-no-such-binary-xyz", ["--version"]);
     assert.equal(result.spawnError, "ENOENT");
+  });
+
+  it("retains separate stdout and stderr from an unsuccessful offline command", async () => {
+    const result = await runProbeCommand(process.execPath, [
+      "-e",
+      'process.stdout.write("version text"); process.stderr.write("broken setup"); process.exitCode = 7',
+    ]);
+    assert.equal(result.exitCode, 7);
+    assert.equal(result.stdout, "version text");
+    assert.equal(result.stderr, "broken setup");
+    assert.equal(result.spawnError, undefined);
+  });
+
+  it("cleans up descendants left by an offline command before resolving", async () => {
+    const result = await runProbeCommand(process.execPath, [
+      "-e",
+      `const { spawn } = require('node:child_process');
+       const child = spawn('sleep', ['30'], { stdio: 'ignore' });
+       console.log(child.pid);
+       child.unref();`,
+    ]);
+    const childPid = Number(result.stdout.trim());
+    assert.ok(Number.isSafeInteger(childPid) && childPid > 0, "probe must capture the child pid");
+    assert.throws(
+      () => process.kill(childPid, 0),
+      (error: NodeJS.ErrnoException) => error.code === "ESRCH",
+    );
+  });
+
+  it("reports oversized probe output instead of accepting truncated compatibility evidence", async () => {
+    const result = await runProbeCommand(process.execPath, [
+      "-e",
+      'process.stdout.write("x".repeat(5 * 1024 * 1024))',
+    ]);
+    assert.equal(result.stdout.length, 4 * 1024 * 1024);
+    assert.match(result.spawnError ?? "", /exceeded the capture limit/);
   });
 });

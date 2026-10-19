@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
+import type { AgentAdapter } from "../adapters/agent-adapter.js";
 import { WorkflowDatabase } from "../store/database.js";
 import { type AgentScript, ScriptedAgentAdapter } from "../test-support/scripted-agent.js";
 import { workflowText } from "../test-support/workflows.js";
@@ -18,14 +19,14 @@ after(() => {
 /** A fresh project directory, a log file for agent start/end markers, and a run service. */
 function fixture(
   plan: readonly AgentScript[],
-  options: { databaseFile?: string; root?: string } = {},
+  options: { databaseFile?: string; root?: string; adapter?: AgentAdapter } = {},
 ) {
   const root = options.root ?? mkdtempSync(path.join(os.tmpdir(), "wf-run-"));
   if (options.root === undefined) {
     directories.push(root);
   }
   const logFile = path.join(root, "agent.log");
-  const adapter = new ScriptedAgentAdapter(plan, { logFile });
+  const adapter = options.adapter ?? new ScriptedAgentAdapter(plan, { logFile });
   const database = new WorkflowDatabase(options.databaseFile ?? ":memory:");
   const service = new RunService(database, {
     agents: new Map([["codex", adapter]]),
@@ -285,6 +286,63 @@ steps:
     assert.equal(service.coordinator.inspect(runId).run.status, "stopped");
     database.close();
   });
+
+  it("stopping a different ready run leaves the live attempt and scheduler untouched", async () => {
+    const { root, database, service } = fixture([{ mode: "delay", extra: "100" }]);
+    try {
+      const active = service.coordinator.createRun({
+        workflowText: oneAgent(""),
+        workflowDir: root,
+      });
+      const other = service.coordinator.createRun({
+        workflowText: oneAgent(""),
+        workflowDir: root,
+      });
+      service.coordinator.start(active);
+      const driving = service.drive(active);
+      await service.stop(other);
+      assert.deepEqual(await driving, { kind: "completed" });
+      assert.equal(service.coordinator.inspect(active).attempts[0]?.status, "succeeded");
+      assert.equal(service.coordinator.inspect(other).run.status, "stopped");
+    } finally {
+      database.close();
+    }
+  });
+
+  it("refuses concurrent drive and live reconciliation without interrupting the owner", async () => {
+    const { root, database, service } = fixture([{ mode: "delay", extra: "100" }]);
+    try {
+      const runId = service.coordinator.createRun({
+        workflowText: oneAgent(""),
+        workflowDir: root,
+      });
+      service.coordinator.start(runId);
+      const driving = service.drive(runId);
+      await assert.rejects(service.drive(runId), /already driving/);
+      assert.throws(() => service.reconcile(runId), /while this runner is driving/);
+      assert.deepEqual(await driving, { kind: "completed" });
+      assert.equal(service.coordinator.inspect(runId).attempts[0]?.status, "succeeded");
+    } finally {
+      database.close();
+    }
+  });
+
+  it("refuses to mark an unowned active attempt stopped before process reconciliation", async () => {
+    const { root, database, service } = fixture([]);
+    try {
+      const runId = service.coordinator.createRun({
+        workflowText: oneAgent(""),
+        workflowDir: root,
+      });
+      service.coordinator.start(runId);
+      service.coordinator.advance(runId);
+      await assert.rejects(service.stop(runId), /does not own the active attempt/);
+      assert.equal(service.coordinator.inspect(runId).run.status, "running");
+      assert.equal(service.coordinator.activeAttempt(runId)?.status, "starting");
+    } finally {
+      database.close();
+    }
+  });
 });
 
 describe("RunService: restart, recovery, and overrides", () => {
@@ -444,6 +502,88 @@ steps:
     assert.deepEqual(await service.drive(runId), { kind: "not_running", status: "paused" });
     assert.equal(service.coordinator.inspect(runId).transitions[0]?.outcome, "system.spawn_error");
     database.close();
+  });
+
+  it("routes unavailable session resume instead of silently launching a fresh agent", async () => {
+    const { root, database, service, logFile } = fixture([]);
+    try {
+      const runId = service.coordinator.createRun({
+        workflowText: oneAgent("system.resume_unavailable: { goto: done }").replace(
+          "session: fresh",
+          "session: resume",
+        ),
+        workflowDir: root,
+      });
+      service.coordinator.start(runId);
+      assert.deepEqual(await service.drive(runId), { kind: "completed" });
+      assert.equal(existsSync(logFile), false);
+      assert.equal(
+        service.coordinator.inspect(runId).transitions[0]?.outcome,
+        "system.resume_unavailable",
+      );
+    } finally {
+      database.close();
+    }
+  });
+
+  it("routes a synchronous adapter launch exception instead of stranding the attempt", async () => {
+    const { root, database, service } = fixture([], {
+      adapter: {
+        id: "codex",
+        start() {
+          throw new Error("adapter launch failed");
+        },
+      },
+    });
+    try {
+      const runId = service.coordinator.createRun({
+        workflowText: oneAgent("system.spawn_error: { goto: done }"),
+        workflowDir: root,
+      });
+      service.coordinator.start(runId);
+      assert.deepEqual(await service.drive(runId), { kind: "completed" });
+      const state = service.coordinator.inspect(runId);
+      assert.equal(state.attempts[0]?.status, "failed");
+      assert.equal(state.transitions[0]?.outcome, "system.spawn_error");
+    } finally {
+      database.close();
+    }
+  });
+
+  it("terminates a live child before routing an adapter completion rejection", async () => {
+    let pid: number | null = null;
+    const child = new ScriptedAgentAdapter([{ mode: "hang" }]);
+    const { root, database, service } = fixture([], {
+      adapter: {
+        id: "codex",
+        start(input) {
+          const handle = child.start(input);
+          pid = handle.pid;
+          return {
+            ...handle,
+            completed: Promise.reject(new Error("adapter stream failed")),
+          };
+        },
+      },
+    });
+    try {
+      const runId = service.coordinator.createRun({
+        workflowText: oneAgent("system.internal_error: { goto: done }"),
+        workflowDir: root,
+      });
+      service.coordinator.start(runId);
+      assert.deepEqual(await service.drive(runId), { kind: "completed" });
+      assert.notEqual(pid, null);
+      assert.throws(
+        () => process.kill(pid as number, 0),
+        (error: NodeJS.ErrnoException) => error.code === "ESRCH",
+      );
+      const state = service.coordinator.inspect(runId);
+      assert.equal(state.attempts[0]?.status, "failed");
+      assert.equal(state.transitions[0]?.outcome, "system.internal_error");
+    } finally {
+      database.close();
+    }
   });
 
   it("an interpolation with no value fails before any process starts", async () => {

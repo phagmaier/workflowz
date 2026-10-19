@@ -5,18 +5,18 @@
  * advertises the flags the registry's capability claims depend on. It never runs a model, never
  * reads credential files, and never passes the caller's full environment to the child.
  */
-import { execFile } from "node:child_process";
 import {
   BUILT_IN_HARNESSES,
   type HarnessDescriptor,
   type HarnessRegistry,
 } from "./harness-registry.js";
+import { startProcess } from "./process.js";
 
 export interface CommandResult {
   readonly exitCode: number | null;
   readonly stdout: string;
   readonly stderr: string;
-  /** Set when the binary could not be started, for example `ENOENT` when it is not on PATH. */
+  /** Set when launch or supervised completion failed, including timeout and truncated output. */
   readonly spawnError?: string | undefined;
 }
 
@@ -87,38 +87,40 @@ export function probeEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJ
   return env;
 }
 
-export const runProbeCommand: CommandRunner = (binary, args) =>
-  new Promise((resolve) => {
-    execFile(
-      binary,
-      [...args],
-      {
-        env: probeEnvironment(),
-        timeout: PROBE_TIMEOUT_MS,
-        maxBuffer: 4 * 1024 * 1024,
-        windowsHide: true,
-      },
-      (error, stdout, stderr) => {
-        if (
-          error &&
-          typeof (error as NodeJS.ErrnoException).code === "string" &&
-          !("killed" in error && error.killed)
-        ) {
-          const code = (error as NodeJS.ErrnoException).code as string;
-          if (code === "ENOENT" || code === "EACCES") {
-            resolve({ exitCode: null, stdout: "", stderr: "", spawnError: code });
-            return;
-          }
-        }
-        resolve({
-          exitCode: error ? (typeof error.code === "number" ? error.code : 1) : 0,
-          stdout: String(stdout),
-          stderr: String(stderr),
-          spawnError: error && "killed" in error && error.killed ? "timed out" : undefined,
-        });
-      },
-    );
-  });
+export const runProbeCommand: CommandRunner = async (binary, args) => {
+  try {
+    const result = await startProcess({
+      command: binary,
+      args,
+      cwd: process.cwd(),
+      env: probeEnvironment(),
+      timeoutMs: PROBE_TIMEOUT_MS,
+      stdoutLimit: 4 * 1024 * 1024,
+      stderrLimit: 4 * 1024 * 1024,
+    }).completed;
+    return {
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      spawnError:
+        result.spawnError ??
+        (result.timedOut
+          ? "timed out"
+          : result.signal !== null
+            ? `ended by signal ${result.signal}`
+            : result.stdoutTruncated || result.stderrTruncated
+              ? "probe output exceeded the capture limit"
+              : undefined),
+    };
+  } catch (error) {
+    return {
+      exitCode: null,
+      stdout: "",
+      stderr: "",
+      spawnError: error instanceof Error ? error.message : String(error),
+    };
+  }
+};
 
 export async function probeHarness(
   descriptor: HarnessDescriptor,
@@ -131,7 +133,10 @@ export async function probeHarness(
       ...base,
       installed: false,
       missingMarkers: [],
-      problem: `'${descriptor.binary}' was not found on PATH (${version.spawnError})`,
+      problem:
+        version.spawnError === "ENOENT"
+          ? `'${descriptor.binary}' was not found on PATH (ENOENT)`
+          : `'${descriptor.binary}' could not be executed (EACCES)`,
     };
   }
 
@@ -141,6 +146,14 @@ export async function probeHarness(
   const missingMarkers = (probe?.markers ?? []).filter((marker) => !helpText.includes(marker));
 
   const problems: string[] = [];
+  if (version.spawnError) {
+    problems.push(`version command failed: ${version.spawnError}`);
+  } else if (version.exitCode !== 0) {
+    problems.push(`version command exited with status ${version.exitCode ?? "unknown"}`);
+  }
+  if (help && !help.spawnError && help.exitCode !== 0) {
+    problems.push(`help command exited with status ${help.exitCode ?? "unknown"}`);
+  }
   if (!probe) {
     problems.push("no help probe is defined for this harness");
   }
@@ -153,7 +166,10 @@ export async function probeHarness(
   return {
     ...base,
     installed: true,
-    version: firstLine(version.stdout) || firstLine(version.stderr) || undefined,
+    version:
+      version.exitCode === 0 && !version.spawnError
+        ? firstLine(version.stdout) || firstLine(version.stderr) || undefined
+        : undefined,
     missingMarkers,
     problem: problems.length > 0 ? problems.join("; ") : undefined,
   };

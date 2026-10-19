@@ -21,6 +21,7 @@ export class SchemaVersionError extends Error {
 export class WorkflowDatabase {
   private readonly db: DatabaseSync;
   private transactionDepth = 0;
+  private transactionFailure: { readonly error: unknown } | undefined;
 
   /** `location` is a file path, or `:memory:` for a throwaway database. */
   constructor(location: string) {
@@ -39,16 +40,24 @@ export class WorkflowDatabase {
 
   /**
    * Runs `work` in one transaction. A nested call joins the outer transaction, so an error anywhere
-   * rolls back everything from the outermost call.
+   * rolls back everything from the outermost call, even if its caller catches the inner error.
    */
   transaction<T>(work: () => T): T {
     if (this.transactionDepth > 0) {
-      return work();
+      try {
+        return work();
+      } catch (error) {
+        this.transactionFailure ??= { error };
+        throw error;
+      }
     }
     this.db.exec("BEGIN IMMEDIATE");
     this.transactionDepth += 1;
     try {
       const result = work();
+      if (this.transactionFailure) {
+        throw this.transactionFailure.error;
+      }
       this.db.exec("COMMIT");
       return result;
     } catch (error) {
@@ -56,6 +65,7 @@ export class WorkflowDatabase {
       throw error;
     } finally {
       this.transactionDepth -= 1;
+      this.transactionFailure = undefined;
     }
   }
 

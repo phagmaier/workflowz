@@ -6,10 +6,7 @@ const rows = results.map((result) => ({
   harness: result.id,
   installed: result.installed ? "yes" : "no",
   version: result.version ?? "-",
-  help:
-    result.installed && result.missingMarkers.length === 0
-      ? "all markers present"
-      : (result.problem ?? "-"),
+  help: result.problem ?? "all markers present",
 }));
 
 const widths = {

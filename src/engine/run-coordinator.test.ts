@@ -215,6 +215,26 @@ describe("RunCoordinator: persistence", () => {
     assert.equal(second.coordinator.inspect(runId).run.status, "completed");
     second.database.close();
   });
+
+  it("does not reuse a cached workflow when rollback lets a revision id be reused", () => {
+    const { database, coordinator } = open();
+    assert.throws(() =>
+      database.transaction(() => {
+        coordinator.createRun({ workflowText: TASK_LOOP, workflowDir: os.tmpdir() });
+        throw new Error("rollback the revision");
+      }),
+    );
+    const other = new RunCoordinator(database);
+    const runId = other.createRun({
+      workflowText: workflowText("start: finish\nsteps:\n  finish:\n    kind: end\n"),
+      workflowDir: os.tmpdir(),
+    });
+    assert.equal(other.run(runId).revisionId, 1, "the rolled-back revision id was reused");
+    assert.equal(coordinator.workflowFor(runId).start, "finish");
+    coordinator.start(runId);
+    assert.deepEqual(coordinator.advance(runId), { kind: "completed" });
+    database.close();
+  });
 });
 
 describe("RunCoordinator: rejected and duplicate settlements", () => {
@@ -382,6 +402,24 @@ steps:
     }));
     assert.equal(attempts, 2);
     assert.deepEqual(final, { kind: "completed" });
+    const state = coordinator.inspect(runId);
+    assert.deepEqual(
+      state.transitions.map((transition) => transition.outcome),
+      ["failed", "system.retry_exhausted"],
+    );
+    assert.deepEqual(
+      state.events
+        .filter((event) => event.type === "transition_committed")
+        .map((event) => event.data["outcome"]),
+      ["failed", "system.retry_exhausted"],
+    );
+    assert.deepEqual(
+      state.events
+        .filter((event) => event.type === "attempt_settled")
+        .map((event) => event.data["outcome"]),
+      ["failed", "failed"],
+      "observed attempt results remain separate from retry-exhaustion routing",
+    );
     database.close();
   });
 
@@ -405,6 +443,48 @@ steps:
     const state = coordinator.inspect(runId);
     assert.equal(state.run.status, "paused");
     assert.equal(state.attention[0]?.category, "engine_loop");
+    database.close();
+  });
+
+  it("can dispatch an attempt exactly at the engine-only step bound", () => {
+    const { database, coordinator } = open(":memory:", { maxEngineStepsPerAdvance: 1 });
+    const runId = coordinator.createRun({
+      workflowText: TASK_LOOP,
+      workflowDir: os.tmpdir(),
+      tasks: TWO_TASKS,
+    });
+    coordinator.start(runId);
+    assert.equal(coordinator.advance(runId).kind, "attempt");
+    assert.equal(coordinator.inspect(runId).attention.length, 0);
+    database.close();
+  });
+
+  it("can finish exactly at the engine-only step bound", () => {
+    const { database, coordinator } = open(":memory:", { maxEngineStepsPerAdvance: 1 });
+    const runId = coordinator.createRun({
+      workflowText: TASK_LOOP,
+      workflowDir: os.tmpdir(),
+    });
+    coordinator.start(runId);
+    assert.deepEqual(coordinator.advance(runId), { kind: "completed" });
+    assert.equal(coordinator.inspect(runId).attention.length, 0);
+    database.close();
+  });
+
+  it("does not add an engine-loop pause after a workflow pause at the bound", () => {
+    const { database, coordinator } = open(":memory:", { maxEngineStepsPerAdvance: 1 });
+    const runId = coordinator.createRun({
+      workflowText: TASK_LOOP.replace("exhausted: { goto: done }", "exhausted: { pause: true }"),
+      workflowDir: os.tmpdir(),
+    });
+    coordinator.start(runId);
+    assert.deepEqual(coordinator.advance(runId), { kind: "not_running", status: "paused" });
+    const state = coordinator.inspect(runId);
+    assert.deepEqual(
+      state.attention.map((item) => item.category),
+      ["routed"],
+    );
+    assert.equal(state.events.filter((event) => event.type === "run_paused").length, 1);
     database.close();
   });
 });
@@ -457,6 +537,55 @@ steps:
   });
 });
 
+describe("RunCoordinator: pause after current", () => {
+  it("commits the requested pause together with settlement and the routed cursor", () => {
+    const { database, coordinator } = open();
+    const runId = coordinator.createRun({
+      workflowText: TASK_LOOP,
+      workflowDir: os.tmpdir(),
+      tasks: TWO_TASKS,
+    });
+    coordinator.start(runId);
+    const attempt = coordinator.advance(runId);
+    if (attempt.kind !== "attempt") throw new Error("expected an attempt");
+    coordinator.requestPause(runId);
+    coordinator.settle(attempt.attemptId, { kind: "outcome", outcome: "complete" });
+    const state = coordinator.inspect(runId);
+    assert.equal(state.run.status, "paused");
+    assert.equal(state.run.cursorStepId, "check");
+    assert.equal(state.activeAttempt, undefined);
+    assert.equal(state.attention.length, 1);
+    assert.equal(state.attention[0]?.category, "user_pause");
+    assert.equal(state.attention[0]?.attemptId, attempt.attemptId);
+    assert.equal(state.attention[0]?.severity, "info");
+    assert.equal(state.events.filter((event) => event.type === "run_paused").length, 1);
+    assert.deepEqual(coordinator.advance(runId), { kind: "not_running", status: "paused" });
+    assert.equal(coordinator.inspect(runId).attention.length, 1);
+    database.close();
+  });
+
+  it("keeps a workflow pause instead of appending a second user pause", () => {
+    const { database, coordinator } = open();
+    const runId = coordinator.createRun({
+      workflowText: TASK_LOOP,
+      workflowDir: os.tmpdir(),
+      tasks: TWO_TASKS,
+    });
+    coordinator.start(runId);
+    const attempt = coordinator.advance(runId);
+    if (attempt.kind !== "attempt") throw new Error("expected an attempt");
+    coordinator.requestPause(runId);
+    coordinator.settle(attempt.attemptId, { kind: "outcome", outcome: "blocked" });
+    const state = coordinator.inspect(runId);
+    assert.equal(state.run.status, "paused");
+    assert.equal(state.attention.length, 1);
+    assert.equal(state.attention[0]?.category, "routed");
+    assert.equal(state.attention[0]?.severity, "blocking");
+    assert.equal(state.events.filter((event) => event.type === "run_paused").length, 1);
+    database.close();
+  });
+});
+
 describe("RunCoordinator: guards", () => {
   it("refuses to create a run from an invalid workflow", () => {
     const { database, coordinator } = open();
@@ -478,4 +607,54 @@ describe("RunCoordinator: guards", () => {
     assert.throws(() => coordinator.start(runId), RunStateError);
     database.close();
   });
+
+  it("does not start a second run while another is running", () => {
+    const { database, coordinator } = open();
+    const other = new RunCoordinator(database);
+    const first = coordinator.createRun({ workflowText: TASK_LOOP, workflowDir: os.tmpdir() });
+    const second = other.createRun({ workflowText: TASK_LOOP, workflowDir: os.tmpdir() });
+    coordinator.start(first);
+    const before = other.inspect(second);
+    assert.throws(() => other.start(second), /only one run can run at a time/);
+    assert.deepEqual(other.inspect(second), before, "rejected start changes no state or events");
+    coordinator.requestPause(first);
+    other.start(second);
+    assert.equal(other.run(second).status, "running");
+    database.close();
+  });
+
+  for (const status of ["paused", "interrupted"] as const) {
+    it(`does not resume a ${status} run while another is pausing`, () => {
+      const { database, coordinator } = open();
+      const first = coordinator.createRun({
+        workflowText: TASK_LOOP,
+        workflowDir: os.tmpdir(),
+        tasks: TWO_TASKS,
+      });
+      const second = coordinator.createRun({
+        workflowText: TASK_LOOP,
+        workflowDir: os.tmpdir(),
+        tasks: TWO_TASKS,
+      });
+      coordinator.start(first);
+      if (status === "paused") {
+        coordinator.requestPause(first);
+      } else {
+        assert.equal(coordinator.advance(first).kind, "attempt");
+        assert.equal(coordinator.reconcileAfterRestart(first), true);
+      }
+      coordinator.start(second);
+      assert.equal(coordinator.advance(second).kind, "attempt");
+      coordinator.requestPause(second);
+      const before = coordinator.inspect(first);
+      assert.equal(before.run.status, status);
+      assert.equal(coordinator.run(second).status, "pausing");
+      assert.throws(() => coordinator.resume(first), /only one run can run at a time/);
+      assert.deepEqual(coordinator.inspect(first), before, "rejected resume changes nothing");
+      coordinator.recordStop(second, "release the synthetic execution slot");
+      coordinator.resume(first);
+      assert.equal(coordinator.run(first).status, "running");
+      database.close();
+    });
+  }
 });

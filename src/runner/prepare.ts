@@ -1,19 +1,23 @@
 /**
  * Turns a dispatched attempt into something a process can run: interpolated argv, prompt, and
  * environment, plus absolute paths. Any failure here is a pre-execution error. The runner settles
- * the attempt as `system.internal_error` and never starts a process, so a broken placeholder cannot
- * run half a command.
+ * it as `system.internal_error` (or `system.resume_unavailable` for missing sessions) and never
+ * starts a process, so a broken placeholder cannot run half a command.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { AgentAdapter, AgentInput } from "../adapters/agent-adapter.js";
 import type { CommandSpec } from "../adapters/command-executor.js";
+import type { SystemOutcome } from "../contracts/identifiers.js";
 import { type InterpolationValues, interpolate } from "../engine/interpolate.js";
 import type { CompiledStep, CompiledWorkflow } from "../engine/model.js";
 import type { TaskRow } from "../store/run-store.js";
 
 export class PreparationError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly code: SystemOutcome = "system.internal_error",
+  ) {
     super(message);
     this.name = "PreparationError";
   }
@@ -80,6 +84,12 @@ function prepare(context: PrepareContext): PreparedAttempt {
   }
 
   if (spec.kind === "agent") {
+    if (spec.session === "resume") {
+      throw new PreparationError(
+        `step '${step.id}' requires a persisted session, but session resume is not available`,
+        "system.resume_unavailable",
+      );
+    }
     const adapter = context.adapters.get(spec.harness);
     if (!adapter) {
       throw new PreparationError(`no adapter is registered for harness '${spec.harness}'`);

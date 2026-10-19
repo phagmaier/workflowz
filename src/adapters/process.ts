@@ -25,6 +25,7 @@ export interface ProcessSpec {
   readonly logPath?: string | undefined;
   readonly stdoutLimit?: number | undefined;
   readonly logLimit?: number | undefined;
+  readonly stderrLimit?: number | undefined;
 }
 
 export interface ProcessResult {
@@ -38,6 +39,8 @@ export interface ProcessResult {
   readonly pid: number | null;
   readonly stdout: string;
   readonly stdoutTruncated: boolean;
+  readonly stderr: string;
+  readonly stderrTruncated: boolean;
 }
 
 export interface RunningProcess {
@@ -53,8 +56,8 @@ export interface RunningProcess {
 const DEFAULT_GRACE_MS = 1_000;
 const DEFAULT_STDOUT_LIMIT = 64 * 1024;
 const DEFAULT_LOG_LIMIT = 16 * 1024 * 1024;
-const STREAM_CLOSE_WAIT_MS = 1_000;
 const REAP_WAIT_MS = 2_000;
+const STREAM_CLOSE_WAIT_MS = 1_000;
 const POLL_MS = 20;
 
 export function startProcess(spec: ProcessSpec): RunningProcess {
@@ -63,25 +66,32 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
     return finished({ spawnError: "cwd_not_found", pid: null });
   }
 
-  const output = new OutputCapture(spec.stdoutLimit ?? DEFAULT_STDOUT_LIMIT);
   const log =
     spec.logPath === undefined
       ? undefined
       : new LogFile(spec.logPath, spec.logLimit ?? DEFAULT_LOG_LIMIT);
-
-  const child = spawn(spec.command, [...spec.args], {
-    cwd: spec.cwd,
-    env: spec.env,
-    detached: true,
-    shell: false,
-    stdio: ["ignore", "pipe", "pipe"],
-    windowsHide: true,
-  });
+  let child: ChildProcess;
+  try {
+    child = spawn(spec.command, [...spec.args], {
+      cwd: spec.cwd,
+      env: spec.env,
+      detached: true,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+  } catch (error) {
+    void log?.close();
+    return finished({ spawnError: errorCode(error), pid: null });
+  }
+  const output = new OutputCapture(spec.stdoutLimit ?? DEFAULT_STDOUT_LIMIT);
+  const stderr = new OutputCapture(spec.stderrLimit ?? DEFAULT_STDOUT_LIMIT);
   const pid = child.pid ?? null;
   const pgid = pid;
 
   let terminated = false;
   let timedOut = false;
+  let settled = false;
   let escalation: ReturnType<typeof setTimeout> | undefined;
   let spawnError: string | null = null;
 
@@ -94,15 +104,21 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
       });
     },
   );
-  const streamsClosed = closeWithin(child, STREAM_CLOSE_WAIT_MS);
+  const streamsClosed = new Promise<void>((resolve) => child.once("close", () => resolve()));
 
   child.stdout?.on("data", (chunk: Buffer) => {
     output.push(chunk);
     log?.write(chunk);
   });
-  child.stderr?.on("data", (chunk: Buffer) => log?.write(chunk));
+  child.stderr?.on("data", (chunk: Buffer) => {
+    stderr.push(chunk);
+    log?.write(chunk);
+  });
 
   const beginTermination = (): void => {
+    if (terminated || settled) {
+      return;
+    }
     terminated = true;
     if (pgid === null) {
       return;
@@ -121,17 +137,21 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
 
   const completed = (async (): Promise<ProcessResult> => {
     const exit = await exited;
-    if (timer) {
-      clearTimeout(timer);
-    }
-    if (pgid !== null) {
-      await reapGroup(pgid, graceMs);
-    }
-    if (escalation) {
+    clearTimeout(timer);
+    try {
+      if (pgid !== null) {
+        await reapGroup(pgid, graceMs);
+      }
+      await closeWithin(streamsClosed);
+    } catch (error) {
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      throw error;
+    } finally {
       clearTimeout(escalation);
+      await log?.close();
+      settled = true;
     }
-    await streamsClosed;
-    await log?.close();
     return {
       exitCode: exit?.code ?? null,
       signal: exit?.signal ?? null,
@@ -141,6 +161,8 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
       pid,
       stdout: output.text(),
       stdoutTruncated: output.truncated(),
+      stderr: stderr.text(),
+      stderrTruncated: stderr.truncated(),
     };
   })();
 
@@ -164,6 +186,8 @@ function finished(result: { spawnError: string; pid: number | null }): RunningPr
     pid: result.pid,
     stdout: "",
     stdoutTruncated: false,
+    stderr: "",
+    stderrTruncated: false,
   };
   return { pid: null, completed: Promise.resolve(completed), terminate: async () => undefined };
 }
@@ -211,13 +235,22 @@ async function reapGroup(pgid: number, graceMs: number): Promise<void> {
     return;
   }
   signalGroup(pgid, "SIGKILL");
-  await waitForGroupGone(pgid, REAP_WAIT_MS);
+  if (!(await waitForGroupGone(pgid, REAP_WAIT_MS))) {
+    throw new Error(`process group ${pgid} still exists after SIGKILL; settlement is uncertain`);
+  }
 }
 
-function closeWithin(child: ChildProcess, ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    child.once("close", () => {
+/** Start the drain deadline only after exit and group cleanup, never while the child is running. */
+function closeWithin(closed: Promise<void>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () =>
+        reject(
+          new Error("process streams remain open after group cleanup; settlement is uncertain"),
+        ),
+      STREAM_CLOSE_WAIT_MS,
+    );
+    void closed.then(() => {
       clearTimeout(timer);
       resolve();
     });
@@ -244,13 +277,13 @@ class LogFile {
     if (this.capped) {
       return;
     }
-    if (this.written + chunk.length > this.limit) {
+    const kept = chunk.subarray(0, this.limit - this.written);
+    this.written += kept.length;
+    this.stream.write(kept);
+    if (kept.length < chunk.length) {
       this.capped = true;
       this.stream.write(`\n[log capped at ${this.limit} bytes]\n`);
-      return;
     }
-    this.written += chunk.length;
-    this.stream.write(chunk);
   }
 
   close(): Promise<void> {

@@ -11,7 +11,7 @@
  *   the stop. The attempt is never settled as if it had finished.
  */
 import { mkdirSync } from "node:fs";
-import type { AgentAdapter } from "../adapters/agent-adapter.js";
+import type { AgentAdapter, AgentHandle, AgentRunResult } from "../adapters/agent-adapter.js";
 import {
   type CommandOutcome,
   type RunningCommand,
@@ -29,7 +29,7 @@ import { PreparationError, type PreparedAttempt, prepareAttempt } from "./prepar
 import { settlementForAgent, settlementForCommand } from "./settlement.js";
 
 export interface RunServiceOptions extends CoordinatorOptions {
-  /** Agent adapters keyed by harness id. A workflow step naming an unregistered harness fails before start. */
+  /** Agent adapters keyed by harness id. Missing adapters fail before a subprocess is launched. */
   readonly agents: ReadonlyMap<string, AgentAdapter>;
   /** Directory for per-attempt log files. Created if missing. */
   readonly logDir: string;
@@ -49,6 +49,7 @@ export class RunService {
   private current: Terminable | undefined;
   private inFlight: Promise<void> | undefined;
   private stopRequested = false;
+  private drivingRunId: string | undefined;
 
   constructor(
     database: WorkflowDatabase,
@@ -58,8 +59,20 @@ export class RunService {
     this.coordinator = new RunCoordinator(database, options);
   }
 
-  /** Runs the run until it completes, pauses, or is stopped. A stop returns `stopped` at once. */
+  /** Drives one run until it completes, pauses, or its stopped process tree has been reaped. */
   async drive(runId: string): Promise<DriveResult> {
+    if (this.drivingRunId !== undefined) {
+      throw new Error(`this runner is already driving run ${this.drivingRunId}`);
+    }
+    this.drivingRunId = runId;
+    try {
+      return await this.driveRun(runId);
+    } finally {
+      this.drivingRunId = undefined;
+    }
+  }
+
+  private async driveRun(runId: string): Promise<DriveResult> {
     for (;;) {
       if (this.stopRequested) {
         return { kind: "stopped" };
@@ -91,7 +104,12 @@ export class RunService {
    * instance stops driving; start a new one to continue other runs.
    */
   async stop(runId: string, reason = "stopped by request"): Promise<void> {
-    if (this.inFlight === undefined) {
+    if (this.drivingRunId !== runId || this.inFlight === undefined) {
+      if (this.coordinator.activeAttempt(runId) !== undefined) {
+        throw new Error(
+          `this runner does not own the active attempt of run ${runId}; reconcile it first`,
+        );
+      }
       this.coordinator.recordStop(runId, reason);
       return;
     }
@@ -103,6 +121,9 @@ export class RunService {
 
   /** Startup reconciliation. Returns true when an attempt left active by a previous process was found. */
   reconcile(runId: string): boolean {
+    if (this.drivingRunId === runId) {
+      throw new Error(`cannot reconcile run ${runId} while this runner is driving it`);
+    }
     return this.coordinator.reconcileAfterRestart(runId);
   }
 
@@ -125,7 +146,7 @@ export class RunService {
       if (error instanceof PreparationError) {
         this.coordinator.settle(attemptId, {
           kind: "system",
-          code: "system.internal_error",
+          code: error.code,
           detail: error.message,
         });
         return;
@@ -133,34 +154,56 @@ export class RunService {
       throw error;
     }
 
-    if (prepared.kind === "command") {
-      const running: RunningCommand = startCommand(prepared.spec);
-      this.current = running;
-      const outcome: CommandOutcome = await running.completed;
-      this.current = undefined;
-      this.coordinator.recordOutput(attemptId, {
-        stdout: outcome.stdout,
-        logPath: prepared.spec.logPath ?? null,
+    let running: RunningCommand | AgentHandle;
+    try {
+      running =
+        prepared.kind === "command"
+          ? startCommand(prepared.spec)
+          : prepared.adapter.start(prepared.input);
+    } catch (error) {
+      this.coordinator.settle(attemptId, {
+        kind: "system",
+        code: "system.spawn_error",
+        detail: error instanceof Error ? error.message : String(error),
       });
-      if (!this.stopRequested) {
-        this.coordinator.settle(attemptId, settlementForCommand(outcome));
-      }
       return;
     }
 
-    const handle = prepared.adapter.start(prepared.input);
-    this.current = handle;
-    const result = await handle.completed;
+    this.current = running;
+    let result: CommandOutcome | AgentRunResult;
+    try {
+      result = await running.completed;
+    } catch (error) {
+      // A broken adapter promise does not prove its process has settled.
+      await running.terminate();
+      this.current = undefined;
+      if (!this.stopRequested) {
+        this.coordinator.settle(attemptId, {
+          kind: "system",
+          code: "system.internal_error",
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return;
+    }
     this.current = undefined;
     this.coordinator.recordOutput(attemptId, {
       stdout: result.stdout,
-      logPath: prepared.input.logPath ?? null,
+      logPath:
+        (prepared.kind === "command" ? prepared.spec.logPath : prepared.input.logPath) ?? null,
     });
     if (!this.stopRequested) {
-      this.coordinator.settle(
-        attemptId,
-        settlementForAgent(result, prepared.input.allowedOutcomes),
-      );
+      if ("kind" in result) {
+        this.coordinator.settle(attemptId, settlementForCommand(result));
+      } else {
+        if (prepared.kind !== "agent") {
+          throw new Error("command returned an agent result");
+        }
+        this.coordinator.settle(
+          attemptId,
+          settlementForAgent(result, prepared.input.allowedOutcomes),
+        );
+      }
     }
   }
 

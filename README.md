@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Approved architecture for a personal-use MVP. Phases 0–3 of [`todo.md`](todo.md) are implemented: project tooling, the strict YAML parser, the typed v1 schema, the policy compiler, the SQLite store, the transactional run coordinator, and a sequential runner that executes command steps and fake agents. Harness adapters for real CLIs and the `wf report` channel are not written yet (phases 4 and 6).
+**Status:** Implemented core: project tooling, strict YAML/schema validation, policy compilation, SQLite persistence, transactional run coordination, and a sequential runner for command steps and fake agents. This is not a complete MVP: real harness adapters, `wf report` and report correction, Markdown import/context assembly, management CLI, and UI remain on the [`todo.md`](todo.md) roadmap.
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -53,9 +53,9 @@ npm run format               # Biome auto-fix
 npm test                     # build to dist/, then node:test over dist/**/*.test.js
 npm run validate -- examples/overnight.yaml   # strict parse, compile, and path checks
 npm run probe:harnesses      # offline version and help-text probe of codex, pi, omp, opencode, claude
+```
 
 Process tests start real children: `sh`, `sleep`, and `node`. They need a POSIX system.
-```
 
 `npm run validate` exits 0 for a runnable workflow (warnings allowed), 1 when it has errors, and 2 when the file cannot be read. Diagnostics are printed as `file:line:column: severity [code] path: message`.
 

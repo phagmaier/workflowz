@@ -33,6 +33,13 @@ export function checkReferencedPaths(
     }
   };
 
+  if (stat(compiled.projectRoot) !== "directory") {
+    report(
+      ["project", "root"],
+      `project root '${compiled.projectRoot}' does not exist or is not a directory`,
+    );
+  }
+
   if (compiled.tasksSourcePath !== undefined) {
     expectFile(compiled.tasksSourcePath, ["tasks", "source", "path"], "task source");
   }

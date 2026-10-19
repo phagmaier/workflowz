@@ -50,7 +50,7 @@ export function routeAttempt(
   if (attemptsSoFar < via.action.maxAttempts) {
     return { kind: "retry", stepId, via };
   }
-  return routeRetryExhausted(workflow, stepId, outcome);
+  return routeRetryExhausted(workflow, stepId);
 }
 
 /**
@@ -73,18 +73,14 @@ export function routeEngineStep(
   return { kind: "pause", outcome, reason: "routed", via };
 }
 
-function routeRetryExhausted(
-  workflow: CompiledWorkflow,
-  stepId: string,
-  outcome: string,
-): Decision {
+function routeRetryExhausted(workflow: CompiledWorkflow, stepId: string): Decision {
   const exhausted = "system.retry_exhausted";
   const declared = new Set<string>();
   const via = resolveOutcome(workflow, stepId, exhausted, declared);
   if (via.action.kind === "goto") {
     return { kind: "goto", stepId: via.action.target, via };
   }
-  return { kind: "pause", outcome, reason: "retry_exhausted", via };
+  return { kind: "pause", outcome: exhausted, reason: "retry_exhausted", via };
 }
 
 export interface TaskSnapshot {

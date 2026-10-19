@@ -13,6 +13,8 @@ const base: ProcessResult = {
   pid: 1,
   stdout: "",
   stdoutTruncated: false,
+  stderr: "",
+  stderrTruncated: false,
 };
 
 describe("commandOutcome (exit-code normalization)", () => {
@@ -58,6 +60,14 @@ describe("commandOutcome (exit-code normalization)", () => {
 });
 
 describe("startCommand", () => {
+  it("reports empty argv and invalid spawn arguments as spawn errors without throwing", async () => {
+    for (const argv of [[], [""], ["node", "bad\0argument"]]) {
+      const outcome = await startCommand({ argv, cwd: os.tmpdir(), env: {} }).completed;
+      assert.equal(outcome.kind, "system");
+      assert.equal(outcome.kind === "system" && outcome.code, "system.spawn_error");
+    }
+  });
+
   it("runs argv directly, so shell syntax in an argument is just text", async () => {
     const outcome = await startCommand({ argv: ["echo", "$HOME;", "x"], cwd: os.tmpdir(), env: {} })
       .completed;

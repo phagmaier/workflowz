@@ -39,6 +39,41 @@ describe("parseWorkflowText", () => {
     assert.equal(parsed.document?.steps.a?.kind, "command");
   });
 
+  it("keeps core-schema values even when YAML requests version 1.1", () => {
+    const parsed = parseWorkflowText(
+      '%YAML 1.1\n---\nversion: 1\nname: yes\nproject:\n  root: "."\nstart: a\nsteps:\n  a:\n    kind: command\n    argv: [echo, yes]\n    on:\n      complete: { pause: true }\n      failed: { pause: true }\n',
+    );
+    assert.deepEqual(parsed.diagnostics, []);
+    assert.equal(parsed.document?.name, "yes");
+    const step = parsed.document?.steps.a;
+    assert.equal(step?.kind, "command");
+    assert.ok(step?.kind === "command");
+    assert.deepEqual(step.argv, ["echo", "yes"]);
+    assert.deepEqual(step.on?.complete, { pause: true });
+  });
+
+  it("rejects unresolved YAML tags instead of silently ignoring their meaning", () => {
+    const parsed = parseWorkflowText(
+      'version: 1\nname: x\nproject:\n  root: "."\nstart: a\nsteps:\n  a:\n    kind: !unknown end\n',
+    );
+    assert.equal(parsed.document, undefined);
+    assert.equal(parsed.diagnostics[0]?.code, "yaml_syntax");
+    assert.deepEqual(parsed.diagnostics[0]?.location, { line: 8, column: 11 });
+  });
+
+  it("rejects mapping entries that schema validation would silently discard", () => {
+    for (const field of ["on", "env"]) {
+      const parsed = parseWorkflowText(
+        `version: 1\nname: x\nproject:\n  root: "."\nstart: a\nsteps:\n  a:\n    kind: command\n    argv: [echo]\n    ${field}:\n      __proto__: ${field === "on" ? "{pause: true}" : "value"}\n`,
+      );
+      assert.equal(parsed.document, undefined);
+      assert.deepEqual(
+        parsed.diagnostics.map((diagnostic) => [diagnostic.code, diagnostic.path]),
+        [["unknown_field", ["steps", "a", field, "__proto__"]]],
+      );
+    }
+  });
+
   it("rejects duplicate YAML keys, pointing at the second occurrence", () => {
     const parsed = parseWorkflowText(
       readFileSync(path.join(INVALID_FIXTURES, "duplicate-step-key.yaml"), "utf8"),

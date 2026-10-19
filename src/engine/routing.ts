@@ -21,7 +21,7 @@ export function lookupExactRule(
   if (!step) {
     return undefined;
   }
-  const own = step.on[outcome];
+  const own = Object.hasOwn(step.on, outcome) ? step.on[outcome] : undefined;
   if (own !== undefined) {
     return resolved(outcome, own, { level: "step" }, false);
   }
@@ -54,7 +54,7 @@ export function lookupExactRule(
     );
   }
 
-  const fallback = rules.defaults[outcome];
+  const fallback = Object.hasOwn(rules.defaults, outcome) ? rules.defaults[outcome] : undefined;
   if (fallback !== undefined) {
     return resolved(outcome, fallback, { level: "defaults" }, false);
   }
@@ -140,7 +140,7 @@ function findPolicy(
   level: PolicyLevel,
 ): { index: number; action: Action } | undefined {
   for (const policy of policies) {
-    const action = policy.on[outcome];
+    const action = Object.hasOwn(policy.on, outcome) ? policy.on[outcome] : undefined;
     if (action !== undefined && policyLevel(policy) === level && policyCovers(policy, step)) {
       return { index: policy.index, action };
     }

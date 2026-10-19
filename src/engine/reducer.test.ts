@@ -52,6 +52,7 @@ describe("attempt routing", () => {
     const exhausted = routeAttempt(workflow, "build", "failed", 3);
     assert.equal(exhausted.kind, "goto");
     assert.equal(exhausted.kind === "goto" ? exhausted.stepId : "", "done");
+    assert.equal(exhausted.via.outcome, "system.retry_exhausted");
   });
 
   it("does not retry an engine-only step; it pauses and says why", () => {
@@ -72,5 +73,7 @@ describe("attempt routing", () => {
     const decision = routeAttempt(bare, "build", "failed", 2);
     assert.equal(decision.kind, "pause");
     assert.equal(decision.kind === "pause" ? decision.reason : "", "retry_exhausted");
+    assert.equal(decision.kind === "pause" ? decision.outcome : "", "system.retry_exhausted");
+    assert.equal(decision.via.outcome, "system.retry_exhausted");
   });
 });

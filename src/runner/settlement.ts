@@ -40,6 +40,13 @@ export function settlementForAgent(
   if (result.timedOut) {
     return { kind: "system", code: "system.timeout", detail: "the agent exceeded its timeout" };
   }
+  if (result.terminated) {
+    return {
+      kind: "system",
+      code: "system.process_error",
+      detail: "the agent was terminated outside a stop request",
+    };
+  }
   if (result.signal !== null) {
     return {
       kind: "system",

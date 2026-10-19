@@ -66,12 +66,12 @@ Use foreign keys and DB constraints. Prefer WAL with bounded busy timeout. Trans
 
 These record the adjustments made when the store was built (todo Phase 2). The rationale is given so later changes can be judged against it.
 
-- **Storage.** `node:sqlite` (built into Node) with `PRAGMA user_version` migrations. The migration file is append-only. Each run's writes go through `WorkflowDatabase.transaction`, which uses `BEGIN IMMEDIATE`.
+- **Storage.** `node:sqlite` (built into Node) with `PRAGMA user_version` migrations. The migration file is append-only. Each run's writes go through `WorkflowDatabase.transaction`, which uses `BEGIN IMMEDIATE`. Nested calls join the outer transaction; any inner failure makes the whole transaction rollback-only, even if its caller catches the error.
 - **Extra table: `transitions`.** Every routing decision is one row, with `revision_id`. `attempt_id` is UNIQUE, so the database itself forbids two transitions for one attempt. Engine-only steps have `attempt_id` NULL.
-- **One active attempt, enforced by the database.** A unique index on `(status IN (active states))`, restricted by a `WHERE` to active rows, allows at most one active attempt across the whole database. The architecture's "one active attempt globally" is therefore a constraint, not only coordinator logic.
-- **Single writer.** `RunCoordinator` is the only code that changes run state. For each step it reads the run, decides with the pure reducer (`engine/reducer.ts`), and writes the decision with its event in one transaction. A settlement with an undeclared outcome is refused before any write (spec §4.2).
-- **Retries.** A `retry` action reruns the step while its attempt count within the current task is below `max_attempts`. The count includes the attempt that just settled. When the budget is spent, `system.retry_exhausted` routes. If that route also asks for a retry, the run pauses. Backoff is recorded but not waited on yet (todo 7.4). Engine-only steps do not retry; a retry there pauses the run.
-- **Limits.** `max_step_executions` counts committed transitions. `max_wall_time_seconds` counts elapsed time since the run started. Reaching either pauses the run with an attention item.
+- **One active run and attempt.** Transactional coordinator start/resume checks reject a second running or pausing run. A database unique index on `(status IN (active states))`, restricted to active attempts, independently allows at most one active attempt across the whole database. These guards do not replace the daemon instance lock planned in todo 7.1.
+- **Single writer.** `RunCoordinator` is the only code that changes run state. For each step it reads the run, decides with the pure reducer (`engine/reducer.ts`), and writes the decision with its event in one transaction. A settlement with an undeclared outcome is refused before any write (spec §4.2). Compiled cache entries use definition hash and source directory, not revision ID alone: rolled-back SQLite revision IDs can be reused.
+- **Retries.** A `retry` action reruns the step while its attempt count within the current task is below `max_attempts`. The count includes the attempt that just settled. When the budget is spent, `system.retry_exhausted` routes and is recorded as the transition outcome; the attempt settlement event preserves the originally observed outcome. If the exhaustion route also asks for a retry, the run pauses. Backoff is recorded but not waited on yet (todo 7.4). Engine-only steps do not retry; a retry there pauses the run.
+- **Limits.** `max_step_executions` counts committed transitions. `max_wall_time_seconds` counts elapsed time since the run started. Reaching either pauses the run with an attention item. A separate consecutive-engine-step bound blocks only another engine primitive, not completion, external dispatch, or a pause already reached at the boundary.
 - **Clock and ids are injected.** Tests use a deterministic clock and ids. Production uses wall-clock time and random ids.
 
 ### 2.1 State reducer
@@ -91,7 +91,7 @@ The reducer must not launch processes, interpret English, read arbitrary files, 
 3. Stream runtime events to append-only structured log and persist bounded index/summary in DB.
 4. Await reliable end of execution, including adapter-specific settle boundary.
 5. Validate report; potentially perform the one correction turn; normalize to an outcome.
-6. Transactionally mark attempt final, apply chosen transition, update cursor/task state, and append event.
+6. Transactionally mark attempt final, apply chosen transition, update cursor/task state, and append event. If pause-after-current was requested, persist that pause in the same transaction, preserving the routed cursor.
 7. Dispatch next stage if run remains running and not pausing.
 
 A crash may happen between (1) and (2), or between (2) and (4). On restart treat incomplete attempts as **uncertain** until process reconciliation; never assume a command did not run just because it lacks a final DB result.
@@ -102,7 +102,7 @@ The engine can guarantee **at most one committed transition for each finalized a
 
 ## 3. Workflow compilation and routing
 
-Parse YAML strictly, normalize paths, reject duplicate keys, validate schema, and compile a graph with node map and effective outcome mapping. Freeze workflow revision for a run.
+Parse YAML with the core schema, reject duplicate keys, unsupported tags and silently discarded entries, normalize paths, validate the schema, and compile a graph with node map and effective outcome mapping. Referenced-path validation checks the project root is a directory as well as checking input paths. Freeze workflow revision for a run.
 
 **Policy resolution:**
 
@@ -111,6 +111,8 @@ Parse YAML strictly, normalize paths, reject duplicate keys, validate schema, an
 3. Equal-precedence overlapping rules with different actions are invalid at compile time.
 
 **Nuance:** `system.error` serves as a *catch-all* for engine errors, not normal agent outcomes. A normal declared agent outcome must resolve to an explicit rule at level 1–3 or validation fails. A step with custom `outcomes: [complete, blocked]` cannot accidentally route an unrecognized `unknown` result by `system.error`.
+
+Graph diagnostics follow effective normal and system-error routes. Terminal `end` steps have no outgoing edges, even when global policies contain transitions. Transition and step lookup uses own properties only, so names such as `constructor` cannot inherit JavaScript object members.
 
 A step attempt has an **input snapshot**: task, project root, prompt, instruction paths, variables, selected preceding reports, working directory, effective outcomes/transitions, harness, model, and timeout. Its accepted report is immutable. Run-specific task overrides are saved alongside imported run-local task IDs; reusable YAML workflows do not depend on project-specific task IDs. Its execution may produce files in the target project, which remain external side effects.
 
@@ -289,12 +291,13 @@ An optional later enhancement can provide automated recovery for proven side-eff
 
 ### 7.4 Phase 3 process notes
 
-- **Ownership by group.** Every child starts as the leader of its own process group. A stop or timeout signals the group, so a descendant the harness started in the background ends with its attempt. `completed` resolves only after the group has been reaped. After the leader exits normally, leftovers in its group are ended too, so an attempt never settles while its tree is still running.
-- **Escalation.** SIGTERM first, then SIGKILL after a grace period (1 s by default). A process that ignores TERM is still ended.
-- **Known limit.** Signals go to the group id, which is the leader's pid. If a leader exits and its pid is reused while members remain, the wrong group could be signalled. Process-start identity checks (todo 7.1) close this gap; until then the window is accepted.
-- **Bounded output.** The head of stdout (64 KiB) stays in memory for `{{steps.<id>.stdout}}`. Full output goes to a per-attempt log file, capped at 16 MiB.
-- **One process at a time.** `RunService.drive` awaits each attempt before it asks the coordinator for the next step. Control requests (pause, stop) are recorded or terminate the in-flight process and never start another one.
-- **Adapters are workflow-agnostic.** Adapters launch processes and report what happened. The runner, not an adapter, maps results to settlements (`src/runner/settlement.ts`), so the same precedence rules apply to every harness.
+- **Ownership by group.** Every child starts as the leader of its own process group. A stop or timeout signals the group. After the leader exits normally, leftovers in its group are ended too. `completed` resolves only after the group disappears and output streams close; cleanup uncertainty rejects completion rather than falsely reporting success.
+- **Escalation.** SIGTERM first, then SIGKILL after a grace period (1 s by default). Failure to confirm group disappearance within the bounded reap wait is an error. Termination after completion is a no-op and never signals an old group.
+- **Known limits.** Signals go to the group id, which is the leader's pid. If a leader exits and its pid is reused while members remain, the wrong group could be signalled. Process-start identity checks (todo 7.1) address this gap. Descendants that deliberately escape the group cannot be terminated through group ownership; retained pipes cause an uncertain-settlement error, not a success. There is no sandbox or subreaper.
+- **Bounded output.** The heads of stdout and stderr (64 KiB each by default) stay in memory; stdout supplies `{{steps.<id>.stdout}}`. Combined output goes to a per-attempt log file, capped at 16 MiB plus a cap marker. A chunk crossing the cap retains its fitting prefix instead of discarding the whole chunk.
+- **One process at a time.** `RunService.drive` awaits each attempt before asking for the next step and rejects concurrent drive calls. Stop only terminates the requested run's owned operation; stopping another saved run cannot affect it. Live operations cannot be reconciled as crashed. Adapter launch exceptions become spawn errors; completion rejections require termination before routing an internal error. If termination cannot be confirmed, the attempt remains active for reconciliation.
+- **Adapters are workflow-agnostic.** Adapters launch processes and report what happened. The runner maps results to settlements (`src/runner/settlement.ts`), so the same precedence rules apply to every harness. Terminated agents cannot succeed even if they reported an outcome and exited zero. Session resume currently routes `system.resume_unavailable` before launch rather than silently starting fresh.
+- **Offline probes use the same supervisor.** Version/help checks terminate owned descendant groups on timeout, retain nonzero exits and stderr, and reject truncated output as compatibility evidence. Help markers alone cannot turn a failed command into a successful probe.
 
 ## 8. Local API and UI boundary
 
