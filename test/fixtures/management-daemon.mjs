@@ -7,11 +7,20 @@ import { readDaemonAccess } from "../../dist/app/state-directory.js";
 import { ScriptedAgentAdapter } from "../../dist/test-support/scripted-agent.js";
 
 const [directory, mode] = process.argv.slice(2);
-const plan =
-  mode === "correction"
-    ? [{ mode: "silent" }, { mode: "report", outcome: "complete" }]
-    : [{ mode: "report-then-hang", outcome: "complete" }];
-const adapter = new ScriptedAgentAdapter(plan);
+const plans = {
+  correction: [{ mode: "silent" }, { mode: "report", outcome: "complete" }],
+  "correction-hang": [{ mode: "silent" }, { mode: "report-then-hang", outcome: "complete" }],
+  "before-report": [{ mode: "hang" }],
+  tasks: [
+    { mode: "report", outcome: "complete" },
+    { mode: "report", outcome: "blocked" },
+  ],
+  report: [{ mode: "report", outcome: "complete" }],
+};
+const adapter = new ScriptedAgentAdapter(
+  plans[mode] ?? [{ mode: "report-then-hang", outcome: "complete" }],
+  { logFile: path.join(directory, "agent-executions") },
+);
 const start = adapter.start.bind(adapter);
 adapter.start = (input) => {
   const access = readDaemonAccess(directory);
@@ -40,6 +49,17 @@ adapter.start = (input) => {
   return start(input);
 };
 const owner = await startDaemon(directory, new Map([["codex", adapter]]));
+if (mode === "between") {
+  // Stop only after the actual settlement transaction, before another dispatch.
+  const coordinator = owner.management.service.coordinator;
+  const settle = coordinator.settle.bind(coordinator);
+  coordinator.settle = (...args) => {
+    const result = settle(...args);
+    writeFileSync(path.join(directory, "between"), "committed");
+    process.kill(process.pid, "SIGSTOP");
+    return result;
+  };
+}
 const shutdown = () => {
   void owner.close().catch(() => {});
 };

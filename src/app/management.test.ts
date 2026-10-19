@@ -176,6 +176,19 @@ async function fixture(t: TestContext, mode?: string) {
   const create = async (text: string) =>
     (await ok<{ runId: string }>(["run", "create", file("workflow.yaml", text)])).runId;
   const status = (id: string) => ok<Status>(["run", "status", id]);
+  const inspect = (id: string) => {
+    const reader = new WorkflowDatabase(path.join(directory, "state.sqlite"), { readOnly: true });
+    try {
+      const coordinator = new RunCoordinator(reader);
+      const state = coordinator.inspect(id);
+      return {
+        ...state,
+        inputs: state.attempts.map((attempt) => coordinator.attemptInput(attempt.attemptId)),
+      };
+    } finally {
+      reader.close();
+    }
+  };
   const control = async (action: string, id: string, extra: string[] = []) =>
     ok([
       "run",
@@ -185,7 +198,7 @@ async function fixture(t: TestContext, mode?: string) {
       String((await status(id)).expectedEventId),
       ...extra,
     ]);
-  return { root, directory, cli, ok, file, create, status, control, owner, launch };
+  return { root, directory, cli, ok, file, create, status, inspect, control, owner, launch };
 }
 
 describe("management CLI and local daemon", { timeout: 90000 }, () => {
@@ -597,6 +610,479 @@ steps:
     await f.ok(["run", "recovery-decide", id, "--request", requestFile]);
     assert.equal((await f.status(id)).run.status, "stopped");
     assert.equal((await f.ok<unknown[]>(["run", "reports", id])).length, 1);
+  });
+
+  it("recovers a killed command daemon, escalates owned descendant cleanup and admits only one explicit retry", async (t) => {
+    const f = await fixture(t);
+    f.file(
+      "tree.mjs",
+      `
+import { spawn } from "node:child_process";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+appendFileSync("executions", "x");
+if (readFileSync("executions", "utf8") === "x") {
+  process.on("SIGTERM", () => appendFileSync("term", "leader\\n"));
+  const child = spawn(process.execPath, ["-e",
+    "process.on('SIGTERM',()=>require('node:fs').appendFileSync('term','child\\\\n'));process.stdout.write('ready');setInterval(()=>{},1000)"],
+    { stdio: ["ignore", "pipe", "inherit"] });
+  child.stdout.once("data", () => writeFileSync("descendant", String(child.pid)));
+  setInterval(() => {}, 1000);
+}
+`,
+    );
+    const text = COMMAND.replace(
+      / {4}argv: .*release.*\n/,
+      `    argv: ${JSON.stringify([process.execPath, "tree.mjs"])}\n`,
+    );
+    const id = await f.create(text);
+    const startArgs = [
+      "run",
+      "start",
+      id,
+      "--expected-event",
+      String((await f.status(id)).expectedEventId),
+    ];
+    assert.deepEqual(
+      (await Promise.all([f.cli(startArgs), f.cli(startArgs)])).map((r) => r.code).sort(),
+      [0, 1],
+    );
+    const active = await until(
+      () => f.status(id),
+      (s) =>
+        s.activeAttempt?.processIdentity != null && existsSync(path.join(f.root, "descendant")),
+    );
+    const identity = active.activeAttempt?.processIdentity;
+    assert.ok(identity);
+    const descendant = Number(readFileSync(path.join(f.root, "descendant"), "utf8"));
+    const before = f.inspect(id);
+    await f.owner.crash();
+    await f.launch();
+    assert.equal((await f.status(id)).run.status, "interrupted");
+    assert.equal(observeProcessGroup(identity), "alive", "startup must not terminate the tree");
+    assert.deepEqual(f.inspect(id).transitions, []);
+    const other = await f.create(END);
+    assert.equal(
+      (
+        await f.cli([
+          "run",
+          "start",
+          other,
+          "--expected-event",
+          String((await f.status(other)).expectedEventId),
+        ])
+      ).code,
+      1,
+    );
+    type Recovery = { expectedEventId: number; attempt: AttemptRow | null };
+    const request = async (action?: string) => {
+      const state = await f.ok<Recovery>(["run", "recovery", id]);
+      return f.file(
+        "recovery.json",
+        JSON.stringify({
+          expectedEventId: state.expectedEventId,
+          attemptId: state.attempt?.attemptId ?? null,
+          reason: "Reviewed partial effects; explicitly clean up and retry",
+          ...(action ? { action } : {}),
+        }),
+      );
+    };
+    assert.equal(
+      (await f.cli(["run", "recovery-decide", id, "--request", await request("retry")])).code,
+      1,
+    );
+    await f.ok(["run", "recovery-terminate", id, "--request", await request()]);
+    assert.equal(observeProcessGroup(identity), "gone");
+    assert.equal(existsSync(`/proc/${descendant}`), false, "descendant must be reaped");
+    assert.deepEqual(readFileSync(path.join(f.root, "term"), "utf8").trim().split("\n").sort(), [
+      "child",
+      "leader",
+    ]);
+    await f.ok(["run", "recovery-decide", id, "--request", await request("retry")]);
+    const paused = await f.status(id);
+    assert.equal(paused.run.status, "paused");
+    assert.equal((await f.status(id)).expectedEventId, paused.expectedEventId);
+    assert.equal(readFileSync(path.join(f.root, "executions"), "utf8"), "x");
+    const resume = [
+      "run",
+      "resume",
+      id,
+      "--expected-event",
+      String(paused.expectedEventId),
+      "--reason",
+      "Execute only the selected retry",
+    ];
+    assert.deepEqual(
+      (await Promise.all([f.cli(resume), f.cli(resume)])).map((r) => r.code).sort(),
+      [0, 1],
+    );
+    await until(
+      () => f.status(id),
+      (s) => s.run.status === "completed",
+    );
+    const final = f.inspect(id);
+    assert.equal(readFileSync(path.join(f.root, "executions"), "utf8"), "xx");
+    assert.equal(readFileSync(path.join(f.root, "effects"), "utf8"), "x");
+    assert.equal(final.attempts.length, 3);
+    assert.equal(final.attempts[0]?.attemptId, before.attempts[0]?.attemptId);
+    assert.equal(final.attempts[0]?.status, "interrupted");
+    assert.deepEqual(
+      final.transitions.map((row) => row.fromStepId),
+      ["work", "next"],
+    );
+    assert.equal(
+      final.transitions.some((row) => row.attemptId === before.attempts[0]?.attemptId),
+      false,
+    );
+  });
+
+  for (const mode of ["before-report", "correction-hang"] as const) {
+    it(`never replays an agent or routes its interrupted report after daemon SIGKILL at ${mode}`, async (t) => {
+      const f = await fixture(t, mode);
+      const id = await f.create(AGENT);
+      await f.control("start", id);
+      const active = await until(
+        () => f.status(id),
+        (s) =>
+          s.activeAttempt?.processIdentity != null &&
+          (mode === "before-report" || s.latestReport != null),
+      );
+      const before = f.inspect(id);
+      const original = before.attempts[0];
+      assert.ok(original?.processIdentity);
+      assert.equal(original.correctionCount, mode === "before-report" ? 0 : 1);
+      const reports = await f.ok<unknown[]>(["run", "reports", id]);
+      assert.equal(reports.length, mode === "before-report" ? 0 : 1);
+      assert.equal(before.transitions.length, 0);
+      await f.owner.crash();
+      await f.launch("report");
+      const recovered = await f.status(id);
+      assert.equal(recovered.run.status, "interrupted");
+      assert.equal(observeProcessGroup(original.processIdentity), "alive");
+      assert.deepEqual(recovered.latestReport, active.latestReport);
+      assert.equal((await f.status(id)).expectedEventId, recovered.expectedEventId);
+      const reopened = f.inspect(id);
+      assert.deepEqual(reopened.inputs, before.inputs);
+      assert.deepEqual(
+        reopened.events.filter((e) =>
+          [
+            "invocation_started",
+            "invocation_settled",
+            "correction_requested",
+            "report_accepted",
+          ].includes(e.type),
+        ),
+        before.events.filter((e) =>
+          [
+            "invocation_started",
+            "invocation_settled",
+            "correction_requested",
+            "report_accepted",
+          ].includes(e.type),
+        ),
+      );
+      const recovery = async () => {
+        const state = await f.ok<{ expectedEventId: number; attempt: AttemptRow }>([
+          "run",
+          "recovery",
+          id,
+        ]);
+        return {
+          expectedEventId: state.expectedEventId,
+          attemptId: state.attempt.attemptId,
+          reason: "Explicit cleanup and retry after inspecting interrupted effects",
+        };
+      };
+      await f.ok([
+        "run",
+        "recovery-terminate",
+        id,
+        "--request",
+        f.file("cleanup.json", JSON.stringify(await recovery())),
+      ]);
+      assert.equal(observeProcessGroup(original.processIdentity), "gone");
+      await f.ok([
+        "run",
+        "recovery-decide",
+        id,
+        "--request",
+        f.file("decision.json", JSON.stringify({ ...(await recovery()), action: "retry" })),
+      ]);
+      assert.equal((await f.status(id)).run.status, "paused");
+      assert.equal(f.inspect(id).attempts.length, 1);
+      await f.control("resume", id, ["--reason", "Launch the selected fresh logical attempt"]);
+      await until(
+        () => f.status(id),
+        (s) => s.run.status === "completed",
+      );
+      const final = f.inspect(id);
+      assert.equal(final.attempts.length, 2);
+      assert.equal(final.attempts[0]?.status, "interrupted");
+      assert.equal(final.attempts[0]?.correctionCount, original.correctionCount);
+      assert.equal(final.attempts[1]?.correctionCount, 0);
+      assert.notEqual(
+        final.attempts[1]?.sessionId,
+        original.sessionId,
+        "fresh retry cannot reuse the uncertain session",
+      );
+      assert.deepEqual(final.inputs[0], before.inputs[0]);
+      assert.equal(final.transitions.length, 1);
+      assert.equal(final.transitions[0]?.attemptId, final.attempts[1]?.attemptId);
+      const finalReports = await f.ok<unknown[]>(["run", "reports", id]);
+      assert.deepEqual(finalReports.slice(0, reports.length), reports);
+      assert.equal(finalReports.length, reports.length + 1);
+    });
+  }
+
+  it("reopens a SIGKILL between committed steps and continues only after disposition plus resume", async (t) => {
+    const f = await fixture(t, "between");
+    f.file("release", "allow the first command to settle");
+    const id = await f.create(COMMAND);
+    await f.control("start", id);
+    await until(async () => existsSync(path.join(f.directory, "between")), Boolean);
+    const before = f.inspect(id);
+    assert.equal(before.run.cursorStepId, "next");
+    assert.equal(before.attempts[0]?.status, "succeeded");
+    await f.owner.crash();
+    await f.launch();
+    const state = await f.status(id);
+    assert.equal(state.run.status, "interrupted");
+    assert.equal(state.activeAttempt, null);
+    assert.deepEqual(f.inspect(id).transitions, before.transitions);
+    assert.equal(existsSync(path.join(f.root, "effects")), false);
+    const decision = f.file(
+      "continue.json",
+      JSON.stringify({
+        expectedEventId: state.expectedEventId,
+        attemptId: null,
+        reason: "Continue the committed cursor without repeating work",
+        action: "continue",
+      }),
+    );
+    await f.ok(["run", "recovery-decide", id, "--request", decision]);
+    const paused = await f.status(id);
+    assert.equal((await f.status(id)).expectedEventId, paused.expectedEventId);
+    assert.equal(existsSync(path.join(f.root, "effects")), false);
+    await f.control("resume", id, ["--reason", "Execute next only"]);
+    await until(
+      () => f.status(id),
+      (s) => s.run.status === "completed",
+    );
+    const final = f.inspect(id);
+    assert.deepEqual(final.attempts[0], before.attempts[0]);
+    assert.deepEqual(final.transitions[0], before.transitions[0]);
+    assert.deepEqual(
+      final.attempts.map((a) => a.stepId),
+      ["work", "next"],
+    );
+    assert.equal(readFileSync(path.join(f.root, "effects"), "utf8"), "x");
+  });
+
+  it("does not dispatch an expired backoff after daemon SIGKILL until explicit continue and resume", async (t) => {
+    const f = await fixture(t);
+    const text = workflowText(`start: work
+steps:
+  work:
+    kind: command
+    argv: ["${process.execPath}", "-e", "require('node:fs').appendFileSync('effects','x');process.exit(1)"]
+    on:
+      complete: {goto: done}
+      failed: {retry: {max_attempts: 2, backoff_seconds: 5}}
+  done: {kind: end}
+`);
+    const id = await f.create(text);
+    await f.control("start", id);
+    const waiting = await until(
+      () => f.status(id),
+      (s) => s.run.retryNotBefore !== null,
+    );
+    const due = waiting.run.retryNotBefore;
+    assert.ok(due);
+    const before = f.inspect(id);
+    await f.owner.crash();
+    await f.launch();
+    const interrupted = await f.status(id);
+    assert.equal(interrupted.run.status, "interrupted");
+    assert.equal(interrupted.run.retryNotBefore, waiting.run.retryNotBefore);
+    assert.equal(interrupted.run.startTime, waiting.run.startTime);
+    // The separate daemon owns a real wall-clock deadline; parent fake timers cannot advance it.
+    await delay(Math.max(0, Date.parse(due) - Date.now()) + 100);
+    assert.deepEqual(f.inspect(id).attempts, before.attempts);
+    assert.deepEqual(f.inspect(id).transitions, before.transitions);
+    assert.equal((await f.status(id)).expectedEventId, interrupted.expectedEventId);
+    await f.ok([
+      "run",
+      "recovery-decide",
+      id,
+      "--request",
+      f.file(
+        "continue.json",
+        JSON.stringify({
+          expectedEventId: interrupted.expectedEventId,
+          attemptId: null,
+          reason: "Preserve the committed retry plan",
+          action: "continue",
+        }),
+      ),
+    ]);
+    assert.equal((await f.status(id)).run.status, "paused");
+    assert.equal(readFileSync(path.join(f.root, "effects"), "utf8"), "x");
+    await f.control("resume", id, ["--reason", "Admit the due retry"]);
+    await until(
+      () => f.status(id),
+      (s) => s.run.status === "paused",
+    );
+    const final = f.inspect(id);
+    assert.equal(final.attempts.length, 2);
+    assert.equal(final.transitions.at(-1)?.outcome, "system.retry_exhausted");
+    assert.equal(final.run.retryNotBefore, null);
+    assert.equal(final.run.startTime, before.run.startTime);
+    assert.equal(readFileSync(path.join(f.root, "effects"), "utf8"), "xx");
+  });
+
+  it("preserves paused revisions, task progress and frozen settings across restarts without crossing session scope", async (t) => {
+    const f = await fixture(t, "tasks");
+    f.file("tasks.md", "- [ ] first\n- [ ] second\n");
+    const text = workflowText(`tasks:
+  source: {kind: markdown_checklist, path: tasks.md}
+start: pick
+steps:
+  pick:
+    kind: task.next
+    on:
+      task_ready: {goto: work}
+      exhausted: {goto: done}
+  work:
+    kind: agent
+    harness: codex
+    session: fresh
+    model: base
+    prompt: 'Original {{task.text}}'
+    outcomes: [complete, blocked]
+    on:
+      complete: {goto: finish}
+      blocked: {pause: true}
+  finish:
+    kind: task.complete
+    on:
+      complete: {goto: pick}
+  done: {kind: end}
+`);
+    const id = await f.create(text);
+    const tasks = f.inspect(id).tasks;
+    const second = tasks[1]?.taskId;
+    assert.ok(second);
+    await f.control("task-overrides", id, [
+      "--task",
+      second,
+      "--request",
+      f.file(
+        "settings.json",
+        JSON.stringify({
+          reason: "Freeze the original task settings",
+          overrides: {
+            steps: { work: { model: "original-model", prompt: "Original {{task.text}}" } },
+          },
+        }),
+      ),
+    ]);
+    await f.control("start", id);
+    await until(
+      () => f.status(id),
+      (s) => s.run.status === "paused",
+    );
+    const before = f.inspect(id);
+    assert.deepEqual(
+      before.tasks.map((task) => task.state),
+      ["completed", "active"],
+    );
+    assert.equal(before.inputs[1]?.model, "original-model");
+    const reports = await f.ok<unknown[]>(["run", "reports", id]);
+    const resumeRevision = (await f.control("revise", id, [
+      "--file",
+      f.file("resume.yaml", text.replace("session: fresh", "session: resume")),
+      "--reason",
+      "Require a session in the new revision",
+    ])) as { revisionId: number };
+    await f.control("task-overrides", id, [
+      "--task",
+      second,
+      "--request",
+      f.file(
+        "settings.json",
+        JSON.stringify({
+          reason: "Change only future task settings",
+          overrides: {
+            steps: { work: { model: "revised-model", prompt: "Revised {{task.text}}" } },
+          },
+        }),
+      ),
+    ]);
+    rmSync(path.join(f.root, "tasks.md"));
+    const paused = await f.status(id);
+    await f.owner.crash();
+    const restarted = await f.launch("report");
+    const reopened = await f.status(id);
+    assert.deepEqual(reopened.run, paused.run);
+    assert.equal(reopened.expectedEventId, paused.expectedEventId);
+    assert.deepEqual(f.inspect(id).attempts, before.attempts);
+    assert.deepEqual(f.inspect(id).inputs, before.inputs);
+    await f.control("resume", id, ["--reason", "Try the revised explicit session policy"]);
+    await until(
+      () => f.status(id),
+      (s) => s.run.status === "paused",
+    );
+    const unavailable = f.inspect(id);
+    assert.equal(unavailable.attempts.length, 3);
+    assert.equal(unavailable.attempts[2]?.revisionId, resumeRevision.revisionId);
+    assert.equal(unavailable.attempts[2]?.errorCode, "system.resume_unavailable");
+    assert.equal(
+      unavailable.events.filter((event) => event.type === "invocation_started").length,
+      2,
+      "new revision cannot launch an old revision's session or fall back to fresh",
+    );
+    assert.deepEqual(await f.ok<unknown[]>(["run", "reports", id]), reports);
+    const freshRevision = (await f.control("revise", id, [
+      "--file",
+      f.file("fresh.yaml", text.replace("Original", "Revised")),
+      "--reason",
+      "Explicitly choose fresh execution for remaining work",
+    ])) as { revisionId: number };
+    await restarted.crash();
+    await f.launch("report");
+    assert.equal((await f.status(id)).run.status, "paused");
+    assert.equal((await f.status(id)).run.revisionId, freshRevision.revisionId);
+    await f.control("resume", id, ["--reason", "Complete only the remaining task"]);
+    await until(
+      () => f.status(id),
+      (s) => s.run.status === "completed",
+    );
+    const final = f.inspect(id);
+    assert.deepEqual(
+      final.tasks.map((task) => task.taskId),
+      tasks.map((task) => task.taskId),
+    );
+    assert.deepEqual(
+      final.tasks.map((task) => task.state),
+      ["completed", "completed"],
+    );
+    assert.equal(final.run.startTime, before.run.startTime);
+    assert.deepEqual(final.attempts.slice(0, 2), before.attempts);
+    assert.deepEqual(final.inputs.slice(0, 2), before.inputs);
+    assert.deepEqual(final.transitions.slice(0, before.transitions.length), before.transitions);
+    assert.equal(final.attempts.length, 4);
+    assert.equal(final.attempts[3]?.revisionId, freshRevision.revisionId);
+    assert.equal(final.attempts[3]?.taskId, second);
+    assert.equal(final.inputs[3]?.model, "revised-model");
+    assert.match(final.inputs[3]?.prompt ?? "", /Revised second/);
+    assert.notEqual(final.attempts[3]?.sessionId, before.attempts[1]?.sessionId);
+    assert.equal(final.events.filter((event) => event.type === "workflow_revised").length, 2);
+    const revisions = await f.ok<{ revisionId: number }[]>(["workflow", "list"]);
+    for (const revisionId of [
+      before.run.revisionId,
+      resumeRevision.revisionId,
+      freshRevision.revisionId,
+    ])
+      assert.ok(revisions.some((row) => row.revisionId === revisionId));
   });
 
   it("enforces separate management authority, strict bodies/origin, owner-only discovery and no token output", async (t) => {

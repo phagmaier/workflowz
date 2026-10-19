@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6 and Phases 7.1–7.3 are complete. Separately authorized Phase 7.4 completes run limits and bounded stage retries offline. This is not a complete MVP: 7.5, the UI and remaining reliability work stay on the [`todo.md`](todo.md) roadmap and require new authorization.
+**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6 and Phases 7.1–7.5 are complete, including offline daemon crash/restart reliability coverage. This is not a complete MVP: the UI and remaining work stay on the [`todo.md`](todo.md) roadmap and require new authorization. See the [Phase 7.5 coverage matrix and acceptance evidence](docs/implementation-log.md#phase-75--daemon-crash-boundaries-and-resumed-revisions).
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 

@@ -622,3 +622,58 @@ git diff --check
 - Final diff checks passed. Confirmed no remaining project `.tmp-management*` or `/tmp/wf-run-limits-*` / `wf-retry-limits-*` fixture directories. Reviewed the complete tracked/untracked change set and kept migrations 1–8 unchanged.
 
 **7.4 is checked only after this acceptance.** Changes remain uncommitted/unpushed for owner review; 7.5 and UI work require new authorization. Idle is an optional observable-silence bound, not semantic progress; process cleanup may exceed a deadline, and unknown/escaped processes and non-atomic identity checks retain the existing conservative recovery limits. No rollback or automatic successful-side-effect inference is claimed.
+
+## Phase 7.5 — daemon crash boundaries and resumed revisions
+
+The owner authorized offline Phase 7.5 implementation/testing, without subagents, providers, credential-file inspection, global harness changes, UI or later roadmap work. Initial inspection confirmed clean `main` at `f9bd2b9a47715b0783fce83ae3a6083ca4b18452` (owner-committed/pushed Phase 7.4); the historical pending-commit/authorization statements above are superseded. This milestone's commit/push still requires separate owner approval.
+
+Read the required guidance, design, roadmap, example, Phase 7.1–7.4 acceptance and schema decisions before designing changes. The codebase-memory index was ready at generation `2026-10-19T22:57:53Z`; exact-path coverage for all 23 requested implementation/test/fixture paths reported metadata matches with no recorded issue. Graph discovery/tracing confirmed the existing daemon → management service → runner ownership path; source reads supplied the bounded assertion and lifecycle audit. No recovery, daemon, adapter, counter or supervision redesign was needed.
+
+### Bounded coverage matrix
+
+| Contract / boundary | Existing evidence retained | Phase 7.5 addition |
+| --- | --- | --- |
+| Actual owner crash during command/agent work | `runner/recovery.test.ts`: command, accepted original/correction reports, unknown correction spawn intent; management test: accepted original agent report through foreground daemon | Foreground command daemon SIGKILL and reopen; fake-agent daemon SIGKILL before reporting and during accepted correction; immutable report/input/invocation history and fresh explicit retry |
+| Committed cursor and retry wait never auto-drive | Recovery tests/smoke: post-commit crash; `engine/retry-limits.test.ts`: durable deadline, revision, restart and cancellation; management test: graceful backoff shutdown | Foreground daemon SIGKILL immediately after committed settlement; real backoff crash/reopen through deadline expiry; separate continue and resume, preserved counter/start time |
+| Duplicate ownership/admission cannot overlap | Management tests: competing owner cannot replace discovery, one active run, stale controls; recovery tests: global unresolved barrier and shared-facade guards | Concurrent separate CLI start/resume requests admit exactly one; recovered live tree blocks another run and premature retry disposition |
+| Owned tree termination and escalation | `adapters/process.test.ts`: timeout, stop, KILL escalation and stream uncertainty; `adapters/probe.test.ts`: departed-leader descendant cleanup; all adapter conformance suites: owned-tree stop | Restarted daemon explicitly terminates TERM-resistant leader and descendant, observes both TERM handlers, confirms group absence and descendant reaping before retry |
+| Unverified identity never permits signalling; termination crashes never replay signals | `process-identity.test.ts`, `recovery.test.ts`, `recovery-decisions.test.ts`: mismatched/unknown/old-boot identity, termination request/result crash boundaries, barrier/audit rollback | Reuse these focused cases rather than duplicate fault injection in the daemon fixture |
+| Paused revisions survive real owner restart | Runner configuration tests: frozen parameters, immutable task snapshot/history and revision-scoped sessions; management tests: revisions with removed checklist and effective paused settings | Two paused-daemon restarts around revised session policy and fresh continuation; stable task IDs/progress, historical attempts/inputs/transitions/reports, new revision associations/settings and no cross-revision resume/fresh fallback |
+| Cleanup, disposition and execution remain separate | Headless decisions: exact attempt/event/reason, external confirmation distinct from observation, retry/continue/skip/jump/end and duplicate rejection | Management recovery cleanup/decision does not execute; separate explicit resume creates only the selected new logical attempt or next committed stage |
+
+Extended only the existing management test and offline daemon fixture. Fixture plans reuse `ScriptedAgentAdapter`, real local `wf report` and the common supervisor. The between-step injection stops the fixture process only after the real settlement transaction, following the existing headless crash-fixture convention. The backoff-expiry case deliberately uses the separate daemon's actual platform clock; fake parent timers cannot advance that persisted deadline. No production behavior, migrations, workflow/report schema or provider compatibility claims change.
+
+### Verification
+
+Node.js **v26.8.2**, npm **11.19.1**. The focused build and process/identity/management/recovery/revision/limit run passed **88 tests / 11 suites**, zero failures/cancellations/skips. All six new scenarios passed on their first execution. No production defect was exposed; this is an acceptance-coverage change, not a behavior cutover. Local child processes and loopback listeners ran successfully without weakening or skipping fixtures.
+
+```bash
+npm run build
+node --test dist/app/management.test.js dist/app/management-service.test.js \
+  dist/runner/recovery.test.js dist/runner/recovery-decisions.test.js \
+  dist/runner/run-configuration.test.js dist/runner/limits.test.js \
+  dist/engine/retry-limits.test.js dist/adapters/process.test.js \
+  dist/adapters/process-identity.test.js
+```
+
+Final acceptance commands:
+
+```bash
+npm run check
+npm run smoke:recovery
+npm run smoke:reporting
+npm run smoke:boundaries
+node dist/app/validate-cli.js examples/overnight.yaml
+git diff --check
+```
+
+- **Full gate: 783 tests / 87 suites passed**, zero failures/cancellations/skips; typecheck and lint passed. Biome checked 138 files with 134 informational suggestions, no errors/warnings and no gate-time fixes. All five adapters retain full offline conformance. The first full-gate attempt stopped at lint before tests because a new assertion used forbidden `!`; replaced it with explicit narrowing and removed an adjacent-space regex warning, then reran the complete gate successfully.
+- Recovery smoke passed command retry, correction skip, committed-cursor continue and unidentified correction-intent end, with actual owner SIGKILL, durable reopen, no automatic replay and explicit owned cleanup.
+- Reporting smoke passed durable acknowledgment before settlement, direct reporting, exactly one successful correction and failed correction routing `system.report_error`; durable SQLite reopen and cleanup passed.
+- Boundary smoke passed OpenCode/Claude synthetic correction/provider-failure paths with selected environment, scrubbed logs/diagnostics, sequential settlement and SQLite reopen. No live provider compatibility scenario was repeated.
+- Canonical example: **valid, 8 steps, zero warnings**, unchanged hash prefix `8a4912284968`. Specification, architecture, schema decisions, example and migrations remain intentionally unchanged: this milestone verifies the established contracts rather than changing them.
+- Fixture teardown reaped each daemon, checked recorded process ownership before any surviving-group cleanup, required group absence and removed its own root. The new tree case explicitly confirmed descendant `/proc` disappearance after TERM-to-KILL escalation before retry. Final process inspection found no management/fake-agent/recovery fixture process or matching temporary working-directory survivor; project `.tmp-management*` directories and this verification's `/tmp/wf-*` fixture directories were absent. **45 older `/tmp/wf-*` directories were preserved**, newest creation `2026-10-19T22:19:54.788Z`, before initial index inspection at `22:57:53Z`. They are not this session's cleanup targets; no uncertain historical evidence was deleted or unrelated process signalled.
+
+**7.5 is checked only after this acceptance.** No production defect was exposed, and no runtime code, dependency or migration changed. Existing limits remain: Linux `/proc` and reliable local SQLite locks are required; identity inspection/signalling is non-atomic; escaped descendants and unidentified operations cannot be proven safe automatically; operator cleanup confirmation is a consequential assertion, not isolation or successful-side-effect evidence. SIGKILL fixtures do not simulate every power-loss/storage failure. No rollback, exactly-once external effects or new live-provider attestation is claimed. UI/later milestones remain unauthorized. Changes are uncommitted/unpushed pending owner review and approval.
+
+After the acceptance review, the owner explicitly approved committing and pushing Phase 7.5 and requested a fresh-agent prompt for the next task. This supersedes the pending-approval statements above; it does not authorize this session to implement Phase 8 or run providers.
