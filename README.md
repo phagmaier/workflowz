@@ -56,6 +56,7 @@ npm run smoke:reporting      # real wf report + SQLite + fake-session correction
 npm run smoke:tasks          # immutable Markdown import + fake task loop + persisted context
 npm run smoke:capabilities   # offline installed-feature preflight + real fixture reporting
 npm run smoke:boundaries     # synthetic credential/environment/log boundaries + real reporting
+npm run smoke:harnesses -- --help  # opt-in live tool; no provider execution without --execute
 npm run probe:harnesses      # isolated factory capability probes of codex, pi, omp, opencode, claude
 ```
 
@@ -165,6 +166,25 @@ Every runner-owned adapter/probe child receives an explicit selected environment
 Known injected credentials and report tokens are scrubbed before streaming observation, capture and capped disk logs, including canonical JSON/URL/Base64 forms and OpenCode's private Basic authorization. Known adapter credentials and retired report tokens remain redaction-only memory until the report channel closes; submissions containing these values are rejected before persistence. Invocation-settled events retain a scrubbed stderr head of at most 4 KiB plus capture-truncation flags. The existing 64 KiB stdout/stderr captures and 16 MiB combined stream logs retain useful session/terminal evidence; correction has its own `.log.correction` file. `npm run smoke:boundaries` independently exercises reporting, correction and provider failures through synthetic local CLIs, without providers.
 
 Environment selection is not isolation. Scrubbing recognizes known injected values and specified representations, not every unknown secret or arbitrary transformation. Harness-managed files, tool inheritance, resources and live provider behavior remain outside this offline guarantee. Exact selections, bounds and remaining limits are in [harness compatibility](docs/harness-compatibility.md#environment-and-diagnostic-boundary-audit-phase-67).
+
+### Opt-in authenticated harness smoke (Phase 6.8)
+
+`npm run smoke:harnesses -- ...` requires one explicit harness, model, scenario, timeout and absolute artifact parent. Without `--execute`, it prints a plan **without probes, authentication checks, smoke artifact writes or provider calls**; npm still builds `dist/` first. Live execution is never invoked by builds, `npm test`, `npm run check` or offline capability probes.
+
+```bash
+npm run smoke:harnesses -- --harness codex --model gpt-6.1-sol \
+  --reasoning-effort low --scenario report --timeout-seconds 60 \
+  --artifacts-dir "$HOME/.local/state/workflowz/live-smoke"
+# Add --execute only after authorizing provider usage for that exact selection.
+```
+
+`report` allows one harness invocation and disables correction. `correction` deliberately requests a clean first turn without a report, then requires exactly one same-session report-only correction (at most 30 seconds). The agent runs a disposable helper that invokes the real `wf report`; success requires its acknowledgment marker, the exact durable report, clean sequential settlement, persisted session identity and SQLite reopen. An accidental original report cannot pass the correction scenario.
+
+Normal HOME/auth/config/resource discovery and existing unrestricted permissions remain enabled: this is **not isolation** and may incur charges. Codex/Pi/Claude status checks discard their output and never log in or print credentials; Pi disables status-time OAuth refresh. OpenCode/omp record `status_unsupported`, not a fabricated authentication pass. No dollar cap is enforced; the timeout bounds supervised execution, not billing, native retries or external side effects.
+
+Each execution retains private `evidence.json`, SQLite and existing bounded scrubbed adapter logs under a unique `wf-<harness>-<scenario>-*` artifact directory. Evidence includes version, capabilities, permissions, selected model/effort, authentication status, outcome, invocation/correction counts and session fingerprints—never raw handles/report access. Settled target projects are removed; uncertain cleanup preserves them and fails. SIGINT/SIGTERM stop through `RunService`. Harness-owned state/transcripts are not copied, rewritten or removed; known-value scrubbing cannot recognize unknown secrets.
+
+The offline smoke tests exercise all five actual factories through synthetic CLIs. **Authenticated live success remains unverified; Phase 0.5 and the full Phase 6 live gate remain open.** See [live procedure and failure interpretation](docs/harness-compatibility.md#opt-in-live-smoke-tooling-phase-68) before authorizing execution.
 
 ### Layout
 

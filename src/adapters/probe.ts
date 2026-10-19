@@ -5,12 +5,19 @@
  * inventory reuses those factories and their isolated environments. It never runs a model, never
  * reads credential files, and never passes the caller's full environment to the child.
  */
+
+import { createClaudeAdapter } from "./claude.js";
+import type { CodexAdapterOptions } from "./codex.js";
+import { createCodexAdapter } from "./codex.js";
 import {
   BUILT_IN_HARNESSES,
   type HarnessCapabilities,
   type HarnessDescriptor,
   type HarnessRegistry,
 } from "./harness-registry.js";
+import { createOmpAdapter } from "./omp.js";
+import { createOpenCodeAdapter } from "./opencode.js";
+import { createPiAdapter } from "./pi.js";
 import { startProcess } from "./process.js";
 import { environmentSecrets } from "./secrets.js";
 
@@ -130,6 +137,29 @@ export async function runProbeCommand(
   }
 }
 
+/** Shared built-in factory dispatch for offline inventory and explicitly admitted smoke execution. */
+export async function createInstalledAdapter(
+  descriptor: HarnessDescriptor,
+  options: CodexAdapterOptions = {},
+  run?: CommandRunner,
+) {
+  const selected = { ...options, binary: options.binary ?? descriptor.binary };
+  switch (descriptor.id) {
+    case "codex":
+      return createCodexAdapter(selected, run);
+    case "pi":
+      return createPiAdapter(selected, run);
+    case "claude":
+      return createClaudeAdapter(selected, run);
+    case "opencode":
+      return createOpenCodeAdapter(selected, run);
+    case "omp":
+      return createOmpAdapter(selected, run);
+    default:
+      throw new CapabilityProbeError("no offline adapter probe is defined for this harness");
+  }
+}
+
 /** Inventory uses the same isolated factories as execution; no parallel marker convention. */
 export async function probeHarness(
   descriptor: HarnessDescriptor,
@@ -137,23 +167,7 @@ export async function probeHarness(
 ): Promise<HarnessProbeResult> {
   const base = { id: descriptor.id, product: descriptor.product, binary: descriptor.binary };
   try {
-    const options = { binary: descriptor.binary };
-    const adapter = await (async () => {
-      switch (descriptor.id) {
-        case "codex":
-          return (await import("./codex.js")).createCodexAdapter(options, run);
-        case "pi":
-          return (await import("./pi.js")).createPiAdapter(options, run);
-        case "claude":
-          return (await import("./claude.js")).createClaudeAdapter(options, run);
-        case "opencode":
-          return (await import("./opencode.js")).createOpenCodeAdapter(options, run);
-        case "omp":
-          return (await import("./omp.js")).createOmpAdapter(options, run);
-        default:
-          throw new CapabilityProbeError("no offline adapter probe is defined for this harness");
-      }
-    })();
+    const adapter = await createInstalledAdapter(descriptor, {}, run);
     return {
       ...base,
       installed: true,

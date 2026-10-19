@@ -19,7 +19,8 @@
     "smoke:reporting": "npm run build --silent && node scripts/smoke-reporting.mjs",
     "smoke:capabilities": "npm run build --silent && node scripts/smoke-capabilities.mjs",
     "smoke:tasks": "npm run build --silent && node scripts/smoke-tasks.mjs",
-    "smoke:boundaries": "npm run build --silent && node scripts/smoke-boundaries.mjs"
+    "smoke:boundaries": "npm run build --silent && node scripts/smoke-boundaries.mjs",
+    "smoke:harnesses": "npm run build --silent && node dist/app/harness-smoke-cli.js"
   },
   "dependencies": {
     "yaml": "2.9.1",

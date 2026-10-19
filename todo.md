@@ -80,9 +80,11 @@
 - [x] 6.5 Implement omp adapter as a verified Pi-family variant: shared LF JSON framing/process supervision, omp terminal/retry/compaction semantics, strict non-creating full-path `--resume`, and unrestricted permission selection.
 - [x] 6.6 Implement capability probe and user-facing preflight errors when requested modes or resume paths aren't supported by installed version.
 - [x] 6.7 Ensure adapter boundary logs are scrubbed of credentials/tokens and that each child process receives only a deliberate environment allowlist; retain useful summaries and raw event files for local inspection.
-- [ ] 6.8 Add opt-in smoke tests for real locally authenticated harnesses; do not require live usage for core unit or integration tests.
+- [x] 6.8 Add opt-in smoke tests for real locally authenticated harnesses; do not require live usage for core unit or integration tests.
 
 **Gate:** One real Codex step and one real Pi step can each return `complete` through the common reporting contract, and every registered adapter (including Claude Code, OpenCode, and omp) passes the offline conformance suite; session correction behavior is verified or incompatibility is documented clearly.
+
+**Live gate still pending:** 6.8 checks tooling and offline synthetic coverage only. No provider-backed smoke has been authorized/executed; real Codex/Pi completion and correction remain unverified. Milestone 0.5 remains open. The exact proposed commands, model choices, invocation/time bounds and absence of a dollar cap are in [`docs/harness-compatibility.md`](docs/harness-compatibility.md#proposed-live-pass--authorization-still-required).
 
 ## Phase 7 — Crash recovery, management CLI, and reliability
 

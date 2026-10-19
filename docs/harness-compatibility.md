@@ -36,11 +36,11 @@ These selections come from installed help or the versioned API contract linked b
 
 ## Authentication
 
-The probe does not check authentication. `codex login status`, `claude auth status`, and `pi auth check --provider openai` each exited with status 0 when run once, but the meaning of that status was not verified for each CLI, and no output was kept. Authentication should be verified per adapter in its opt-in live smoke test, using the CLI's own status command and recording only pass or fail. Credential files are never inspected or copied into project state.
+Offline inventory does not check authentication. Earlier unverified status-command exits are not authentication evidence. The opt-in Phase 6.8 tool uses documented Codex/Pi/Claude status checks, discards all status output, and retains only the classification below. No credential files are inspected or copied; no login/logout or global configuration change is performed.
 
 ## Live verification (not yet done)
 
-No paid model call has been made. The live smoke test for each adapter (todo 6.8) is the place to confirm event framing, the settle boundary, and resume behavior against the versions above.
+No provider-backed smoke has been authorized or executed. Phase 6.8 tooling is implemented and verified offline; actual authentication, provider framing, session/resume and tool propagation remain unverified until explicit live execution succeeds. The Phase 6 live gate and milestone 0.5 remain open.
 
 
 ## Codex adapter implementation (Phase 6.1)
@@ -227,3 +227,61 @@ Useful evidence stays available: stdout/stderr capture heads are 64 KiB each; `i
 
 
 Final installed offline inventory for 6.7 again passed all five factories at the versions above. Default `/tmp` extraction of omp's native addon returned `EDQUOT`; repeating only the probe scratch directories under a disposable workspace `TMPDIR` passed and removed those directories. No installed/global setup or adapter workaround changed. The sequential full gate passed 667 tests; exact commands, the initial environmental failures and independent smoke results are in [implementation verification](implementation-log.md#phase-67--deliberate-child-environments-credential-scrubbing-and-bounded-diagnostics).
+
+## Opt-in live smoke tooling (Phase 6.8)
+
+`npm run smoke:harnesses -- --help` describes the separate developer-only command. Required selections: one registered `--harness`, explicit `--model`, `--scenario report|correction`, `--timeout-seconds 1..300`, absolute `--artifacts-dir`; optional `--reasoning-effort`. No default provider/model, all-harness sweep, workflow retry or fallback model. Without `--execute`, it prints the exact selection/invocation bound without probes, authentication checks or smoke artifacts; npm still builds `dist/` first. Ordinary build/test/check/inventory paths never execute a provider.
+
+Execution reuses the real factory dispatch used by inventory, the common adapter/supervisor, `RunService`, private report server and SQLite inspection/reopen. Normal HOME/config/auth/resource discovery is preserved; only target projects and runner artifacts are disposable. Existing unrestricted permissions remain selected. This is not isolation: normal hooks/extensions/resources can execute, discover credentials, affect user files and make their own requests.
+
+### Authentication admission
+
+| Harness | Harness-owned check | Evidence retained |
+| --- | --- | --- |
+| Codex | `codex login status` | Exit 0: `available` (credentials present, not entitlement/provider success); exit 1: `unavailable` |
+| Pi 1.3.0 | `pi auth check --model <selected-model> --no-refresh` | Exit 0: ready; exit 1: not ready; exit 2: invalid/check failure. No `--credentials`, key-printing or token-printing command |
+| Claude Code | `claude auth status` | Documented exit 0: logged in; exit 1: not logged in. JSON/account output is discarded |
+| OpenCode, omp | No status command implemented/assumed | `status_unsupported`, not a pass; explicit execution may still use normal locally configured authentication |
+
+Both output channels have zero capture limit and no log path for these checks. Status commands use the existing explicit base/relevant harness environment selections, normal resource discovery, a 15-second supervisor timeout and no interactive authentication. Unexpected exits, spawn/signal/timeout failures block execution as `authentication_check_failed`; uncertain status-process cleanup blocks execution and preserves the target. An available status is not proof of billing entitlements or model availability. Unsupported checks never masquerade as successful verification; later provider failures remain failures.
+
+Current official and installed documentation consulted:
+
+- [Codex CLI reference](https://learn.chatgpt.com/docs/developer-commands?surface=cli#codex-login), plus installed `codex login --help`: status exits zero when credentials are present.
+- [Pi v1.3.0 CLI credential commands](https://github.com/earendil-works/pi/blob/v1.3.0/packages/coding-agent/docs/cli.md#credential-commands), plus the installed bundled `docs/cli.md`: `check` exit semantics, model selection and `--no-refresh`. No authentication check was run against the user's account during offline implementation.
+- [Claude CLI reference](https://code.claude.com/docs/en/cli-reference), plus installed `claude auth status --help`: status JSON/exit semantics.
+- [Codex model guidance](https://learn.chatgpt.com/docs/models) and installed Pi `docs/models.md` / `docs/providers.md`: explicit selectors and normal provider auth. Proposed model entitlement remains unverified. Context7 lookup was attempted but rejected its configured API key; official sources supplied the evidence.
+
+### Scenarios and retained evidence
+
+`report` requests one tool command: run the generated `smoke-report.mjs` using the runner's absolute Node executable. That helper invokes the real `wf report complete`, requires exit 0, writes a credential-free acknowledgment marker and remains alive briefly so acknowledgment precedes settlement. The workflow disables correction: a missing original report fails without another paid invocation.
+
+`correction` deliberately replaces the fresh smoke prompt with a request to reply `READY` without tools/reporting. The normal runner may then issue exactly one report-only correction in the exact persisted session, capped at 30 seconds or the lower chosen timeout. The correction prompt requests the same helper. The tool requires two ordered cleanly settled invocations and matching original-settled/correction-start/correction-settled identities. An accidental original report, missing identity, unavailable resume, failed correction or missing acknowledgment fails this scenario; none is reported as verified incompatibility or a pass without actual evidence.
+
+Success requires one logical attempt, one exact expected report/summary, durable acceptance before final settlement, declared `complete`, a completed run, real helper acknowledgment and a closed/reopened SQLite database preserving report/attempt/session/correction history. Only the existing runner decides whether the process/group/pipes settled. No raw `AgentHandle`, report-access object, injected secret list or inspected-state dump is serialized by the smoke tool.
+
+Every admitted execution creates a mode-0700 `wf-<harness>-<scenario>-*` directory containing `evidence.json` (mode 0600), `state.sqlite` and adapter `logs/`. Evidence allowlists version, selected model/effort, effective capabilities, permission modes, outcome, status classification, invocation/correction counts, SHA-256 session fingerprints, acknowledgment and reopen results. Existing scrubbed 64-KiB captures, 4-KiB durable stderr and 16-MiB-per-invocation logs apply; correction logs remain separate. Known-value scrubbing does not recognize unknown credentials, and harness-owned transcripts/journals may contain tool environments; those files are not copied, rewritten or deleted.
+
+Settled success/failure removes only its generated `project/`, preserving evidence/logs/SQLite for local review. `cleanup_uncertain` preserves the target too and never reports success. SIGINT/SIGTERM request the existing service stop and await settlement. Failure categories distinguish unsupported capability/probe, unavailable authentication, failed authentication check, adapter-signaled provider/protocol failure, execution failure, smoke assertion failure and uncertain cleanup. `provider_failure` reflects adapter `providerError` evidence (which can include protocol/transport errors), not proof that a billable request reached a provider. Inspect the scrubbed logs/SQLite for technical details; do not publish them without review.
+
+### Proposed live pass — authorization still required
+
+The following is a proposal, **not execution evidence**. Use Codex `gpt-6.1-sol` and Pi `openai/gpt-6.1-sol`, both at `low` reasoning. The installed Pi docs use provider ID `openai` for local OpenAI auth; model/account availability is not established by these offline checks. No alternative model/provider or retry will be selected if admission or execution fails.
+
+```bash
+export PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH
+export TMPDIR=/home/phagmaier/.local/state/workflowz/live-smoke-6.8/scratch
+mkdir -p "$TMPDIR"
+for scenario in report correction; do
+  npm run smoke:harnesses -- --execute --harness codex --model gpt-6.1-sol \
+    --reasoning-effort low --scenario "$scenario" --timeout-seconds 60 \
+    --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-6.8 || break
+  npm run smoke:harnesses -- --execute --harness pi --model openai/gpt-6.1-sol \
+    --reasoning-effort low --scenario "$scenario" --timeout-seconds 60 \
+    --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-6.8 || break
+done
+```
+
+Four standalone workflows; at most **six harness invocations** (two direct reports plus two pairs of original/correction), sequential, stop on the first failure. These are invocation bounds, not provider-request bounds: harness-native recovery, normal hooks/resources and multi-turn tool use may make additional requests. Four original invocations are each bounded to 60 seconds; two corrections to 30 seconds each: at most 300 seconds of configured agent execution, plus factory/status checks, build and process cleanup. Status checks are at most 15 seconds each; existing version/help probes have their own 15-second limits. This is not a total wall-clock deadline.
+
+Targets are unique children of the named artifact parent (`wf-*/project`), never this checkout. Probe scratch stays in the named non-`/tmp` scratch directory to avoid the previously observed extraction quota issue. Normal auth HOME/config remains unchanged. Artifact/scratch retention is deliberate; the program removes settled targets, not harness-owned state. **There is no enforceable dollar cap in this tool**; time and invocation bounds do not guarantee a spend limit. Approve these exact selections/bounds before adding/executing `--execute`. Claude/OpenCode/omp provider execution is not part of this proposed pass.

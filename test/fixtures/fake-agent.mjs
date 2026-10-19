@@ -37,6 +37,14 @@ const forever = () => setInterval(() => {}, 1000);
 note(`start ${process.pid} ${mode}`);
 if (process.env.FAKE_CORRECTION === "1") note(`correction ${session ?? "missing"}`);
 switch (mode) {
+  case "smoke-helper": {
+    const child = spawn(process.execPath, ["smoke-report.mjs"], { stdio: "inherit" });
+    const { promise, resolve } = Promise.withResolvers();
+    child.once("close", resolve);
+    child.once("error", () => resolve(1));
+    finish((await promise) ?? 1);
+    break;
+  }
   case "report":
     await report();
     finish(0);
