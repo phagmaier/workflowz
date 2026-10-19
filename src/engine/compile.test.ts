@@ -232,6 +232,7 @@ describe("compiler rules", () => {
             supportsStructuredFinalOutput: false,
             supportsPermissionMode: false,
             supportsModelSelection: false,
+            supportsReasoningEffort: false,
           },
         },
       ],
@@ -246,7 +247,7 @@ describe("compiler rules", () => {
     );
   });
 
-  it("refuses session resume and model selection when the harness does not advertise them", () => {
+  it("refuses session resume, model and reasoning selection when the harness does not advertise them", () => {
     const registry: HarnessRegistry = new Map([
       [
         "bare",
@@ -261,13 +262,14 @@ describe("compiler rules", () => {
             supportsStructuredFinalOutput: false,
             supportsPermissionMode: false,
             supportsModelSelection: false,
+            supportsReasoningEffort: false,
           },
         },
       ],
     ]);
     const parsed = parseWorkflowText(
       workflowText(
-        "start: a\nsteps:\n  a:\n    kind: agent\n    harness: bare\n    model: m1\n    session: resume\n    prompt: go\n    outcomes: [complete]\n    on:\n      complete: { goto: b }\n  b:\n    kind: end\n",
+        "start: a\nsteps:\n  a:\n    kind: agent\n    harness: bare\n    model: m1\n    reasoning_effort: high\n    session: resume\n    prompt: go\n    outcomes: [complete]\n    on:\n      complete: { goto: b }\n  b:\n    kind: end\n",
       ),
     );
     assert.ok(parsed.document);
@@ -277,6 +279,7 @@ describe("compiler rules", () => {
       [
         ["unsupported_capability", "steps.a.session"],
         ["unsupported_capability", "steps.a.model"],
+        ["unsupported_capability", "steps.a.reasoning_effort"],
       ],
     );
   });

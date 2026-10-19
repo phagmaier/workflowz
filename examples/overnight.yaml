@@ -1,4 +1,5 @@
 # Canonical YAML v1 validation example; wf report and Markdown import are implemented; all five harnesses have offline adapter coverage; live verification remains on the roadmap.
+# Installed capabilities are checked before each agent invocation; offline probes do not verify authentication or live sessions.
 # Paths are relative to project.root unless noted otherwise.
 # `harness` may be any registered adapter: codex | pi | omp | opencode | claude (see spec.md §2.4).
 version: 1

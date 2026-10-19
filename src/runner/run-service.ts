@@ -12,6 +12,7 @@
  */
 import { mkdirSync } from "node:fs";
 import {
+  AdapterPreflightError,
   type AgentAdapter,
   type AgentHandle,
   type AgentRunResult,
@@ -282,6 +283,7 @@ export class RunService {
     const sessionId = this.attemptRow(runId, attemptId).sessionId;
     if (
       this.coordinator.workflowFor(runId).reportCorrectionAttempts === 0 ||
+      !prepared.adapter.capabilities.supportsResume ||
       !prepared.adapter.resumeForReportCorrection ||
       !sessionId
     )
@@ -340,7 +342,10 @@ export class RunService {
           signal: null,
           timedOut: false,
           terminated: false,
-          spawnError: "adapter launch failed",
+          spawnError:
+            error instanceof AdapterPreflightError
+              ? error.message.replaceAll(access.token, "[redacted]")
+              : "adapter launch failed",
           stdout: "",
         };
       }

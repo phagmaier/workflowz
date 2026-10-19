@@ -6,7 +6,13 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import type { AgentAdapter, AgentInput } from "../adapters/agent-adapter.js";
+import {
+  AdapterPreflightError,
+  type AgentAdapter,
+  type AgentInput,
+  assertAdapterCapabilities,
+  ResumeUnavailableError,
+} from "../adapters/agent-adapter.js";
 import type { CommandSpec } from "../adapters/command-executor.js";
 import type { AgentContext } from "../contracts/agent-context.js";
 import type { SystemOutcome } from "../contracts/identifiers.js";
@@ -46,6 +52,13 @@ export function prepareAttempt(context: PrepareContext): PreparedAttempt {
   try {
     return prepare(context);
   } catch (error) {
+    if (error instanceof AdapterPreflightError)
+      throw new PreparationError(
+        error.message,
+        error instanceof ResumeUnavailableError
+          ? "system.resume_unavailable"
+          : "system.spawn_error",
+      );
     if (error instanceof PreparationError) {
       throw error;
     }
@@ -98,6 +111,11 @@ function prepare(context: PrepareContext): PreparedAttempt {
     if (!adapter) {
       throw new PreparationError(`no adapter is registered for harness '${spec.harness}'`);
     }
+    assertAdapterCapabilities(adapter, {
+      priorSessionId: spec.session === "resume" ? context.priorSessionId : undefined,
+      model: spec.model,
+      reasoningEffort: spec.reasoning_effort,
+    });
     const prompt =
       spec.prompt !== undefined
         ? interpolate(spec.prompt, values)

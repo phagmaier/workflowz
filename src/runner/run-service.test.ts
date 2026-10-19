@@ -5,7 +5,11 @@ import path from "node:path";
 import { after, describe, it } from "node:test";
 import type { AgentAdapter } from "../adapters/agent-adapter.js";
 import { WorkflowDatabase } from "../store/database.js";
-import { type AgentScript, ScriptedAgentAdapter } from "../test-support/scripted-agent.js";
+import {
+  type AgentScript,
+  SCRIPTED_CAPABILITIES,
+  ScriptedAgentAdapter,
+} from "../test-support/scripted-agent.js";
 import { workflowText } from "../test-support/workflows.js";
 import { RunService } from "./run-service.js";
 
@@ -530,6 +534,7 @@ steps:
     const { root, database, service } = fixture([], {
       adapter: {
         id: "codex",
+        capabilities: SCRIPTED_CAPABILITIES,
         start() {
           throw new Error("adapter launch failed");
         },
@@ -556,6 +561,7 @@ steps:
     const { root, database, service } = fixture([], {
       adapter: {
         id: "codex",
+        capabilities: SCRIPTED_CAPABILITIES,
         start(input) {
           const handle = child.start(input);
           pid = handle.pid;
@@ -708,6 +714,7 @@ steps:
     const { root, database, service } = fixture([], {
       adapter: {
         id: "codex",
+        capabilities: SCRIPTED_CAPABILITIES,
         start(input) {
           if (input.priorSessionId) rmSync(input.priorSessionId);
           return child.start(input);
@@ -734,6 +741,7 @@ steps:
     const { root, database, service } = fixture([], {
       adapter: {
         id: "uncertain",
+        capabilities: SCRIPTED_CAPABILITIES,
         start() {
           return {
             pid: null,

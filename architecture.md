@@ -150,50 +150,18 @@ Keep the first interface small, with typed input/output and event callbacks; do 
 
 ```ts
 interface AgentAdapter {
-  readonly id: HarnessId; // open registry: 'codex' | 'pi' | 'omp' | 'opencode' | 'claude' | ...
-  probe(): Promise<AdapterCapabilities>;
-  start(input: AgentInput, sink: EventSink): Promise<AgentHandle>;
-  resumeForReportCorrection(
-    handle: AgentHandle,
-    correctionPrompt: string,
-    sink: EventSink
-  ): Promise<AgentHandle>;
-  stop(handle: AgentHandle, options: StopOptions): Promise<void>;
-}
-
-interface AgentInput {
-  attemptId: string;
-  cwd: string;
-  prompt: string;
-  harnessModel?: string;
-  reasoningEffort?: string;
-  sessionPolicy: 'fresh' | 'resume';
-  priorSessionId?: string;
-  timeoutMs?: number;
-  reportContract: { allowedOutcomes: string[]; schemaVersion: 1 };
-  reportEndpoint: string;
-  reportToken: string;
-  permissionMode?: string;
-}
-
-interface AgentHandle {
-  pid?: number;
-  processGroupId?: number;
-  sessionId?: string;
-  completed: Promise<AgentProcessResult>;
-}
-
-interface AgentProcessResult {
-  exitCode: number | null;
-  signal?: string;
-  settled: boolean;
-  errorCode?: string;
+  readonly id: string;
+  readonly capabilities: HarnessCapabilities;
+  start(input: AgentInput): AgentHandle;
+  readonly resumeForReportCorrection?: (
+    input: AgentInput & { readonly priorSessionId: string }
+  ) => AgentHandle;
 }
 ```
 
-Exact signatures may change, but responsibilities cannot: adapter handles harness-specific launch/session/streaming; runner validates reports, stores state, routes outcomes.
+Actual input/result signatures live in `src/adapters/agent-adapter.ts`. Async factories perform the probes and expose their snapshot; there is no second per-invocation probe method. Responsibilities remain: adapter handles harness-specific launch/session/streaming; runner validates reports, stores state, routes outcomes.
 
-A **harness registry** maps `HarnessId` to an adapter factory. Workflow validation resolves `harness` against the registry and reports a clear "unknown or unsupported harness" error instead of failing an enum. The registry is a lookup table, not a plugin system; dynamic third-party plugin loading is deferred (see [spec.md](spec.md) §8).
+The static **harness registry** maps `HarnessId` to descriptor/capability data. Executable adapters are supplied explicitly through `RunService` options. Workflow validation resolves `harness` against the registry and reports a clear "unknown or unsupported harness" error instead of failing an enum. The registry is a lookup table, not a plugin system; dynamic third-party plugin loading is deferred (see [spec.md](spec.md) §8).
 
 Adapter responsibilities are uniform across harnesses; only the four harness-specific behaviors below differ:
 
@@ -257,7 +225,7 @@ The factory isolates version/help probes with a temporary Pi config directory, o
 
 The result UUID is the engine's opaque session identity. Missing identity cannot authorize correction. Explicit resume accepts only full UUIDs, uses `--resume <UUID>`, and preserves the requested identity on mismatch. Installed offline missing-UUID evidence confirms a nonzero terminal error without fresh fallback; the adapter maps that known result to unavailable resume. No recent selector, transcript-path lookup, fork or ephemeral flag is used. Same-harness/run/task/revision lookup and one bounded sequential correction remain owned by the runner.
 
-Only the common environment, explicitly selected Claude/Anthropic settings and report access reach the child; known injected auth is scrubbed by the supervisor. Version and selected permission mode are audited. Claude is `conformance_passed` after the full shared offline suite through a synthetic CLI, with additional framing, failure, identity and settlement cases. No workflow fields, migrations or coordinator behavior changed. Authentication, actual provider streams, tool environment and live persistence/resume remain unverified; see `docs/harness-compatibility.md`. OpenCode now has the separate implementation below; 0.5 and 6.6–6.8 remain open.
+Only the common environment, explicitly selected Claude/Anthropic settings and report access reach the child; known injected auth is scrubbed by the supervisor. Version and selected permission mode are audited. Claude is `conformance_passed` after the full shared offline suite through a synthetic CLI, with additional framing, failure, identity and settlement cases. No workflow fields, migrations or coordinator behavior changed. Authentication, actual provider streams, tool environment and live persistence/resume remain unverified; see `docs/harness-compatibility.md`. OpenCode now has the separate implementation below; 0.5 and 6.7–6.8 remain open.
 
 ### 4.4 OpenCode integration
 
@@ -281,11 +249,17 @@ OpenCode is `conformance_passed` after the entire shared offline suite through a
 
 `omp-session.ts` reads v3 UUID journals, accepting the optional physical title slot before the logical header. It retains only header/transfer metadata while checking bounded records. Dedicated directories default to `omp-sessions` beside logs. The absolute persisted file path is the engine identity; header/UUID/cwd are revalidated. Resume uses `--resume <absolute-path>` with its exact directory. Installed source and deletion-after-precheck smoke confirm strict open rejects missing files, unlike prefix/global ID lookup's permissive open. No continue/restore/selector/fork fallback is used. Latest valid departed-transfer markers make a journal unavailable before launch because the CLI would implicitly fork it. Returned mismatches never replace the durable target.
 
-The complete shared synthetic offline suite runs as `omp`; additional framing, native-recovery, persistence/identity, environment/secret and settlement coverage supports `conformance_passed`. Independent service smoke proves one sequential correction and durable reporting; installed negative smoke proves missing/deleted paths do not create replacements. Fresh isolated installed startup failed in database initialization, so the negative check used an empty schema fixture from official source; no runtime workaround or global change was introduced. Authentication, successful live sessions/streams, tool environment and resource interactions remain unverified. No coordinator, report contract, workflow fields, migrations, daemon or UI changes are needed; 0.5 and 6.6–6.8 remain open.
+The complete shared synthetic offline suite runs as `omp`; additional framing, native-recovery, persistence/identity, environment/secret and settlement coverage supports `conformance_passed`. Independent service smoke proves one sequential correction and durable reporting; installed negative smoke proves missing/deleted paths do not create replacements. Fresh isolated installed startup failed in database initialization, so the negative check used an empty schema fixture from official source; no runtime workaround or global change was introduced. Authentication, successful live sessions/streams, tool environment and resource interactions remain unverified. No coordinator, report contract, workflow fields, migrations, daemon or UI changes are needed; 0.5 and 6.7–6.8 remain open.
 
 ### 4.6 Harness capabilities and graceful incompatibilities
 
-Adapters report capabilities: `supportsResume`, `supportsStructuredFinalOutput`, `supportsEventStream`, `supportsPermissionMode`, `supportsModelSelection`. Preflight errors if a workflow requires unsupported capabilities (e.g., `session: resume` without a valid session). For *report correction*, if resume is unavailable at runtime, immediately route `system.report_error` and pause by default. Avoid inventing brittle alternative behavior such as prompting a new independent model to infer what the first agent meant.
+Phase 6.6 adds the missing connection between existing factory evidence and attempt preparation. The compiler uses static `HarnessCapabilities` (including `supportsReasoningEffort`) without subprocesses. Each real adapter publishes a frozen snapshot for its selected CLI and implemented transport. `probeHarness`/`probeHarnesses` invoke those same factories through a small built-in lookup; the earlier informational `HELP_PROBES` table was removed to prevent divergent checks. Required failed/truncated version/help evidence rejects construction. Optional resume/model/reasoning evidence gates only requested features; OpenCode's optional run/session help failures do not prohibit its supported fresh API transport. Codex config remains required for always-used environment overrides, with separate resume-model checks.
+
+`prepareAttempt` checks the effective selected adapter before dispatch, using frozen task/revision settings. Unsupported model/reasoning selection becomes `system.spawn_error`; unsupported explicit resume becomes `system.resume_unavailable`. These are existing routable outcomes, recorded through coordinator settlement with explanatory detail/attention and no subprocess or correction. Known credential-free `AdapterPreflightError` messages from adapter option/session checks survive the service boundary; arbitrary launch exceptions stay generic. The runner does not interpret vendor flags or provider schemas. No new workflow fields, migrations or mandatory gates are needed.
+
+Snapshot capability cannot prove session existence or provider access. Journal/cwd validation and exact non-creating CLI/API admission remain in each adapter and still fail closed after prechecks, including deletion races. A fresh workflow does not require resume merely because correction is enabled; absent correction support produces the existing `system.report_error` after clean missing-report execution. All process/group/pipe settlement and token rules remain unchanged. Current transports advertise structured-final-output as false because no report fallback is implemented; OpenCode also advertises no provider event stream. Static CLI potential is not promoted into transport support.
+
+Preflight occurs at preparation of the affected attempt, not exhaustive run-creation validation of every branch or task. Factories are explicit offline snapshots: callers must recreate adapters after binary/configuration changes. Help markers are not authentication, live session, provider framing or tool-environment evidence. The independent `smoke:capabilities` exercises factory rejection, durable preflight failure, fresh reporting, unavailable correction and explicit workflow resume without providers. Phase 0.5 and 6.7–6.8 remain open.
 
 ## 5. Reporting channel
 

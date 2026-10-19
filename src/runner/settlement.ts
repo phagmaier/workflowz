@@ -35,7 +35,7 @@ export function settlementForAgent(
     return {
       kind: "system",
       code: "system.resume_unavailable",
-      detail: "the persisted agent session is unavailable",
+      detail: result.spawnError ?? "the persisted agent session is unavailable",
     };
   if (result.completionError)
     return {

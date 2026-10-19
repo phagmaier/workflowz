@@ -3,9 +3,9 @@
  * architecture §4). It is data only. It spawns nothing, so the compiler can depend on it.
  *
  * Adding a harness means adding an entry here and an adapter that passes the conformance suite.
- * An entry's `adapter` status stays `planned` until that suite passes. Run preflight (todo Phase 3)
- * will refuse to start a harness that is still `planned`. Validation in the compiler works with any registry it is given, so
- * tests can use fake harnesses.
+ * An entry's `adapter` status stays `planned` until that suite passes. Executable adapters are
+ * supplied explicitly to RunService, which checks their installed capabilities before invocation.
+ * Static validation works with any supplied registry, so tests can use fake harnesses.
  */
 
 export interface HarnessCapabilities {
@@ -14,6 +14,7 @@ export interface HarnessCapabilities {
   readonly supportsStructuredFinalOutput: boolean;
   readonly supportsPermissionMode: boolean;
   readonly supportsModelSelection: boolean;
+  readonly supportsReasoningEffort: boolean;
 }
 
 export type AdapterStatus = "planned" | "conformance_passed";
@@ -30,9 +31,9 @@ export interface HarnessDescriptor {
 export type HarnessRegistry = ReadonlyMap<string, HarnessDescriptor>;
 
 /**
- * Capabilities are taken from each CLI's documented headless interface (see
- * docs/harness-compatibility.md). `npm run probe:harnesses` checks that the installed binaries still
- * advertise the flags those claims depend on.
+ * Static capabilities describe documented harness potential (see docs/harness-compatibility.md).
+ * `npm run probe:harnesses` uses execution factories to report the selected installed CLI and
+ * implemented transport; those effective snapshots can be narrower than this static metadata.
  */
 const BUILT_IN: readonly HarnessDescriptor[] = [
   {
@@ -46,6 +47,7 @@ const BUILT_IN: readonly HarnessDescriptor[] = [
       supportsStructuredFinalOutput: true,
       supportsPermissionMode: true,
       supportsModelSelection: true,
+      supportsReasoningEffort: true,
     },
   },
   {
@@ -59,6 +61,7 @@ const BUILT_IN: readonly HarnessDescriptor[] = [
       supportsStructuredFinalOutput: false,
       supportsPermissionMode: false,
       supportsModelSelection: true,
+      supportsReasoningEffort: true,
     },
   },
   {
@@ -72,6 +75,7 @@ const BUILT_IN: readonly HarnessDescriptor[] = [
       supportsStructuredFinalOutput: false,
       supportsPermissionMode: true,
       supportsModelSelection: true,
+      supportsReasoningEffort: true,
     },
   },
   {
@@ -85,6 +89,7 @@ const BUILT_IN: readonly HarnessDescriptor[] = [
       supportsStructuredFinalOutput: false,
       supportsPermissionMode: true,
       supportsModelSelection: true,
+      supportsReasoningEffort: true,
     },
   },
   {
@@ -98,6 +103,7 @@ const BUILT_IN: readonly HarnessDescriptor[] = [
       supportsStructuredFinalOutput: true,
       supportsPermissionMode: true,
       supportsModelSelection: true,
+      supportsReasoningEffort: true,
     },
   },
 ];

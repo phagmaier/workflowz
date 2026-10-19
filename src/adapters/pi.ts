@@ -12,15 +12,26 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  type AdapterCompatibility,
+  AdapterPreflightError,
   type AgentAdapter,
   type AgentHandle,
   type AgentInput,
+  assertAdapterCapabilities,
   ResumeUnavailableError,
 } from "./agent-adapter.js";
 import { childEnvironment } from "./environment.js";
+import type { HarnessCapabilities } from "./harness-registry.js";
 import { readOmpSession } from "./omp-session.js";
 import { isPiSessionHeader, PiEvents, type PiSessionHeader } from "./pi-events.js";
-import { type CommandRunner, probeEnvironment, runProbeCommand } from "./probe.js";
+import {
+  CapabilityProbeError,
+  type CommandRunner,
+  helpAdvertises,
+  probeEnvironment,
+  probeText,
+  runProbeCommand,
+} from "./probe.js";
 import { startProcess } from "./process.js";
 
 export interface PiAdapterOptions {
@@ -31,10 +42,7 @@ export interface PiAdapterOptions {
   /** Persistent session root. Defaults to <harness>-sessions beside the invocation log. */
   readonly sessionDir?: string;
 }
-export interface PiCompatibility {
-  readonly version: string;
-  readonly supportsResume: boolean;
-}
+export interface PiCompatibility extends AdapterCompatibility {}
 
 const WF_BIN = fileURLToPath(new URL("../../bin", import.meta.url));
 // Deliberate provider selection, not all runner credentials. Other providers can use Pi's auth store.
@@ -86,15 +94,11 @@ export async function createPiAdapter(
         ...(options.prefixArgs ?? []),
         ...args,
       ]);
-      if (result.spawnError || result.exitCode !== 0)
-        throw new Error(
-          `Pi compatibility probe failed (${args.join(" ")}): ${result.spawnError ?? `exit ${result.exitCode}`}`,
-        );
-      return result.stdout;
+      return probeText(result, "Pi", args);
     };
     const version = (await checked(["--version"])).trim();
     if (!/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(version))
-      throw new Error("Pi compatibility probe returned an unrecognized version");
+      throw new CapabilityProbeError("Pi compatibility probe returned an unrecognized version");
     const help = await checked([
       "--offline",
       "--no-extensions",
@@ -105,33 +109,48 @@ export async function createPiAdapter(
       "--no-context-files",
       "--help",
     ]);
-    const advertised = (flag: string) => new RegExp(`(?:^|\\s)${flag}(?:\\s|[=<,])`).test(help);
-    const missing = ["--print", "--mode", "--model", "--thinking", "--session-dir"].filter(
-      (flag) => !advertised(flag),
-    );
-    if (missing.length || !/\bjson\b/.test(help))
-      throw new Error(
-        `Pi JSON mode is incompatible; help does not advertise ${missing.join(", ") || "json"}`,
+    const advertised = (flag: string) => helpAdvertises(help, flag);
+    const missing = ["--print", "--mode", "--session-dir"].filter((flag) => !advertised(flag));
+    if (!/\bjson\b/.test(help)) missing.push("json");
+    if (missing.length)
+      throw new CapabilityProbeError(
+        `Pi JSON mode is incompatible; help does not advertise ${missing.join(", ")}`,
+        missing,
       );
-    return new PiAdapter(options, { version, supportsResume: advertised("--session") });
+    return new PiAdapter(options, {
+      version,
+      supportsResume: advertised("--session"),
+      supportsModelSelection: advertised("--model"),
+      supportsReasoningEffort: advertised("--thinking"),
+    });
   } finally {
     rmSync(probeDir, { recursive: true, force: true });
   }
 }
 
 export class PiAdapter implements AgentAdapter {
+  readonly capabilities: HarnessCapabilities;
   readonly resumeForReportCorrection: AgentAdapter["resumeForReportCorrection"];
   constructor(
     private readonly options: PiAdapterOptions,
     readonly compatibility: PiCompatibility,
     readonly id: "pi" | "omp" = "pi",
   ) {
+    this.capabilities = Object.freeze({
+      supportsResume: compatibility.supportsResume,
+      supportsModelSelection: compatibility.supportsModelSelection,
+      supportsReasoningEffort: compatibility.supportsReasoningEffort,
+      supportsEventStream: true,
+      supportsPermissionMode: this.id === "omp",
+      supportsStructuredFinalOutput: false,
+    });
     this.resumeForReportCorrection = compatibility.supportsResume
       ? (input) => this.start(input)
       : undefined;
   }
 
   start(input: AgentInput): AgentHandle {
+    assertAdapterCapabilities(this, input);
     const prior = input.priorSessionId;
     const readSession = this.id === "omp" ? readOmpSession : readHeader;
     const header = prior === undefined ? undefined : readSession(prior);
@@ -150,7 +169,7 @@ export class PiAdapter implements AgentAdapter {
       !THINKING.has(input.reasoningEffort) &&
       !(this.id === "omp" && input.reasoningEffort === "auto")
     )
-      throw new Error(`${this.id} thinking level is unsupported`);
+      throw new AdapterPreflightError(`${this.id} thinking level is unsupported`);
     const root =
       this.options.sessionDir ??
       (input.logPath ? path.join(path.dirname(input.logPath), `${this.id}-sessions`) : undefined);
@@ -158,7 +177,9 @@ export class PiAdapter implements AgentAdapter {
     if (prior) sessionDir = path.dirname(prior);
     else {
       if (!root)
-        throw new Error(`${this.id} requires sessionDir or logPath for persistent sessions`);
+        throw new AdapterPreflightError(
+          `${this.id} requires sessionDir or logPath for persistent sessions`,
+        );
       mkdirSync(path.resolve(root), { recursive: true });
       sessionDir = mkdtempSync(path.join(path.resolve(root), "session-"));
     }

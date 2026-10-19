@@ -3,89 +3,87 @@ import { describe, it } from "node:test";
 import { BUILT_IN_HARNESSES, type HarnessDescriptor } from "./harness-registry.js";
 import {
   type CommandRunner,
-  HELP_PROBES,
+  helpAdvertises,
   probeEnvironment,
   probeHarness,
   runProbeCommand,
 } from "./probe.js";
 
 const CLAUDE: HarnessDescriptor = BUILT_IN_HARNESSES.get("claude") as HarnessDescriptor;
-
-/** A runner that answers `--version` and the help probe from fixed text, recording what it was asked. */
-function fakeRunner(help: string, version = "9.9.9"): { run: CommandRunner; calls: string[] } {
-  const calls: string[] = [];
-  const run: CommandRunner = async (binary, args) => {
-    calls.push(`${binary} ${args.join(" ")}`);
-    if (args[0] === "--version") {
-      return { exitCode: 0, stdout: `${binary} ${version}\n`, stderr: "" };
-    }
-    return { exitCode: 0, stdout: help, stderr: "" };
-  };
-  return { run, calls };
-}
+const HELP =
+  "--print --input-format text --output-format stream-json --verbose --permission-mode bypassPermissions --model --effort --resume";
+const fakeRunner =
+  (help = HELP): CommandRunner =>
+  async (_binary, args) => ({
+    exitCode: 0,
+    stderr: "",
+    stdout: args.includes("--version") ? "2.1.303 (Claude Code)" : help,
+  });
 
 describe("harness probe", () => {
-  it("reports a missing binary without treating it as an error in the harness", async () => {
-    const run: CommandRunner = async () => ({
+  it("matches complete flags at EOF and assignment syntax without accepting longer flag names", () => {
+    assert.equal(helpAdvertises("--model", "--model"), true);
+    assert.equal(helpAdvertises("--model=<name>", "--model"), true);
+    assert.equal(helpAdvertises("--model-extra", "--model"), false);
+    assert.equal(helpAdvertises("--session-dir", "--session"), false);
+  });
+  it("reports a missing binary without treating it as provider failure", async () => {
+    const result = await probeHarness(CLAUDE, async () => ({
       exitCode: null,
       stdout: "",
       stderr: "",
       spawnError: "ENOENT",
-    });
-    const result = await probeHarness(CLAUDE, run);
+    }));
     assert.equal(result.installed, false);
-    assert.match(result.problem ?? "", /not found on PATH/);
+    assert.match(result.problem ?? "", /ENOENT/);
+    assert.equal(result.capabilities, undefined);
   });
-
-  it("reads the version from the first line of --version output", async () => {
-    const { run } = fakeRunner(HELP_PROBES.claude?.markers.join("\n") ?? "");
-    const result = await probeHarness(CLAUDE, async (binary, args) => {
-      if (args[0] === "--version") {
-        return { exitCode: 0, stdout: "2.1.303 (Claude Code)\nmore\n", stderr: "" };
-      }
-      return run(binary, args);
-    });
+  it("uses the actual adapter factory's version, transport and optional capabilities", async () => {
+    const result = await probeHarness(
+      CLAUDE,
+      fakeRunner(HELP.replace("--resume", "--resume-extra")),
+    );
     assert.equal(result.version, "2.1.303 (Claude Code)");
+    assert.equal(result.capabilities?.supportsResume, false);
+    assert.equal(result.capabilities?.supportsModelSelection, true);
+    assert.equal(result.capabilities?.supportsStructuredFinalOutput, false);
     assert.deepEqual(result.missingMarkers, []);
     assert.equal(result.problem, undefined);
   });
-
-  it("names each advertised flag the help text no longer contains", async () => {
-    const { run } = fakeRunner("usage: claude --print --resume\n");
-    const result = await probeHarness(CLAUDE, run);
-    assert.ok(result.missingMarkers.includes("--permission-mode"));
-    assert.ok(!result.missingMarkers.includes("--resume"));
-    assert.match(result.problem ?? "", /no longer advertises/);
-  });
-
-  it("preserves failed version and help statuses even if all markers are present", async () => {
-    const markers = HELP_PROBES.claude?.markers.join(" ") ?? "";
-    const result = await probeHarness(CLAUDE, async (_binary, args) => ({
-      exitCode: args[0] === "--version" ? 7 : 9,
-      stdout: args[0] === "--version" ? "fatal: broken installation" : markers,
-      stderr: "",
-    }));
-    assert.equal(result.version, undefined);
-    assert.deepEqual(result.missingMarkers, []);
-    assert.match(result.problem ?? "", /version command exited with status 7/);
-    assert.match(result.problem ?? "", /help command exited with status 9/);
-  });
-
-  it("preserves a version timeout even when the help command succeeds", async () => {
-    const { run } = fakeRunner(HELP_PROBES.claude?.markers.join(" ") ?? "");
-    const result = await probeHarness(CLAUDE, (binary, args) =>
-      args[0] === "--version"
-        ? Promise.resolve({ exitCode: null, stdout: "", stderr: "", spawnError: "timed out" })
-        : run(binary, args),
+  it("names required flags using the same matching rules as the factory", async () => {
+    const result = await probeHarness(
+      CLAUDE,
+      fakeRunner(HELP.replace("--verbose", "--verbose-extra")),
     );
-    assert.equal(result.version, undefined);
-    assert.match(result.problem ?? "", /version command failed: timed out/);
+    assert.deepEqual(result.missingMarkers, ["--verbose"]);
+    assert.match(result.problem ?? "", /incompatible/);
+    assert.equal(result.capabilities, undefined);
   });
-
-  it("runs only --version and the help probe, never a model call", async () => {
-    const { run, calls } = fakeRunner(HELP_PROBES.claude?.markers.join(" ") ?? "");
-    await probeHarness(CLAUDE, run);
-    assert.deepEqual(calls, ["claude --version", "claude --help"]);
+  it("does not accept failed/truncated probe evidence even with all markers", async () => {
+    for (const bad of [
+      { exitCode: 7 },
+      { exitCode: 0, spawnError: "probe output exceeded the capture limit" },
+    ]) {
+      const result = await probeHarness(CLAUDE, async (_binary, args) => ({
+        ...(await fakeRunner()(_binary, args)),
+        ...bad,
+      }));
+      assert.equal(result.version, undefined);
+      assert.equal(result.capabilities, undefined);
+      assert.match(result.problem ?? "", /probe failed/);
+    }
+  });
+  it("runs only version/help through the factory and keeps unknown failures out of diagnostics", async () => {
+    const calls: string[][] = [];
+    await probeHarness(CLAUDE, async (binary, args) => {
+      calls.push([...args]);
+      return fakeRunner()(binary, args);
+    });
+    assert.deepEqual(calls, [["--version"], ["--help"]]);
+    const result = await probeHarness(CLAUDE, async () => {
+      throw new Error("untrusted secret output");
+    });
+    assert.equal(result.problem?.includes("secret"), false);
   });
 
   it("gives child processes only the allowlisted environment", () => {

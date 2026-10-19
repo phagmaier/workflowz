@@ -49,8 +49,18 @@ export interface ScriptedOptions {
 
 export const FAKE_AGENT = path.join(REPO_ROOT, "test", "fixtures", "fake-agent.mjs");
 
+export const SCRIPTED_CAPABILITIES = Object.freeze({
+  supportsResume: true,
+  supportsModelSelection: true,
+  supportsReasoningEffort: true,
+  supportsEventStream: false,
+  supportsStructuredFinalOutput: false,
+  supportsPermissionMode: false,
+});
+
 export class ScriptedAgentAdapter implements AgentAdapter {
   readonly id = "scripted";
+  readonly capabilities;
   private readonly plan: AgentScript[];
 
   constructor(
@@ -58,6 +68,10 @@ export class ScriptedAgentAdapter implements AgentAdapter {
     private readonly options: ScriptedOptions = {},
   ) {
     this.plan = [...plan];
+    this.capabilities = Object.freeze({
+      ...SCRIPTED_CAPABILITIES,
+      supportsResume: options.supportsResume !== false,
+    });
     this.resumeForReportCorrection =
       options.supportsResume === false ? undefined : (input) => this.launch(input, true);
   }

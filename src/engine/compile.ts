@@ -232,6 +232,13 @@ class Compilation {
           [...base, "model"],
         );
       }
+      if (spec.reasoning_effort !== undefined && !descriptor.capabilities.supportsReasoningEffort) {
+        this.error(
+          "unsupported_capability",
+          `harness '${spec.harness}' does not support reasoning effort selection`,
+          [...base, "reasoning_effort"],
+        );
+      }
     }
     this.checkTemplate(spec.harness, [...base, "harness"], PLAIN_CONTEXT);
     if (spec.model !== undefined) {

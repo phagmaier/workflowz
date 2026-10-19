@@ -6,7 +6,9 @@ const rows = results.map((result) => ({
   harness: result.id,
   installed: result.installed ? "yes" : "no",
   version: result.version ?? "-",
-  help: result.problem ?? "all markers present",
+  help:
+    result.problem ??
+    `resume=${result.capabilities?.supportsResume}; model=${result.capabilities?.supportsModelSelection}; reasoning=${result.capabilities?.supportsReasoningEffort}; event-stream=${result.capabilities?.supportsEventStream} (offline capability snapshot)`,
 }));
 
 const widths = {

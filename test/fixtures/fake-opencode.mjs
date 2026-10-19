@@ -5,15 +5,18 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { probeReply } from "./probe-controls.mjs";
 
 const [configFile, ...args] = process.argv.slice(2);
 const config = JSON.parse(readFileSync(configFile, "utf8"));
 if (args.includes("--version")) {
-  console.log("opencode v2.0.32");
-  process.exit(0);
+  probeReply(config, args, "opencode v2.0.32");
+  await new Promise(() => {});
 }
 if (args.includes("--help")) {
-  console.log(
+  probeReply(
+    config,
+    args,
     args[0] === "serve"
       ? "--stdio --hostname --port"
       : args[0] === "session"
@@ -22,7 +25,7 @@ if (args.includes("--help")) {
           : "list export"
         : "--model provider/model#variant --format json --session --auto",
   );
-  process.exit(0);
+  await new Promise(() => {});
 }
 if (args.join(" ") !== "serve --stdio --hostname 127.0.0.1 --port 0")
   throw new Error("invalid private-server launch");

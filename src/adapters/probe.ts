@@ -1,12 +1,13 @@
 /**
  * Offline compatibility probe for installed harness CLIs (todo 0.5, architecture §4).
  *
- * It runs `<binary> --version` and `<binary> <help args>` and checks that the help text still
- * advertises the flags the registry's capability claims depend on. It never runs a model, never
+ * The execution factories run version/help checks and expose their effective capabilities. This
+ * inventory reuses those factories and their isolated environments. It never runs a model, never
  * reads credential files, and never passes the caller's full environment to the child.
  */
 import {
   BUILT_IN_HARNESSES,
+  type HarnessCapabilities,
   type HarnessDescriptor,
   type HarnessRegistry,
 } from "./harness-registry.js";
@@ -22,36 +23,36 @@ export interface CommandResult {
 
 export type CommandRunner = (binary: string, args: readonly string[]) => Promise<CommandResult>;
 
-export interface HelpProbe {
-  readonly args: readonly string[];
-  /** Literal substrings the help text must contain for the registry's claims to hold. */
-  readonly markers: readonly string[];
+/** Probe failures contain safe runner-owned explanations, not CLI stdout/stderr. */
+export class CapabilityProbeError extends Error {
+  constructor(
+    message: string,
+    readonly missingMarkers: readonly string[] = [],
+    readonly installed = true,
+  ) {
+    super(message);
+  }
 }
 
-/** Flags each harness's capability claims rely on. Verified against the CLIs listed in the compatibility note. */
-export const HELP_PROBES: Readonly<Record<string, HelpProbe>> = {
-  codex: {
-    args: ["exec", "--help"],
-    markers: ["--json", "--output-schema", "resume", "--sandbox", "--model"],
-  },
-  pi: { args: ["--help"], markers: ["--mode", "--print", "--session", "--resume", "--model"] },
-  omp: {
-    args: ["--help"],
-    markers: ["--mode=", "--print", "--resume", "--model=", "--approval-mode"],
-  },
-  opencode: { args: ["run", "--help"], markers: ["--format", "--session", "--model", "--auto"] },
-  claude: {
-    args: ["--help"],
-    markers: [
-      "--print",
-      "--output-format",
-      "--resume",
-      "--permission-mode",
-      "--model",
-      "--session-id",
-    ],
-  },
-};
+export function helpAdvertises(help: string, flag: string): boolean {
+  return new RegExp(`(?:^|\\s)${flag}(?:\\s|[=<,]|$)`).test(help);
+}
+
+export function probeText(result: CommandResult, harness: string, args: readonly string[]): string {
+  const failure =
+    result.spawnError === "ENOENT"
+      ? "executable was not found on PATH (ENOENT)"
+      : result.spawnError === "EACCES"
+        ? "executable could not be executed (EACCES)"
+        : (result.spawnError ?? `exit ${result.exitCode}`);
+  if (result.spawnError || result.exitCode !== 0)
+    throw new CapabilityProbeError(
+      `${harness} compatibility probe failed (${args.join(" ")}): ${failure}`,
+      [],
+      result.spawnError !== "ENOENT" && result.spawnError !== "EACCES",
+    );
+  return result.stdout;
+}
 
 export interface HarnessProbeResult {
   readonly id: string;
@@ -59,7 +60,8 @@ export interface HarnessProbeResult {
   readonly binary: string;
   readonly installed: boolean;
   readonly version?: string | undefined;
-  /** Markers the help text did not contain. Empty when every claim is advertised. */
+  readonly capabilities?: HarnessCapabilities | undefined;
+  /** Required markers the factory help text did not contain. Empty when every claim is advertised. */
   readonly missingMarkers: readonly string[];
   /** Human-readable explanation of anything that prevents a clean result. */
   readonly problem?: string | undefined;
@@ -126,70 +128,55 @@ export async function runProbeCommand(
   }
 }
 
+/** Inventory uses the same isolated factories as execution; no parallel marker convention. */
 export async function probeHarness(
   descriptor: HarnessDescriptor,
-  run: CommandRunner = runProbeCommand,
+  run?: CommandRunner,
 ): Promise<HarnessProbeResult> {
   const base = { id: descriptor.id, product: descriptor.product, binary: descriptor.binary };
-  const version = await run(descriptor.binary, ["--version"]);
-  if (version.spawnError === "ENOENT" || version.spawnError === "EACCES") {
+  try {
+    const options = { binary: descriptor.binary };
+    const adapter = await (async () => {
+      switch (descriptor.id) {
+        case "codex":
+          return (await import("./codex.js")).createCodexAdapter(options, run);
+        case "pi":
+          return (await import("./pi.js")).createPiAdapter(options, run);
+        case "claude":
+          return (await import("./claude.js")).createClaudeAdapter(options, run);
+        case "opencode":
+          return (await import("./opencode.js")).createOpenCodeAdapter(options, run);
+        case "omp":
+          return (await import("./omp.js")).createOmpAdapter(options, run);
+        default:
+          throw new CapabilityProbeError("no offline adapter probe is defined for this harness");
+      }
+    })();
     return {
       ...base,
-      installed: false,
+      installed: true,
+      version: adapter.compatibility.version,
+      capabilities: adapter.capabilities,
       missingMarkers: [],
+    };
+  } catch (error) {
+    return {
+      ...base,
+      installed: error instanceof CapabilityProbeError ? error.installed : true,
+      missingMarkers: error instanceof CapabilityProbeError ? error.missingMarkers : [],
       problem:
-        version.spawnError === "ENOENT"
-          ? `'${descriptor.binary}' was not found on PATH (ENOENT)`
-          : `'${descriptor.binary}' could not be executed (EACCES)`,
+        error instanceof CapabilityProbeError
+          ? error.message
+          : "adapter compatibility probe failed",
     };
   }
-
-  const probe = HELP_PROBES[descriptor.id];
-  const help = probe ? await run(descriptor.binary, probe.args) : undefined;
-  const helpText = `${help?.stdout ?? ""}\n${help?.stderr ?? ""}`;
-  const missingMarkers = (probe?.markers ?? []).filter((marker) => !helpText.includes(marker));
-
-  const problems: string[] = [];
-  if (version.spawnError) {
-    problems.push(`version command failed: ${version.spawnError}`);
-  } else if (version.exitCode !== 0) {
-    problems.push(`version command exited with status ${version.exitCode ?? "unknown"}`);
-  }
-  if (help && !help.spawnError && help.exitCode !== 0) {
-    problems.push(`help command exited with status ${help.exitCode ?? "unknown"}`);
-  }
-  if (!probe) {
-    problems.push("no help probe is defined for this harness");
-  }
-  if (help?.spawnError) {
-    problems.push(`help command failed: ${help.spawnError}`);
-  }
-  if (missingMarkers.length > 0) {
-    problems.push(`help text no longer advertises ${missingMarkers.join(", ")}`);
-  }
-  return {
-    ...base,
-    installed: true,
-    version:
-      version.exitCode === 0 && !version.spawnError
-        ? firstLine(version.stdout) || firstLine(version.stderr) || undefined
-        : undefined,
-    missingMarkers,
-    problem: problems.length > 0 ? problems.join("; ") : undefined,
-  };
 }
 
 export async function probeHarnesses(
   registry: HarnessRegistry = BUILT_IN_HARNESSES,
-  run: CommandRunner = runProbeCommand,
+  run?: CommandRunner,
 ): Promise<HarnessProbeResult[]> {
   const results: HarnessProbeResult[] = [];
-  for (const descriptor of registry.values()) {
-    results.push(await probeHarness(descriptor, run));
-  }
+  for (const descriptor of registry.values()) results.push(await probeHarness(descriptor, run));
   return results;
-}
-
-function firstLine(text: string): string {
-  return text.split("\n")[0]?.trim() ?? "";
 }

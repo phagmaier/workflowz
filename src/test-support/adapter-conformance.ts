@@ -63,6 +63,7 @@ export function describeAdapterConformance(
       const inputs: AgentInput[] = [];
       const wrapped: AgentAdapter = {
         id: adapter.id,
+        capabilities: adapter.capabilities,
         start(input) {
           inputs.push(input);
           return adapter.start(input);

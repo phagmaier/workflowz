@@ -4,14 +4,25 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  type AdapterCompatibility,
+  AdapterPreflightError,
   type AgentAdapter,
   type AgentHandle,
   type AgentInput,
+  assertAdapterCapabilities,
   ResumeUnavailableError,
 } from "./agent-adapter.js";
 import { ClaudeEvents, isClaudeSessionId } from "./claude-events.js";
 import { childEnvironment } from "./environment.js";
-import { type CommandRunner, probeEnvironment, runProbeCommand } from "./probe.js";
+import type { HarnessCapabilities } from "./harness-registry.js";
+import {
+  CapabilityProbeError,
+  type CommandRunner,
+  helpAdvertises,
+  probeEnvironment,
+  probeText,
+  runProbeCommand,
+} from "./probe.js";
 import { startProcess } from "./process.js";
 
 export interface ClaudeAdapterOptions {
@@ -21,10 +32,7 @@ export interface ClaudeAdapterOptions {
   readonly environment?: NodeJS.ProcessEnv;
   readonly wfBinDir?: string;
 }
-export interface ClaudeCompatibility {
-  readonly version: string;
-  readonly supportsResume: boolean;
-}
+export interface ClaudeCompatibility extends AdapterCompatibility {}
 
 const WF_BIN = fileURLToPath(new URL("../../bin", import.meta.url));
 const CLAUDE_ENV_NAMES = [
@@ -58,33 +66,33 @@ export async function createClaudeAdapter(
         ...(options.prefixArgs ?? []),
         ...args,
       ]);
-      if (result.spawnError || result.exitCode !== 0)
-        throw new Error(
-          `Claude compatibility probe failed (${args.join(" ")}): ${result.spawnError ?? `exit ${result.exitCode}`}`,
-        );
-      return result.stdout;
+      return probeText(result, "Claude", args);
     };
     const version = (await checked(["--version"])).trim();
     if (!/^\d+\.\d+\.\d+(?:[-+][\w.-]+)? \(Claude Code\)$/.test(version))
-      throw new Error("Claude compatibility probe returned an unrecognized version");
+      throw new CapabilityProbeError("Claude compatibility probe returned an unrecognized version");
     const help = await checked(["--help"]);
-    const advertised = (flag: string) => new RegExp(`(?:^|\\s)${flag}(?:\\s|[=<,])`).test(help);
+    const advertised = (flag: string) => helpAdvertises(help, flag);
     const missing = [
       "--print",
       "--input-format",
       "--output-format",
       "--verbose",
       "--permission-mode",
-      "--model",
-      "--effort",
     ].filter((flag) => !advertised(flag));
-    for (const marker of ["stream-json", "bypassPermissions", ...EFFORT])
+    for (const marker of ["stream-json", "bypassPermissions"])
       if (!help.includes(marker)) missing.push(marker);
     if (missing.length)
-      throw new Error(
+      throw new CapabilityProbeError(
         `Claude print mode is incompatible; help does not advertise ${missing.join(", ")}`,
+        missing,
       );
-    return new ClaudeAdapter(options, { version, supportsResume: advertised("--resume") });
+    return new ClaudeAdapter(options, {
+      version,
+      supportsResume: advertised("--resume"),
+      supportsModelSelection: advertised("--model"),
+      supportsReasoningEffort: advertised("--effort"),
+    });
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -92,23 +100,33 @@ export async function createClaudeAdapter(
 
 export class ClaudeAdapter implements AgentAdapter {
   readonly id = "claude";
+  readonly capabilities: HarnessCapabilities;
   readonly resumeForReportCorrection: AgentAdapter["resumeForReportCorrection"];
   constructor(
     private readonly options: ClaudeAdapterOptions,
     readonly compatibility: ClaudeCompatibility,
   ) {
+    this.capabilities = Object.freeze({
+      supportsResume: compatibility.supportsResume,
+      supportsModelSelection: compatibility.supportsModelSelection,
+      supportsReasoningEffort: compatibility.supportsReasoningEffort,
+      supportsEventStream: true,
+      supportsPermissionMode: true,
+      supportsStructuredFinalOutput: false,
+    });
     this.resumeForReportCorrection = compatibility.supportsResume
       ? (input) => this.start(input)
       : undefined;
   }
 
   start(input: AgentInput): AgentHandle {
+    assertAdapterCapabilities(this, input);
     const prior = input.priorSessionId;
     if (prior !== undefined && (!this.compatibility.supportsResume || !isClaudeSessionId(prior)))
       throw new ResumeUnavailableError();
     if (!input.reportAccess) throw new Error("Claude requires the runner's report channel");
     if (input.reasoningEffort !== undefined && !EFFORT.has(input.reasoningEffort))
-      throw new Error("Claude effort must be low, medium, high, xhigh, or max");
+      throw new AdapterPreflightError("Claude effort must be low, medium, high, xhigh, or max");
     const source = this.options.environment ?? process.env;
     const extra: Record<string, string> = {};
     for (const name of CLAUDE_ENV_NAMES) if (source[name] !== undefined) extra[name] = source[name];

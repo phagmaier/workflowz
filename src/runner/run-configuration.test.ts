@@ -66,6 +66,7 @@ function fixture(t: TestContext) {
         "codex",
         {
           id: "codex",
+          capabilities: agent.capabilities,
           start: (input: AgentInput) => {
             inputs.push(input);
             return agent.start(input);

@@ -1,6 +1,6 @@
 # Harness compatibility note
 
-Probed on this machine with `npm run probe:harnesses` (offline: `--version` and each CLI's help text only; no model is called and no credentials are read). Re-run the probe after any CLI upgrade. Each row below records what the **installed** help text advertises and what the registry claims (`src/adapters/harness-registry.ts`).
+Probed on this machine with `npm run probe:harnesses` (offline: `--version` and each CLI's help text only; no model is called and no credentials are read). Re-run the probe after any CLI upgrade. The historical table below records CLI interfaces. Phase 6.6 now uses the actual isolated adapter factories for inventory, rather than treating CLI flags as proof of an implemented transport. Static registry metadata and effective installed snapshots are distinct.
 
 | Harness | Installed version | Headless launch | Machine-readable stream | Session resume | Permission mode | Model selection |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -10,7 +10,7 @@ Probed on this machine with `npm run probe:harnesses` (offline: `--version` and 
 | `opencode` | `opencode v2.0.32` | `opencode run [message]` | `--format json` | `--session <id>` (creates the session if it does not exist), `--continue` | `--auto` (auto-approve anything not explicitly denied) | `--model provider/model` |
 | `claude` | `2.1.303 (Claude Code)` | `claude --print` (`-p`) | `--output-format stream-json` | `--resume <session-id>`, `--session-id <uuid>` | `--permission-mode acceptEdits\|auto\|bypassPermissions\|manual\|dontAsk\|plan` | `--model` |
 
-All five binaries advertised every marker in `HELP_PROBES` (`src/adapters/probe.ts`) on this machine.
+Earlier probes advertised the original informational help markers. The separate `HELP_PROBES` table has now been replaced by factory-backed inventory; see Phase 6.6 below.
 
 ## Notes that affect the adapters
 
@@ -186,3 +186,14 @@ Official references, alongside installed version/help and bundled docs:
 - Empty negative-check fixture DDL only: [credential store](https://github.com/can1357/oh-my-pi/blob/v18.12.2/packages/ai/src/auth/sqlite-credential-store.ts), [agent storage](https://github.com/can1357/oh-my-pi/blob/v18.12.2/packages/coding-agent/src/session/agent-storage.ts).
 
 `fake-omp.mjs` is a synthetic offline CLI, not a recorded provider trace. All shared conformance cases run through the real adapter as `omp`; additional tests cover dialect framing, native retry/compaction, terminal/provider failures, unavailable/deleted/mismatched/moved sessions, secret/environment boundaries and settlement. Registry status is `conformance_passed`, not authenticated/live verification. No paid calls, dependencies, global harness edits, daemon or UI work were added. Milestones 0.5, 6.6–6.8 and the full Phase 6 live gate remain open; successful live sessions/streams, permissions/tool environment and resource interactions still need opt-in verification.
+
+
+## Capability snapshots and preflight (Phase 6.6)
+
+`npm run probe:harnesses` now uses the same isolated version/help factories as execution. It reports effective resume, model, reasoning and event-stream capabilities. Required launch features still gate factory creation; missing optional model/thinking/effort/resume selectors disable those features while permitting supported fresh work. Failed/truncated required evidence is never accepted. Failed optional Codex resume and OpenCode run/session evidence disables only the affected features. Exact flag matching avoids confusing `--session-dir` with `--session` or longer flags with supported ones.
+
+`adapter.capabilities` describes this implemented transport, rather than every potential CLI feature. All current adapters report `supportsStructuredFinalOutput: false`: schema-constrained stdout reporting is not implemented. OpenCode retains `supportsEventStream: false`, and Pi retains `supportsPermissionMode: false` while using normal unrestricted tools. Reasoning support is now explicit metadata for the existing workflow field. Provider/model-specific reasoning availability, authentication and successful live sessions remain unproven.
+
+The static compiler registry remains offline data. At preparation of each selected effective attempt, the service checks its actual adapter snapshot. Unsupported requested model/reasoning selection routes `system.spawn_error`; unsupported explicit resume routes `system.resume_unavailable`. Explanations survive into durable failure/attention records. Known adapter option/session validation messages are retained; arbitrary exceptions remain generic. No graph-wide upfront rejection, hidden retries, workflow fields or new permission gates were introduced. A clean missing report on a fresh invocation without correction support still produces `system.report_error`, without launching fresh correction.
+
+Snapshots are made when factories run; recreate adapters after upgrading/replacing the CLI. Capability evidence cannot establish runtime session availability. Existing exact journal/API/CLI admission checks and deletion-race protections remain authoritative. No authentication or provider call is part of this milestone. The runtime environment/scrubbing audit and opt-in live smokes remain 6.7 and 6.8; Phase 0.5 remains open.

@@ -3,7 +3,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { PiAdapter, type PiAdapterOptions } from "./pi.js";
-import { type CommandRunner, runProbeCommand } from "./probe.js";
+import {
+  CapabilityProbeError,
+  type CommandRunner,
+  helpAdvertises,
+  probeText,
+  runProbeCommand,
+} from "./probe.js";
 
 /** Version/help only: no user configuration, authentication or provider execution. */
 export async function createOmpAdapter(
@@ -30,30 +36,33 @@ export async function createOmpAdapter(
         ...(options.prefixArgs ?? []),
         ...args,
       ]);
-      if (result.spawnError || result.exitCode !== 0)
-        throw new Error(
-          `omp compatibility probe failed (${args.join(" ")}): ${result.spawnError ?? `exit ${result.exitCode}`}`,
-        );
-      return result.stdout;
+      return probeText(result, "omp", args);
     };
     const version = (await checked(["--version"])).trim();
     if (!/^omp\/\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(version))
-      throw new Error("omp compatibility probe returned an unrecognized version");
+      throw new CapabilityProbeError("omp compatibility probe returned an unrecognized version");
     const help = await checked(["--help"]);
-    const advertised = (flag: string) => new RegExp(`(?:^|\\s)${flag}(?:\\s|[=<,])`).test(help);
-    const missing = [
-      "--print",
-      "--mode",
-      "--model",
-      "--thinking",
-      "--session-dir",
-      "--approval-mode",
-    ].filter((flag) => !advertised(flag));
-    if (missing.length || !/\bjson\b/.test(help) || !/\byolo\b/.test(help))
-      throw new Error(
-        `omp JSON mode is incompatible; help does not advertise ${missing.join(", ") || "json/yolo"}`,
+    const advertised = (flag: string) => helpAdvertises(help, flag);
+    const missing = ["--print", "--mode", "--session-dir", "--approval-mode"].filter(
+      (flag) => !advertised(flag),
+    );
+    if (!/\bjson\b/.test(help)) missing.push("json");
+    if (!/\byolo\b/.test(help)) missing.push("yolo");
+    if (missing.length)
+      throw new CapabilityProbeError(
+        `omp JSON mode is incompatible; help does not advertise ${missing.join(", ")}`,
+        missing,
       );
-    return new PiAdapter(options, { version, supportsResume: advertised("--resume") }, "omp");
+    return new PiAdapter(
+      options,
+      {
+        version,
+        supportsResume: advertised("--resume"),
+        supportsModelSelection: advertised("--model"),
+        supportsReasoningEffort: advertised("--thinking"),
+      },
+      "omp",
+    );
   } finally {
     rmSync(probeDir, { recursive: true, force: true });
   }

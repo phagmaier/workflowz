@@ -54,7 +54,8 @@ npm test                     # build to dist/, then node:test over dist/**/*.tes
 npm run validate -- examples/overnight.yaml   # strict parse, compile, and path checks
 npm run smoke:reporting      # real wf report + SQLite + fake-session correction, no model calls
 npm run smoke:tasks          # immutable Markdown import + fake task loop + persisted context
-npm run probe:harnesses      # offline version and help-text probe of codex, pi, omp, opencode, claude
+npm run smoke:capabilities   # offline installed-feature preflight + real fixture reporting
+npm run probe:harnesses      # isolated factory capability probes of codex, pi, omp, opencode, claude
 ```
 
 Process tests start real children: `sh`, `sleep`, and `node`. They need a POSIX system.
@@ -121,7 +122,7 @@ The adapter sends prompts through stdin with `--print --input-format text --outp
 
 Default CLI session persistence stays enabled. The terminal UUID is the opaque session identity; resume passes only that exact UUID to `--resume`, with no recent-session selector, fork or fresh fallback. Unavailable sessions and mismatches fail explicitly. CLI version and `bypassPermissions` are audited. Runtime selects the base environment plus Claude config, explicit Anthropic auth/provider settings and report access, scrubbing injected tokens/keys. No global config is edited.
 
-The installed version is 2.1.303. Its offline missing-UUID check confirmed failure without a provider request. The real adapter passes all shared conformance tests against a synthetic CLI; authenticated persistence/resume, actual provider framing and tool environment remain live-smoke work. See [compatibility details](docs/harness-compatibility.md). Milestones 0.5 and 6.6–6.8 remain open.
+The installed version is 2.1.303. Its offline missing-UUID check confirmed failure without a provider request. The real adapter passes all shared conformance tests against a synthetic CLI; authenticated persistence/resume, actual provider framing and tool environment remain live-smoke work. See [compatibility details](docs/harness-compatibility.md). Milestones 0.5 and 6.7–6.8 remain open.
 
 ### OpenCode adapter (Phase 6.4)
 
@@ -133,7 +134,7 @@ After prompt acknowledgment, the adapter waits for idle and verifies matching id
 
 Model selection accepts `provider/model#variant`; `reasoning_effort` selects a named variant when an explicit unqualified model is supplied. Supplying both a model variant and reasoning effort is rejected rather than silently choosing one. Session-level `{action: "*", resource: "*", effect: "allow"}` rules select unrestricted permissions and are audited as `session-allow-all`. Unlike CLI `--auto`, these rules override denials for this session; global settings are unchanged. The private lease password and known injected provider/report credentials are scrubbed.
 
-The synthetic CLI passes the full shared conformance suite. Installed offline checks verified create-if-missing CLI behavior, non-creating exact API resume failure and terminal provider failure against an invalid provider without credentials. Authentication, successful live persistence/resume, actual provider execution and tool environment propagation remain unverified. See [compatibility details](docs/harness-compatibility.md). Milestones 0.5 and 6.6–6.8 remain open.
+The synthetic CLI passes the full shared conformance suite. Installed offline checks verified create-if-missing CLI behavior, non-creating exact API resume failure and terminal provider failure against an invalid provider without credentials. Authentication, successful live persistence/resume, actual provider execution and tool environment propagation remain unverified. See [compatibility details](docs/harness-compatibility.md). Milestones 0.5 and 6.7–6.8 remain open.
 
 
 ### omp adapter (Phase 6.5)
@@ -144,7 +145,17 @@ Launch uses stdin with `--print --mode json --approval-mode yolo`, optionally `-
 
 Dedicated persistent directories live under `omp-sessions` beside logs, or explicit `sessionDir`. The durable identity is an absolute journal path with matching UUID/header/cwd; the reader accepts omp's leading title slot. Resume passes that exact path to `--resume`, whose installed strict-open branch cannot create an absent file. Prefix/UUID/global/latest selectors, restore and forks are not used. Moved-away transcripts are refused before launch because omp otherwise forks them. Journals with malformed, truncated or over-1-MiB records are unavailable rather than partially trusted.
 
-Version and `yolo` are audited; explicit tool/user denials and provider safety policies still apply. Deliberate omp/provider environment selection and common secret scrubbing preserve report access without changing global configuration. The full shared offline suite and independent service/deletion-race smokes pass. Installed isolated startup needed an empty-schema fixture to get past a fresh-database initialization failure; no workaround was added to the adapter. Authentication, successful live sessions, actual provider framing and tool environment remain unverified. See [compatibility details](docs/harness-compatibility.md); 0.5 and 6.6–6.8 remain open.
+Version and `yolo` are audited; explicit tool/user denials and provider safety policies still apply. Deliberate omp/provider environment selection and common secret scrubbing preserve report access without changing global configuration. The full shared offline suite and independent service/deletion-race smokes pass. Installed isolated startup needed an empty-schema fixture to get past a fresh-database initialization failure; no workaround was added to the adapter. Authentication, successful live sessions, actual provider framing and tool environment remain unverified. See [compatibility details](docs/harness-compatibility.md); 0.5 and 6.7–6.8 remain open.
+
+### Installed capability preflight (Phase 6.6)
+
+Each async adapter factory returns a frozen `adapter.capabilities` snapshot for its selected executable and implemented transport, alongside `adapter.compatibility` version evidence. `npm run probe:harnesses` calls these same isolated factories; it does not maintain a separate flag table. Failed/truncated required probes reject construction. Missing optional resume/model/reasoning selectors disable those features while preserving supported fresh execution. Codex still requires config support for its invocation environment settings; its resume model selector is checked separately.
+
+The compiler uses static registry capabilities, including reasoning-effort support, without spawning CLIs. The headless service checks the selected adapter's snapshot when preparing each effective attempt, including frozen task settings and revised workflows. A requested unsupported model/reasoning selector fails with `system.spawn_error`; unsupported explicit resume fails with `system.resume_unavailable`. Errors identify the feature and harness, are recorded with the failed attempt/attention item, and start no provider execution or report correction. Adapter-authored invalid-option/session errors also retain useful explanations; unexpected exceptions remain generic. This runs immediately before the affected attempt, rather than rejecting every possible future graph branch at run creation.
+
+Resume capability does not establish that a particular session exists. Existing adapter-specific journal/API/CLI admission checks still enforce exact identity, cwd and no fresh fallback. Missing optional correction support never prevents fresh work; a clean missing report then follows the existing `system.report_error` policy without launching correction. Recreate adapters after changing/upgrading a CLI: snapshots do not continuously re-probe or attest to a binary that changes afterward.
+
+OpenCode's effective event-stream capability stays false. All current transports report structured-final-output support as false because the common report path is exclusively `wf report`; a harness's CLI schema flag alone does not implement a report fallback. No workflow fields, migrations, provider calls or approval gates were added. `npm run smoke:capabilities` independently exercises required-feature rejection, model preflight, supported fresh work, disabled correction and unsupported workflow resume, including SQLite reopen. Authentication/live-session/tool-environment checks remain separate work.
 
 ### Layout
 

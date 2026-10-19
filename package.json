@@ -17,6 +17,7 @@
     "validate": "npm run build --silent && node dist/app/validate-cli.js",
     "probe:harnesses": "npm run build --silent && node dist/adapters/probe-cli.js",
     "smoke:reporting": "npm run build --silent && node scripts/smoke-reporting.mjs",
+    "smoke:capabilities": "npm run build --silent && node scripts/smoke-capabilities.mjs",
     "smoke:tasks": "npm run build --silent && node scripts/smoke-tasks.mjs"
   },
   "dependencies": {

@@ -4,20 +4,23 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { probeReply } from "./probe-controls.mjs";
 
 const [configFile, ...args] = process.argv.slice(2);
 const config = JSON.parse(readFileSync(configFile, "utf8"));
 const flag = (name) => args[args.indexOf(name) + 1];
 const event = (value) => process.stdout.write(`${JSON.stringify(value)}\n`);
 if (args.includes("--version")) {
-  console.log("1.3.0");
-  process.exit(0);
+  probeReply(config, args, "1.3.0");
+  await new Promise(() => {});
 }
 if (args.includes("--help")) {
-  console.log(
+  probeReply(
+    config,
+    args,
     `--print --mode json rpc --model --thinking --session-dir <dir>${config.options.supportsResume === false ? "" : " --session <path|id>"}`,
   );
-  process.exit(0);
+  await new Promise(() => {});
 }
 const index = config.index ?? 0;
 config.index = index + 1;

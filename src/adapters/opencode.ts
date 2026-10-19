@@ -5,14 +5,25 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  type AdapterCompatibility,
+  AdapterPreflightError,
   type AgentAdapter,
   type AgentHandle,
   type AgentInput,
+  assertAdapterCapabilities,
   ResumeUnavailableError,
 } from "./agent-adapter.js";
 import { childEnvironment } from "./environment.js";
+import type { HarnessCapabilities } from "./harness-registry.js";
 import { isOpenCodeSessionId, OpenCodeEvents } from "./opencode-events.js";
-import { type CommandRunner, probeEnvironment, runProbeCommand } from "./probe.js";
+import {
+  CapabilityProbeError,
+  type CommandRunner,
+  helpAdvertises,
+  probeEnvironment,
+  probeText,
+  runProbeCommand,
+} from "./probe.js";
 import { startProcess } from "./process.js";
 
 export interface OpenCodeAdapterOptions {
@@ -21,10 +32,7 @@ export interface OpenCodeAdapterOptions {
   readonly environment?: NodeJS.ProcessEnv;
   readonly wfBinDir?: string;
 }
-export interface OpenCodeCompatibility {
-  readonly version: string;
-  readonly supportsResume: boolean;
-}
+export interface OpenCodeCompatibility extends AdapterCompatibility {}
 const WF_BIN = fileURLToPath(new URL("../../bin", import.meta.url));
 const BRIDGE = fileURLToPath(new URL("./opencode-bridge.js", import.meta.url));
 const ENV_NAMES = [
@@ -69,26 +77,36 @@ export async function createOpenCodeAdapter(
         ...(options.prefixArgs ?? []),
         ...args,
       ]);
-      if (result.spawnError || result.exitCode !== 0)
-        throw new Error(
-          `OpenCode compatibility probe failed (${args.join(" ")}): ${result.spawnError ?? `exit ${result.exitCode}`}`,
-        );
-      return result.stdout;
+      return probeText(result, "OpenCode", args);
     };
     const version = (await checked(["--version"])).trim();
     if (!/^opencode v2\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(version))
-      throw new Error("OpenCode compatibility probe requires the v2 API");
+      throw new CapabilityProbeError("OpenCode compatibility probe requires the v2 API");
     const serve = await checked(["serve", "--help"]);
-    const help = await checked(["run", "--help"]);
-    const missing = ["--stdio", "--hostname", "--port"].filter((flag) => !serve.includes(flag));
-    for (const marker of ["--model", "provider/model#variant"])
-      if (!help.includes(marker)) missing.push(marker);
+    const optionalHelp = async (args: string[]) => {
+      const result = await command(options.binary ?? "opencode", [
+        ...(options.prefixArgs ?? []),
+        ...args,
+      ]);
+      return !result.spawnError && result.exitCode === 0 ? result.stdout : "";
+    };
+    const help = await optionalHelp(["run", "--help"]);
+    const missing = ["--stdio", "--hostname", "--port"].filter(
+      (flag) => !helpAdvertises(serve, flag),
+    );
     if (missing.length)
-      throw new Error(
+      throw new CapabilityProbeError(
         `OpenCode private API mode is incompatible; help does not advertise ${missing.join(", ")}`,
+        missing,
       );
-    const sessions = await checked(["session", "--help"]);
-    return new OpenCodeAdapter(options, { version, supportsResume: /\bexport\b/.test(sessions) });
+    const sessions = await optionalHelp(["session", "--help"]);
+    return new OpenCodeAdapter(options, {
+      version,
+      supportsResume: /\bexport\b/.test(sessions),
+      supportsModelSelection: helpAdvertises(help, "--model"),
+      supportsReasoningEffort:
+        helpAdvertises(help, "--model") && help.includes("provider/model#variant"),
+    });
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -96,16 +114,26 @@ export async function createOpenCodeAdapter(
 
 export class OpenCodeAdapter implements AgentAdapter {
   readonly id = "opencode";
+  readonly capabilities: HarnessCapabilities;
   readonly resumeForReportCorrection: AgentAdapter["resumeForReportCorrection"];
   constructor(
     private readonly options: OpenCodeAdapterOptions,
     readonly compatibility: OpenCodeCompatibility,
   ) {
+    this.capabilities = Object.freeze({
+      supportsResume: compatibility.supportsResume,
+      supportsModelSelection: compatibility.supportsModelSelection,
+      supportsReasoningEffort: compatibility.supportsReasoningEffort,
+      supportsEventStream: false,
+      supportsPermissionMode: true,
+      supportsStructuredFinalOutput: false,
+    });
     this.resumeForReportCorrection = compatibility.supportsResume
       ? (input) => this.start(input)
       : undefined;
   }
   start(input: AgentInput): AgentHandle {
+    assertAdapterCapabilities(this, input);
     const prior = input.priorSessionId;
     if (prior !== undefined && (!this.compatibility.supportsResume || !isOpenCodeSessionId(prior)))
       throw new ResumeUnavailableError();
@@ -113,12 +141,18 @@ export class OpenCodeAdapter implements AgentAdapter {
     // OpenCode v2 selects reasoning through the model's named variant, not a separate effort flag.
     const match = input.model?.match(/^([^/\s#]+)\/([^\s#]+)(?:#([^\s#]+))?$/);
     if (input.model !== undefined && !match)
-      throw new Error("OpenCode model must be provider/model#variant (variant optional)");
+      throw new AdapterPreflightError(
+        "OpenCode model must be provider/model#variant (variant optional)",
+      );
+    if (match?.[3] !== undefined && !this.capabilities.supportsReasoningEffort)
+      throw new AdapterPreflightError(
+        "OpenCode installed model mode does not support named reasoning variants",
+      );
     if (
       input.reasoningEffort !== undefined &&
       (!match || !/^[A-Za-z0-9_-]+$/.test(input.reasoningEffort) || match[3] !== undefined)
     )
-      throw new Error(
+      throw new AdapterPreflightError(
         "OpenCode reasoning effort requires an explicit provider/model without an existing variant",
       );
     const model = match

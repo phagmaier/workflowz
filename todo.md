@@ -78,7 +78,7 @@
 - [x] 6.3 Implement Claude Code adapter: `claude -p` with `--output-format stream-json`, session-id capture, `--resume` follow-up, permission-mode selection, and settle detection on the terminal `result` message.
 - [x] 6.4 Implement OpenCode adapter: private `serve --stdio`/v2 API path with exact persisted-session admission and terminal idle/outcome verification (CLI `run --session` creates missing sessions), plus unrestricted permission selection.
 - [x] 6.5 Implement omp adapter as a verified Pi-family variant: shared LF JSON framing/process supervision, omp terminal/retry/compaction semantics, strict non-creating full-path `--resume`, and unrestricted permission selection.
-- [ ] 6.6 Implement capability probe and user-facing preflight errors when requested modes or resume paths aren't supported by installed version.
+- [x] 6.6 Implement capability probe and user-facing preflight errors when requested modes or resume paths aren't supported by installed version.
 - [ ] 6.7 Ensure adapter boundary logs are scrubbed of credentials/tokens and that each child process receives only a deliberate environment allowlist; retain useful summaries and raw event files for local inspection.
 - [ ] 6.8 Add opt-in smoke tests for real locally authenticated harnesses; do not require live usage for core unit or integration tests.
 
