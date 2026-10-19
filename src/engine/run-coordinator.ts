@@ -524,6 +524,11 @@ export class RunCoordinator {
       failure?: SystemOutcome | undefined;
       harnessVersion?: string;
       permissionMode?: string;
+      diagnostics?: {
+        stderr: string;
+        stdoutTruncated: boolean;
+        stderrTruncated: boolean;
+      };
     },
   ): void {
     this.database.transaction(() => {

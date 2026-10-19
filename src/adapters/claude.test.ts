@@ -27,7 +27,7 @@ async function fixture(
   const settings = {
     binary: process.execPath,
     prefixArgs: [path.join(REPO_ROOT, "test/fixtures/fake-claude.mjs"), config],
-    environment: { ...process.env, CLAUDE_CONFIG_DIR: root },
+    environment: { PATH: process.env.PATH, HOME: root, CLAUDE_CONFIG_DIR: root },
   };
   return { root, config, capture, settings, adapter: await createClaudeAdapter(settings) };
 }

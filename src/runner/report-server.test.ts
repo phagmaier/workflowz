@@ -9,7 +9,7 @@ import { RunCoordinator } from "../engine/run-coordinator.js";
 import { WorkflowDatabase } from "../store/database.js";
 import { REPO_ROOT } from "../test-support/paths.js";
 import { workflowText } from "../test-support/workflows.js";
-import { ReportServer } from "./report-server.js";
+import { type ReportAccess, ReportServer } from "./report-server.js";
 
 const FLOW = workflowText(`start: build
 steps:
@@ -32,7 +32,7 @@ async function fixture(
     database: WorkflowDatabase;
     coordinator: RunCoordinator;
     server: ReportServer;
-    access: { endpoint: string; token: string };
+    access: ReportAccess;
     attemptId: string;
     runId: string;
   }) => Promise<void>,
@@ -72,6 +72,28 @@ function send(access: { endpoint: string; token: string }, body: unknown = BODY)
 }
 
 describe("private reporting endpoint and CLI", () => {
+  it("rejects registered injected credentials and discards that knowledge when the channel closes", async () =>
+    fixture(async (f) => {
+      const credential = "synthetic-injected-authorization";
+      f.server.protect(f.access, [credential]);
+      const before = f.coordinator.inspect(f.runId);
+      assert.equal(
+        (await send(f.access, { ...BODY, summary: Buffer.from(credential).toString("base64") }))
+          .status,
+        422,
+      );
+      assert.deepEqual(f.coordinator.inspect(f.runId), before);
+      f.server.revoke(f.access);
+      const current = f.server.issue(f.attemptId);
+      assert.ok(current.secrets.includes(credential));
+      f.server.protect(f.access, ["late-registration"]);
+      assert.ok(!current.secrets.includes("late-registration"));
+      await f.server.close();
+      await f.server.listen();
+      const reopened = f.server.issue(f.attemptId);
+      assert.ok(!reopened.secrets.includes(credential));
+      assert.equal((await send(reopened)).status, 201);
+    }));
   it("rejects malformed/invalid bodies, authority fields, origins and tokens without any mutation", async () =>
     fixture(async (f) => {
       const before = f.coordinator.inspect(f.runId);
@@ -81,6 +103,8 @@ describe("private reporting endpoint and CLI", () => {
         { ...BODY, outcome: "unknown" },
         { ...BODY, run_id: "other" },
         { ...BODY, summary: f.access.token },
+        { ...BODY, data: { authorization: Buffer.from(f.access.token).toString("base64") } },
+        { ...BODY, handoff: Buffer.from(f.access.token).toString("base64url") },
       ]) {
         const response = await send(f.access, body);
         assert.equal(response.status, 422);
@@ -157,6 +181,25 @@ describe("private reporting endpoint and CLI", () => {
       const stopped = f.server.issue(next.attemptId);
       f.coordinator.recordStop(f.runId, "test stop");
       assert.equal((await send(stopped)).status, 410);
+    }));
+
+  it("retains revoked token representations for rejection across later attempts in the channel", async () =>
+    fixture(async (f) => {
+      const old = f.access.token;
+      f.server.revoke(f.access);
+      f.coordinator.settle(f.attemptId, { kind: "system", code: "system.report_error" });
+      f.coordinator.resume(f.runId);
+      const next = f.coordinator.advance(f.runId);
+      assert.equal(next.kind, "attempt");
+      if (next.kind !== "attempt") throw new Error("not dispatched");
+      const access = f.server.issue(next.attemptId);
+      assert.deepEqual(access.secrets, [old, access.token]);
+      assert.equal(
+        (await send(access, { ...BODY, summary: Buffer.from(old).toString("base64") })).status,
+        422,
+      );
+      assert.equal(f.coordinator.reportFor(next.attemptId), undefined);
+      assert.equal((await send(access)).status, 201);
     }));
 
   it("persists correction budget and rejects a second request transactionally after reopen", async () =>

@@ -32,3 +32,11 @@ export class OutputCapture {
     return this.dropped;
   }
 }
+
+/** Diagnostic text uses a UTF-8 byte bound without manufacturing a partial-code-point replacement. */
+export function boundedText(value: string, limit: number): { text: string; truncated: boolean } {
+  const bytes = Buffer.from(value);
+  let end = Math.min(bytes.length, limit);
+  while (end > 0 && end < bytes.length && ((bytes[end] ?? 0) & 0xc0) === 0x80) end--;
+  return { text: bytes.subarray(0, end).toString("utf8"), truncated: bytes.length > limit };
+}

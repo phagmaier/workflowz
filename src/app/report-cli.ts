@@ -1,6 +1,7 @@
 /** wf report is synchronous from the caller's perspective: success means durable acknowledgment. */
 import { closeSync, openSync, readSync } from "node:fs";
 import { request } from "node:http";
+import { scrubSecrets } from "../adapters/secrets.js";
 import { REPORT_BODY_LIMIT, REPORT_LIMITS, validateReport } from "../contracts/report.js";
 
 function fileText(file: string, max: number): string {
@@ -111,7 +112,7 @@ try {
   // Do not print arguments, endpoints, tokens, file contents, or raw transport errors.
   let message = error instanceof Error ? error.message : "report failed";
   const token = process.env["WF_REPORT_TOKEN"];
-  if (token) message = message.replaceAll(token, "[redacted]");
+  if (token) message = scrubSecrets(message, [token]);
   console.error(message);
   process.exitCode = 1;
 }

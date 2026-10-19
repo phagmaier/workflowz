@@ -37,7 +37,10 @@ export interface AgentInput {
   readonly allowedOutcomes: readonly string[];
   readonly timeoutMs?: number | undefined;
   readonly logPath?: string | undefined;
-  readonly reportAccess?: { readonly endpoint: string; readonly token: string } | undefined;
+  /** Redaction history remains in memory/private bridge stdin; only the current report token enters env. */
+  readonly reportAccess?:
+    | { readonly endpoint: string; readonly token: string; readonly secrets?: readonly string[] }
+    | undefined;
   readonly priorSessionId?: string | undefined;
 }
 
@@ -52,10 +55,18 @@ export interface AgentRunResult {
   readonly completionError?: boolean | undefined;
   readonly resumeUnavailable?: boolean | undefined;
   readonly stdout: string;
+  /** Scrubbed, bounded process evidence; independent of provider/session interpretation. */
+  readonly diagnostics?: {
+    readonly stderr: string;
+    readonly stdoutTruncated: boolean;
+    readonly stderrTruncated: boolean;
+  };
 }
 
 export interface AgentHandle {
   readonly pid: number | null;
+  /** Known injected authorization for runner-side rejection/scrubbing; never persisted. */
+  readonly secrets?: readonly string[];
   readonly sessionId?: string | undefined;
   readonly launchInfo?: {
     readonly harnessVersion: string;

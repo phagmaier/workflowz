@@ -12,8 +12,8 @@
  */
 import { type ChildProcess, spawn } from "node:child_process";
 import { createWriteStream, statSync, type WriteStream } from "node:fs";
-import { StringDecoder } from "node:string_decoder";
-import { OutputCapture } from "./output.js";
+import { boundedText, OutputCapture } from "./output.js";
+import { SecretFilter } from "./secrets.js";
 
 export interface ProcessSpec {
   readonly command: string;
@@ -59,6 +59,16 @@ export interface RunningProcess {
    * resolves once the process has ended and been reaped. Calling it again is harmless.
    */
   terminate(): Promise<void>;
+}
+
+/** A small durable diagnostic head; the capped raw stream log retains the surrounding evidence. */
+export function processDiagnostics(result: ProcessResult) {
+  const capture = boundedText(result.stderr, 4096);
+  return {
+    stderr: capture.text,
+    stdoutTruncated: result.stdoutTruncated,
+    stderrTruncated: result.stderrTruncated || capture.truncated,
+  };
 }
 
 const DEFAULT_GRACE_MS = 1_000;
@@ -119,14 +129,16 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
   );
   const streamsClosed = new Promise<void>((resolve) => child.once("close", () => resolve()));
 
+  // A final log filter also catches values reassembled at the stdout/stderr merge boundary.
+  const logFilter = new SecretFilter(spec.secrets ?? [], (chunk) => log?.write(chunk));
   const stdoutFilter = new SecretFilter(spec.secrets ?? [], (chunk) => {
     spec.onStdout?.(chunk);
     output.push(chunk);
-    log?.write(chunk);
+    logFilter.push(chunk);
   });
   const stderrFilter = new SecretFilter(spec.secrets ?? [], (chunk) => {
     stderr.push(chunk);
-    log?.write(chunk);
+    logFilter.push(chunk);
   });
   child.stdout?.on("data", (chunk: Buffer) => stdoutFilter.push(chunk));
   child.stderr?.on("data", (chunk: Buffer) => stderrFilter.push(chunk));
@@ -167,6 +179,7 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
       clearTimeout(escalation);
       stdoutFilter.end();
       stderrFilter.end();
+      logFilter.end();
       await log?.close();
       settled = true;
     }
@@ -328,34 +341,4 @@ function errorCode(error: unknown): string {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Retain enough suffix to recognize a secret split between adjacent chunks. */
-class SecretFilter {
-  private pending = "";
-  private readonly decoder = new StringDecoder("utf8");
-  constructor(
-    private readonly secrets: readonly string[],
-    private readonly write: (chunk: Buffer) => void,
-  ) {}
-  push(chunk: Buffer): void {
-    if (!this.secrets.length) {
-      this.write(chunk);
-      return;
-    }
-    this.pending += this.decoder.write(chunk);
-    this.flush(false);
-  }
-  end(): void {
-    this.pending += this.decoder.end();
-    this.flush(true);
-  }
-  private flush(final: boolean): void {
-    for (const secret of this.secrets)
-      if (secret) this.pending = this.pending.replaceAll(secret, "[redacted]");
-    const retain = final ? 0 : Math.max(0, ...this.secrets.map((s) => s.length - 1));
-    const count = Math.max(0, this.pending.length - retain);
-    if (count) this.write(Buffer.from(this.pending.slice(0, count)));
-    this.pending = this.pending.slice(count);
-  }
 }

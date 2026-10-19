@@ -204,6 +204,8 @@ export function describeAdapterConformance(
       const current = f.inputs[1]?.reportAccess;
       assert.ok(old && current);
       assert.notEqual(old.token, current.token);
+      assert.ok(current.secrets?.includes(old.token));
+      assert.ok(current.secrets?.includes(current.token));
       const response = await fetch(old.endpoint, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${old.token}` },

@@ -1,18 +1,21 @@
 /** Private, short-lived loopback channel. Tokens stay in memory and expire at invocation settlement. */
 import { randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { scrubSecrets } from "../adapters/secrets.js";
 import { REPORT_BODY_LIMIT, ReportRejected } from "../contracts/report.js";
 import type { RunCoordinator } from "../engine/run-coordinator.js";
 
 export interface ReportAccess {
   readonly endpoint: string;
   readonly token: string;
+  /** Known injected authorization, including retired tokens; memory-only, never child environment. */
+  readonly secrets: readonly string[];
 }
 
 export class ReportServer {
   private readonly tokens = new Map<string, string>();
+  // Retired values have no authority; retain only until channel close to prevent resume echoes.
   private secrets: string[] = [];
-  private attemptId: string | undefined;
   private server: Server | undefined;
   private endpoint = "";
 
@@ -41,15 +44,18 @@ export class ReportServer {
 
   issue(attemptId: string): ReportAccess {
     if (!this.server?.listening) throw new Error("report server is not listening");
-    if (this.attemptId !== attemptId) {
-      this.secrets = [];
-      this.attemptId = attemptId;
-    }
     this.tokens.clear();
     const token = randomBytes(32).toString("hex");
     this.tokens.set(token, attemptId);
     this.secrets.push(token);
-    return { endpoint: this.endpoint, token };
+    return { endpoint: this.endpoint, token, secrets: this.secrets };
+  }
+
+  /** Register adapter-injected credentials before yielding to any report request handlers. */
+  protect(access: ReportAccess, values: readonly string[]): void {
+    if (!this.tokens.has(access.token)) return;
+    for (const value of new Set(values))
+      if (value && !this.secrets.includes(value)) this.secrets.push(value);
   }
 
   revoke(access: ReportAccess): void {
@@ -117,8 +123,9 @@ export class ReportServer {
         reply(422, { error: "report must be valid JSON" });
         return;
       }
-      if (this.secrets.some((token) => JSON.stringify(value).includes(token))) {
-        reply(422, { error: "report must not contain report authorization" });
+      const serialized = JSON.stringify(value);
+      if (scrubSecrets(serialized, this.secrets) !== serialized) {
+        reply(422, { error: "report must not contain injected authorization" });
         return;
       }
       const accepted = this.coordinator.acceptReport(attemptId, value);

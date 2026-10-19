@@ -32,7 +32,8 @@ import {
   probeText,
   runProbeCommand,
 } from "./probe.js";
-import { startProcess } from "./process.js";
+import { processDiagnostics, startProcess } from "./process.js";
+import { environmentSecrets } from "./secrets.js";
 
 export interface PiAdapterOptions {
   readonly binary?: string;
@@ -197,6 +198,10 @@ export class PiAdapter implements AgentAdapter {
       source,
     );
     const events = new PiEvents(this.id);
+    const secrets = [
+      ...(input.reportAccess.secrets ?? [input.reportAccess.token]),
+      ...environmentSecrets(env),
+    ];
     const running = startProcess({
       command: this.options.binary ?? this.id,
       args: [
@@ -220,16 +225,12 @@ export class PiAdapter implements AgentAdapter {
       stdin: input.prompt,
       timeoutMs: input.timeoutMs,
       logPath: input.logPath,
-      secrets: [
-        input.reportAccess.token,
-        ...Object.entries(extra)
-          .filter(([name]) => /KEY|TOKEN/.test(name))
-          .map(([, value]) => value),
-      ],
+      secrets,
       onStdout: (chunk) => events.push(chunk),
     });
     return {
       pid: running.pid,
+      secrets,
       sessionId: prior,
       launchInfo: {
         harnessVersion: this.compatibility.version,
@@ -260,6 +261,7 @@ export class PiAdapter implements AgentAdapter {
           spawnError: result.spawnError,
           sessionId,
           stdout: result.stdout,
+          diagnostics: processDiagnostics(result),
           ...(clean && wrongSession ? { resumeUnavailable: true } : {}),
           ...(clean &&
           (!events.successful ||

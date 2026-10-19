@@ -1,5 +1,14 @@
+import { readFileSync, writeFileSync } from "node:fs";
+
 // Offline fault injection for the existing synthetic CLIs; never used by production adapters.
 export function probeReply(config, args, text) {
+  if (config.options.boundary) {
+    const file = process.argv[2];
+    const persisted = JSON.parse(readFileSync(file, "utf8"));
+    persisted.probeEnvironments ??= [];
+    persisted.probeEnvironments.push(Object.keys(process.env).sort());
+    writeFileSync(file, JSON.stringify(persisted));
+  }
   const key = args.includes("--version")
     ? "version"
     : (args.find((a) => ["resume", "serve", "run", "session"].includes(a)) ?? "help");

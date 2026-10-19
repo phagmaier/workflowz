@@ -55,6 +55,7 @@ npm run validate -- examples/overnight.yaml   # strict parse, compile, and path 
 npm run smoke:reporting      # real wf report + SQLite + fake-session correction, no model calls
 npm run smoke:tasks          # immutable Markdown import + fake task loop + persisted context
 npm run smoke:capabilities   # offline installed-feature preflight + real fixture reporting
+npm run smoke:boundaries     # synthetic credential/environment/log boundaries + real reporting
 npm run probe:harnesses      # isolated factory capability probes of codex, pi, omp, opencode, claude
 ```
 
@@ -122,7 +123,7 @@ The adapter sends prompts through stdin with `--print --input-format text --outp
 
 Default CLI session persistence stays enabled. The terminal UUID is the opaque session identity; resume passes only that exact UUID to `--resume`, with no recent-session selector, fork or fresh fallback. Unavailable sessions and mismatches fail explicitly. CLI version and `bypassPermissions` are audited. Runtime selects the base environment plus Claude config, explicit Anthropic auth/provider settings and report access, scrubbing injected tokens/keys. No global config is edited.
 
-The installed version is 2.1.303. Its offline missing-UUID check confirmed failure without a provider request. The real adapter passes all shared conformance tests against a synthetic CLI; authenticated persistence/resume, actual provider framing and tool environment remain live-smoke work. See [compatibility details](docs/harness-compatibility.md). Milestones 0.5 and 6.7–6.8 remain open.
+The installed version is 2.1.303. Its offline missing-UUID check confirmed failure without a provider request. The real adapter passes all shared conformance tests against a synthetic CLI; authenticated persistence/resume, actual provider framing and tool environment remain live-smoke work. See [compatibility details](docs/harness-compatibility.md). Milestones 0.5 and 6.8 remain open.
 
 ### OpenCode adapter (Phase 6.4)
 
@@ -134,7 +135,7 @@ After prompt acknowledgment, the adapter waits for idle and verifies matching id
 
 Model selection accepts `provider/model#variant`; `reasoning_effort` selects a named variant when an explicit unqualified model is supplied. Supplying both a model variant and reasoning effort is rejected rather than silently choosing one. Session-level `{action: "*", resource: "*", effect: "allow"}` rules select unrestricted permissions and are audited as `session-allow-all`. Unlike CLI `--auto`, these rules override denials for this session; global settings are unchanged. The private lease password and known injected provider/report credentials are scrubbed.
 
-The synthetic CLI passes the full shared conformance suite. Installed offline checks verified create-if-missing CLI behavior, non-creating exact API resume failure and terminal provider failure against an invalid provider without credentials. Authentication, successful live persistence/resume, actual provider execution and tool environment propagation remain unverified. See [compatibility details](docs/harness-compatibility.md). Milestones 0.5 and 6.7–6.8 remain open.
+The synthetic CLI passes the full shared conformance suite. Installed offline checks verified create-if-missing CLI behavior, non-creating exact API resume failure and terminal provider failure against an invalid provider without credentials. Authentication, successful live persistence/resume, actual provider execution and tool environment propagation remain unverified. See [compatibility details](docs/harness-compatibility.md). Milestones 0.5 and 6.8 remain open.
 
 
 ### omp adapter (Phase 6.5)
@@ -145,7 +146,7 @@ Launch uses stdin with `--print --mode json --approval-mode yolo`, optionally `-
 
 Dedicated persistent directories live under `omp-sessions` beside logs, or explicit `sessionDir`. The durable identity is an absolute journal path with matching UUID/header/cwd; the reader accepts omp's leading title slot. Resume passes that exact path to `--resume`, whose installed strict-open branch cannot create an absent file. Prefix/UUID/global/latest selectors, restore and forks are not used. Moved-away transcripts are refused before launch because omp otherwise forks them. Journals with malformed, truncated or over-1-MiB records are unavailable rather than partially trusted.
 
-Version and `yolo` are audited; explicit tool/user denials and provider safety policies still apply. Deliberate omp/provider environment selection and common secret scrubbing preserve report access without changing global configuration. The full shared offline suite and independent service/deletion-race smokes pass. Installed isolated startup needed an empty-schema fixture to get past a fresh-database initialization failure; no workaround was added to the adapter. Authentication, successful live sessions, actual provider framing and tool environment remain unverified. See [compatibility details](docs/harness-compatibility.md); 0.5 and 6.7–6.8 remain open.
+Version and `yolo` are audited; explicit tool/user denials and provider safety policies still apply. Deliberate omp/provider environment selection and common secret scrubbing preserve report access without changing global configuration. The full shared offline suite and independent service/deletion-race smokes pass. Installed isolated startup needed an empty-schema fixture to get past a fresh-database initialization failure; no workaround was added to the adapter. Authentication, successful live sessions, actual provider framing and tool environment remain unverified. See [compatibility details](docs/harness-compatibility.md); 0.5 and 6.8 remain open.
 
 ### Installed capability preflight (Phase 6.6)
 
@@ -156,6 +157,14 @@ The compiler uses static registry capabilities, including reasoning-effort suppo
 Resume capability does not establish that a particular session exists. Existing adapter-specific journal/API/CLI admission checks still enforce exact identity, cwd and no fresh fallback. Missing optional correction support never prevents fresh work; a clean missing report then follows the existing `system.report_error` policy without launching correction. Recreate adapters after changing/upgrading a CLI: snapshots do not continuously re-probe or attest to a binary that changes afterward.
 
 OpenCode's effective event-stream capability stays false. All current transports report structured-final-output support as false because the common report path is exclusively `wf report`; a harness's CLI schema flag alone does not implement a report fallback. No workflow fields, migrations, provider calls or approval gates were added. `npm run smoke:capabilities` independently exercises required-feature rejection, model preflight, supported fresh work, disabled correction and unsupported workflow resume, including SQLite reopen. Authentication/live-session/tool-environment checks remain separate work.
+
+### Adapter environment and logs (Phase 6.7)
+
+Every runner-owned adapter/probe child receives an explicit selected environment. OpenCode reselects the same environment for its nested private server. Existing harness configuration/authentication names and unrestricted permission modes are preserved; ordinary commands still receive the base allowlist plus every user-authored `env` override.
+
+Known injected credentials and report tokens are scrubbed before streaming observation, capture and capped disk logs, including canonical JSON/URL/Base64 forms and OpenCode's private Basic authorization. Known adapter credentials and retired report tokens remain redaction-only memory until the report channel closes; submissions containing these values are rejected before persistence. Invocation-settled events retain a scrubbed stderr head of at most 4 KiB plus capture-truncation flags. The existing 64 KiB stdout/stderr captures and 16 MiB combined stream logs retain useful session/terminal evidence; correction has its own `.log.correction` file. `npm run smoke:boundaries` independently exercises reporting, correction and provider failures through synthetic local CLIs, without providers.
+
+Environment selection is not isolation. Scrubbing recognizes known injected values and specified representations, not every unknown secret or arbitrary transformation. Harness-managed files, tool inheritance, resources and live provider behavior remain outside this offline guarantee. Exact selections, bounds and remaining limits are in [harness compatibility](docs/harness-compatibility.md#environment-and-diagnostic-boundary-audit-phase-67).
 
 ### Layout
 

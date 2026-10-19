@@ -2,12 +2,15 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { openCodeEnvironment } from "./opencode-environment.js";
 import { OPENCODE_RECORD_LIMIT, openCodeSessionId } from "./opencode-events.js";
+import { environmentSecrets, SecretFilter } from "./secrets.js";
 
 const requestSchema = z.strictObject({
   binary: z.string(),
   args: z.array(z.string()),
   password: z.string(),
+  secrets: z.array(z.string()).optional(),
   prompt: z.string(),
   prior: openCodeSessionId.optional(),
   model: z
@@ -41,7 +44,15 @@ async function main(): Promise<void> {
     input.binary,
     [...input.args, "serve", "--stdio", "--hostname", "127.0.0.1", "--port", "0"],
     {
-      env: { ...process.env, OPENCODE_PASSWORD: input.password },
+      env: openCodeEnvironment(process.env, {
+        ...(process.env.WF_REPORT_ENDPOINT === undefined
+          ? {}
+          : { WF_REPORT_ENDPOINT: process.env.WF_REPORT_ENDPOINT }),
+        ...(process.env.WF_REPORT_TOKEN === undefined
+          ? {}
+          : { WF_REPORT_TOKEN: process.env.WF_REPORT_TOKEN }),
+        OPENCODE_PASSWORD: input.password,
+      }),
       stdio: ["pipe", "pipe", "pipe"],
     },
   );
@@ -50,7 +61,27 @@ async function main(): Promise<void> {
     server.once("close", (code, signal) => resolve({ code, signal }));
   });
   server.stdin.on("error", () => {});
-  server.stderr.pipe(process.stderr);
+  // Filter before multiplexing server channels: interleaving partial stdout/stderr credentials
+  // would otherwise hide complete matches from the outer supervisor's stderr filter.
+  const secrets = [
+    ...environmentSecrets(process.env),
+    ...(input.secrets ?? []),
+    input.password,
+    Buffer.from(`opencode:${input.password}`).toString("base64"),
+  ];
+  const stdoutDiagnostics = diagnosticWriter();
+  const stderrDiagnostics = diagnosticWriter();
+  const stdoutFilter = new SecretFilter(secrets, (chunk) => stdoutDiagnostics.push(chunk));
+  const stderrFilter = new SecretFilter(secrets, (chunk) => stderrDiagnostics.push(chunk));
+  server.stderr.on("data", (chunk: Buffer) => stderrFilter.push(chunk));
+  server.stderr.on("end", () => {
+    stderrFilter.end();
+    stderrDiagnostics.end();
+  });
+  server.stdout.on("end", () => {
+    stdoutFilter.end();
+    stdoutDiagnostics.end();
+  });
   let ready = false;
   let pending = Buffer.alloc(0);
   const endpoint = new Promise<string>((resolve, reject) => {
@@ -61,7 +92,7 @@ async function main(): Promise<void> {
     server.once("exit", () => reject(new Error("OpenCode exited before readiness")));
     server.stdout.on("data", (chunk: Buffer) => {
       if (ready) {
-        process.stderr.write(chunk);
+        stdoutFilter.push(chunk);
         return;
       }
       if (pending.length + chunk.length > OPENCODE_RECORD_LIMIT) {
@@ -92,7 +123,7 @@ async function main(): Promise<void> {
         )
           throw new Error("OpenCode returned a non-loopback endpoint");
         ready = true;
-        process.stderr.write(pending.subarray(newline + 1));
+        stdoutFilter.push(pending.subarray(newline + 1));
         pending = Buffer.alloc(0);
         resolve(url.origin);
       } catch (error) {
@@ -205,6 +236,35 @@ async function main(): Promise<void> {
 }
 function emit(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value)}\n`);
+}
+
+/** Keep short diagnostic lines readable when merging channels; long/unterminated lines stay bounded. */
+function diagnosticWriter() {
+  let pending: Buffer = Buffer.alloc(0);
+  return {
+    push(chunk: Buffer): void {
+      pending = Buffer.concat([pending, chunk]);
+      while (pending.length) {
+        const newline = pending.indexOf(10);
+        let count = newline >= 0 && newline < 4096 ? newline + 1 : Math.min(4096, pending.length);
+        if (newline < 0 && pending.length < 4096) break;
+        const boundary = count;
+        if (newline < 0 || newline >= 4096)
+          while (
+            count < pending.length &&
+            ((pending[count] ?? 0) & 0xc0) === 0x80 &&
+            boundary - count < 3
+          )
+            count--;
+        process.stderr.write(pending.subarray(0, count));
+        pending = pending.subarray(count);
+      }
+    },
+    end(): void {
+      if (pending.length) process.stderr.write(pending);
+      pending = Buffer.alloc(0);
+    },
+  };
 }
 
 // This module is only executed as the adapter's private child, never imported by the engine.

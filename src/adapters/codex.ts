@@ -23,7 +23,8 @@ import {
   probeText,
   runProbeCommand,
 } from "./probe.js";
-import { startProcess } from "./process.js";
+import { processDiagnostics, startProcess } from "./process.js";
+import { environmentSecrets } from "./secrets.js";
 
 export interface CodexAdapterOptions {
   readonly binary?: string;
@@ -171,6 +172,10 @@ export class CodexAdapter implements AgentAdapter {
       "-",
     ];
     const events = new CodexEvents();
+    const secrets = [
+      ...(input.reportAccess.secrets ?? [input.reportAccess.token]),
+      ...environmentSecrets(env),
+    ];
     const running = startProcess({
       command: this.options.binary ?? "codex",
       args,
@@ -179,11 +184,12 @@ export class CodexAdapter implements AgentAdapter {
       stdin: input.prompt,
       timeoutMs: input.timeoutMs,
       logPath: input.logPath,
-      secrets: [input.reportAccess.token, ...(extra.CODEX_API_KEY ? [extra.CODEX_API_KEY] : [])],
+      secrets,
       onStdout: (chunk) => events.push(chunk),
     });
     return {
       pid: running.pid,
+      secrets,
       sessionId: input.priorSessionId,
       launchInfo: {
         harnessVersion: this.compatibility.version,
@@ -212,6 +218,7 @@ export class CodexAdapter implements AgentAdapter {
             ? { providerError: "Codex event stream did not confirm a successful turn" }
             : {}),
           stdout: result.stdout,
+          diagnostics: processDiagnostics(result),
         };
       }),
       terminate: running.terminate,

@@ -13,8 +13,8 @@ import {
   assertAdapterCapabilities,
   ResumeUnavailableError,
 } from "./agent-adapter.js";
-import { childEnvironment } from "./environment.js";
 import type { HarnessCapabilities } from "./harness-registry.js";
+import { openCodeEnvironment } from "./opencode-environment.js";
 import { isOpenCodeSessionId, OpenCodeEvents } from "./opencode-events.js";
 import {
   CapabilityProbeError,
@@ -24,7 +24,8 @@ import {
   probeText,
   runProbeCommand,
 } from "./probe.js";
-import { startProcess } from "./process.js";
+import { processDiagnostics, startProcess } from "./process.js";
+import { environmentSecrets } from "./secrets.js";
 
 export interface OpenCodeAdapterOptions {
   readonly binary?: string;
@@ -35,23 +36,6 @@ export interface OpenCodeAdapterOptions {
 export interface OpenCodeCompatibility extends AdapterCompatibility {}
 const WF_BIN = fileURLToPath(new URL("../../bin", import.meta.url));
 const BRIDGE = fileURLToPath(new URL("./opencode-bridge.js", import.meta.url));
-const ENV_NAMES = [
-  "XDG_CACHE_HOME",
-  "OPENCODE_CONFIG_DIR",
-  "OPENCODE_CONFIG",
-  "OPENCODE_DB",
-  "OPENCODE_DISABLE_MODELS_FETCH",
-  "OPENCODE_MODELS_PATH",
-  "OPENCODE_CONFIG_PROJECT_DISABLE",
-  "OPENCODE_DISABLE_CLAUDE_CODE",
-  "OPENAI_API_KEY",
-  "ANTHROPIC_API_KEY",
-  "ANTHROPIC_AUTH_TOKEN",
-  "GEMINI_API_KEY",
-  "GOOGLE_GENERATIVE_AI_API_KEY",
-  "OPENROUTER_API_KEY",
-] as const;
-
 /** Offline help/version only, isolated from user config/auth and the shared service. */
 export async function createOpenCodeAdapter(
   options: OpenCodeAdapterOptions = {},
@@ -165,45 +149,42 @@ export class OpenCodeAdapter implements AgentAdapter {
         }
       : undefined;
     const source = this.options.environment ?? process.env;
-    const extra: Record<string, string> = {};
-    for (const name of ENV_NAMES) if (source[name] !== undefined) extra[name] = source[name];
+
     const password = randomBytes(32).toString("base64url");
     const events = new OpenCodeEvents();
+    const env = openCodeEnvironment(source, {
+      PATH: `${path.resolve(this.options.wfBinDir ?? WF_BIN)}${path.delimiter}${source.PATH ?? ""}`,
+      WF_REPORT_ENDPOINT: input.reportAccess.endpoint,
+      WF_REPORT_TOKEN: input.reportAccess.token,
+    });
+    const secrets = [
+      ...(input.reportAccess.secrets ?? [input.reportAccess.token]),
+      password,
+      Buffer.from(`opencode:${password}`).toString("base64"),
+      ...environmentSecrets(env),
+    ];
     const running = startProcess({
       command: process.execPath,
       args: [BRIDGE],
       cwd: input.cwd,
-      env: childEnvironment(
-        {
-          ...extra,
-          PATH: `${path.resolve(this.options.wfBinDir ?? WF_BIN)}${path.delimiter}${source.PATH ?? ""}`,
-          WF_REPORT_ENDPOINT: input.reportAccess.endpoint,
-          WF_REPORT_TOKEN: input.reportAccess.token,
-        },
-        source,
-      ),
+      env,
       stdin: JSON.stringify({
         binary: this.options.binary ?? "opencode",
         args: this.options.prefixArgs ?? [],
         password,
+        secrets: input.reportAccess.secrets ?? [input.reportAccess.token],
         prompt: input.prompt,
         ...(prior === undefined ? {} : { prior }),
         ...(model === undefined ? {} : { model }),
       }),
       timeoutMs: input.timeoutMs,
       logPath: input.logPath,
-      secrets: [
-        input.reportAccess.token,
-        password,
-        Buffer.from(`opencode:${password}`).toString("base64"),
-        ...Object.entries(extra)
-          .filter(([name]) => /KEY|TOKEN/.test(name))
-          .map(([, value]) => value),
-      ],
+      secrets,
       onStdout: (chunk) => events.push(chunk),
     });
     return {
       pid: running.pid,
+      secrets,
       sessionId: prior,
       launchInfo: {
         harnessVersion: this.compatibility.version,
@@ -223,6 +204,7 @@ export class OpenCodeAdapter implements AgentAdapter {
           spawnError: result.spawnError ?? (uninterrupted ? (events.spawnError ?? null) : null),
           sessionId: prior ?? events.sessionId,
           stdout: result.stdout,
+          diagnostics: processDiagnostics(result),
           ...(uninterrupted &&
           prior !== undefined &&
           (events.resumeUnavailable || (clean && events.sessionId !== prior))

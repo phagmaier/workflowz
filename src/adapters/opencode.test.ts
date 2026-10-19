@@ -27,7 +27,7 @@ async function fixture(
   const settings = {
     binary: process.execPath,
     prefixArgs: [path.join(REPO_ROOT, "test/fixtures/fake-opencode.mjs"), config],
-    environment: { ...process.env, OPENCODE_CONFIG_DIR: root },
+    environment: { PATH: process.env.PATH, HOME: root, OPENCODE_CONFIG_DIR: root },
   };
   return { root, config, capture, settings, adapter: await createOpenCodeAdapter(settings) };
 }

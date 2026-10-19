@@ -12,6 +12,7 @@ import {
   type HarnessRegistry,
 } from "./harness-registry.js";
 import { startProcess } from "./process.js";
+import { environmentSecrets } from "./secrets.js";
 
 export interface CommandResult {
   readonly exitCode: number | null;
@@ -100,6 +101,7 @@ export async function runProbeCommand(
       args,
       cwd: process.cwd(),
       env: environment,
+      secrets: environmentSecrets(environment),
       timeoutMs: PROBE_TIMEOUT_MS,
       stdoutLimit: 4 * 1024 * 1024,
       stderrLimit: 4 * 1024 * 1024,
@@ -118,12 +120,12 @@ export async function runProbeCommand(
               ? "probe output exceeded the capture limit"
               : undefined),
     };
-  } catch (error) {
+  } catch {
     return {
       exitCode: null,
       stdout: "",
       stderr: "",
-      spawnError: error instanceof Error ? error.message : String(error),
+      spawnError: "probe supervision failed; process settlement is uncertain",
     };
   }
 }

@@ -14,7 +14,7 @@ import {
   ResumeUnavailableError,
 } from "../adapters/agent-adapter.js";
 import { childEnvironment } from "../adapters/environment.js";
-import { type ProcessResult, startProcess } from "../adapters/process.js";
+import { type ProcessResult, processDiagnostics, startProcess } from "../adapters/process.js";
 import { REPO_ROOT } from "./paths.js";
 
 export type AgentMode =
@@ -125,7 +125,7 @@ export class ScriptedAgentAdapter implements AgentAdapter {
       }),
       timeoutMs: input.timeoutMs,
       logPath: input.logPath,
-      secrets: input.reportAccess ? [input.reportAccess.token] : [],
+      secrets: input.reportAccess ? (input.reportAccess.secrets ?? [input.reportAccess.token]) : [],
     });
     return {
       pid: running.pid,
@@ -148,5 +148,6 @@ function toAgentResult(result: ProcessResult): AgentRunResult {
     terminated: result.terminated,
     spawnError: result.spawnError,
     stdout: result.stdout,
+    diagnostics: processDiagnostics(result),
   };
 }

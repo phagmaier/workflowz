@@ -27,7 +27,7 @@ async function fixture(
   const settings = {
     binary: process.execPath,
     prefixArgs: [path.join(REPO_ROOT, "test/fixtures/fake-pi.mjs"), config],
-    environment: { ...process.env, PI_CODING_AGENT_DIR: root },
+    environment: { PATH: process.env.PATH, HOME: root, PI_CODING_AGENT_DIR: root },
     sessionDir: path.join(root, "sessions"),
   };
   return { root, config, capture, settings, adapter: await createPiAdapter(settings) };

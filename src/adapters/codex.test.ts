@@ -27,7 +27,7 @@ async function fixture(
   const settings = {
     binary: process.execPath,
     prefixArgs: [path.join(REPO_ROOT, "test/fixtures/fake-codex.mjs"), config],
-    environment: { ...process.env, CODEX_HOME: root },
+    environment: { PATH: process.env.PATH, HOME: root, CODEX_HOME: root },
   };
   const adapter = await createCodexAdapter(settings);
   return { root, capture, config, settings, adapter };

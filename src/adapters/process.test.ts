@@ -5,7 +5,7 @@ import path from "node:path";
 import { after, describe, it } from "node:test";
 import { childEnvironment } from "./environment.js";
 import { OutputCapture } from "./output.js";
-import { startProcess } from "./process.js";
+import { processDiagnostics, startProcess } from "./process.js";
 
 const temporaryDirectories: string[] = [];
 after(() => {
@@ -52,6 +52,31 @@ const sh = (script: string, options: { timeoutMs?: number; cwd?: string; logPath
   });
 
 describe("startProcess", () => {
+  it("bounds durable diagnostics in bytes without splitting a final Unicode code point", async () => {
+    const result = await startProcess({
+      command: process.execPath,
+      args: ["-e", 'process.stderr.write("x".repeat(4095) + "🙂")'],
+      cwd: os.tmpdir(),
+      env: childEnvironment(),
+    }).completed;
+    const diagnostic = processDiagnostics(result);
+    assert.equal(diagnostic.stderr, "x".repeat(4095));
+    assert.equal(diagnostic.stderrTruncated, true);
+    assert.ok(Buffer.byteLength(diagnostic.stderr) <= 4096);
+  });
+  it("scrubs credentials reassembled where stdout and stderr merge into the disk log", async () => {
+    const logPath = path.join(scratch(), "merged.log");
+    const result = await startProcess({
+      command: process.execPath,
+      args: ["-e", 'process.stdout.write("synthetic-"); process.stderr.write("credential")'],
+      cwd: os.tmpdir(),
+      env: childEnvironment(),
+      secrets: ["synthetic-credential"],
+      logPath,
+    }).completed;
+    assert.equal(result.exitCode, 0);
+    assert.equal(readFileSync(logPath, "utf8"), "[redacted]");
+  });
   it("writes stdin to completion and streams scrubbed output beyond the capture limit", async () => {
     const prompt = "prompt🙂\n".repeat(100_000);
     const observed: Buffer[] = [];

@@ -23,6 +23,8 @@ import {
   type RunningCommand,
   startCommand,
 } from "../adapters/command-executor.js";
+import { boundedText } from "../adapters/output.js";
+import { scrubSecrets } from "../adapters/secrets.js";
 import type { TaskOverrideEdit, WorkflowRevisionInput } from "../contracts/run-configuration.js";
 import type { RunStatus } from "../contracts/run-state.js";
 import {
@@ -344,14 +346,15 @@ export class RunService {
           terminated: false,
           spawnError:
             error instanceof AdapterPreflightError
-              ? error.message.replaceAll(access.token, "[redacted]")
+              ? scrubSecrets(error.message, access.secrets)
               : "adapter launch failed",
           stdout: "",
         };
       }
       this.current = running;
+      this.reports.protect(access, running.secrets ?? []);
       const sessionId = running.sessionId;
-      if (sessionId?.includes(access.token)) {
+      if (sessionId !== undefined && scrubSecrets(sessionId, access.secrets) !== sessionId) {
         await running.terminate();
         this.current = undefined;
         return {
@@ -366,7 +369,12 @@ export class RunService {
       }
       try {
         this.coordinator.recordInvocation(attemptId, invocation, "started", {
-          ...running.launchInfo,
+          ...(running.launchInfo
+            ? {
+                harnessVersion: scrubSecrets(running.launchInfo.harnessVersion, access.secrets),
+                permissionMode: scrubSecrets(running.launchInfo.permissionMode, access.secrets),
+              }
+            : {}),
           pid: running.pid,
           sessionId,
           logPath: input.logPath,
@@ -382,7 +390,7 @@ export class RunService {
         if (result.spawnError)
           result = {
             ...result,
-            spawnError: result.spawnError.replaceAll(access.token, "[redacted]"),
+            spawnError: scrubSecrets(result.spawnError, access.secrets),
           };
       } catch {
         await running.terminate();
@@ -400,15 +408,30 @@ export class RunService {
       this.current = undefined;
       // The adapter must positively identify the same persisted session on correction.
       const finalSession = result.sessionId ?? sessionId;
-      if (finalSession?.includes(access.token)) return { ...result, completionError: true };
+      if (finalSession !== undefined && scrubSecrets(finalSession, access.secrets) !== finalSession)
+        return { ...result, completionError: true };
       const wrongSession = invocation === 1 && finalSession !== input.priorSessionId;
       const observed = settlementForAgent(result, input.allowedOutcomes);
+      // Defend this durable boundary too, including adapters supplied by API callers.
+      const stderr = boundedText(
+        scrubSecrets(result.diagnostics?.stderr ?? "", access.secrets),
+        4096,
+      );
       this.coordinator.recordInvocation(attemptId, invocation, "settled", {
         pid: running.pid,
         sessionId: wrongSession ? input.priorSessionId : finalSession,
         logPath: input.logPath,
         exitCode: result.exitCode,
         timedOut: result.timedOut,
+        ...(result.diagnostics
+          ? {
+              diagnostics: {
+                stderr: stderr.text,
+                stdoutTruncated: result.diagnostics.stdoutTruncated,
+                stderrTruncated: result.diagnostics.stderrTruncated || stderr.truncated,
+              },
+            }
+          : {}),
         failure: wrongSession
           ? "system.resume_unavailable"
           : observed.kind === "system" && observed.code !== "system.report_error"
@@ -416,7 +439,7 @@ export class RunService {
             : undefined,
       });
       this.coordinator.recordOutput(attemptId, {
-        stdout: result.stdout.replaceAll(access.token, "[redacted]"),
+        stdout: scrubSecrets(result.stdout, access.secrets),
         logPath: input.logPath ?? null,
       });
       return wrongSession ? undefined : result;

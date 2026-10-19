@@ -5,6 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { boundaryEvidence } from "./boundary-controls.mjs";
 import { probeReply } from "./probe-controls.mjs";
 
 const [configFile, ...args] = process.argv.slice(2);
@@ -148,6 +149,7 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (operation === "prompt") {
+      await boundaryEvidence(config);
       if (script.mode === "delete-at-admission") {
         res.writeHead(404);
         send({ _tag: "SessionNotFoundError", sessionID: id });

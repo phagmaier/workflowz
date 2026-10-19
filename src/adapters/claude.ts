@@ -23,7 +23,8 @@ import {
   probeText,
   runProbeCommand,
 } from "./probe.js";
-import { startProcess } from "./process.js";
+import { processDiagnostics, startProcess } from "./process.js";
+import { environmentSecrets } from "./secrets.js";
 
 export interface ClaudeAdapterOptions {
   readonly binary?: string;
@@ -140,6 +141,10 @@ export class ClaudeAdapter implements AgentAdapter {
       source,
     );
     const events = new ClaudeEvents();
+    const secrets = [
+      ...(input.reportAccess.secrets ?? [input.reportAccess.token]),
+      ...environmentSecrets(env),
+    ];
     const running = startProcess({
       command: this.options.binary ?? "claude",
       args: [
@@ -161,16 +166,12 @@ export class ClaudeAdapter implements AgentAdapter {
       stdin: input.prompt,
       timeoutMs: input.timeoutMs,
       logPath: input.logPath,
-      secrets: [
-        input.reportAccess.token,
-        ...Object.entries(extra)
-          .filter(([name]) => /KEY|TOKEN/.test(name))
-          .map(([, value]) => value),
-      ],
+      secrets,
       onStdout: (chunk) => events.push(chunk),
     });
     return {
       pid: running.pid,
+      secrets,
       sessionId: prior,
       launchInfo: {
         harnessVersion: this.compatibility.version,
@@ -192,6 +193,7 @@ export class ClaudeAdapter implements AgentAdapter {
           // No mismatched identity can replace the requested durable session, even on provider failure.
           sessionId: prior ?? events.sessionId,
           stdout: result.stdout,
+          diagnostics: processDiagnostics(result),
           ...(uninterrupted &&
           prior !== undefined &&
           ((clean && wrongSession) || (events.resumeUnavailable && events.sessionId === prior))

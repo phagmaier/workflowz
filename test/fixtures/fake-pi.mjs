@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { boundaryEvidence } from "./boundary-controls.mjs";
 import { probeReply } from "./probe-controls.mjs";
 
 const [configFile, ...args] = process.argv.slice(2);
@@ -50,6 +51,7 @@ if (!isResume && script.mode !== "unpersisted-session")
 const chunks = [];
 for await (const chunk of process.stdin) chunks.push(chunk);
 const prompt = Buffer.concat(chunks).toString("utf8");
+await boundaryEvidence(config);
 if (config.capture)
   writeFileSync(
     config.capture,

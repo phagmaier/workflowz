@@ -113,6 +113,20 @@ describe("harness probe", () => {
     assert.equal(result.spawnError, undefined);
   });
 
+  it("scrubs explicitly selected synthetic probe credentials on failure", async () => {
+    const result = await runProbeCommand(
+      process.execPath,
+      [
+        "-e",
+        'process.stdout.write(Buffer.from(process.env.API_TOKEN).toString("base64")); process.stderr.write(process.env.API_TOKEN); process.exitCode = 7',
+      ],
+      { API_TOKEN: "synthetic-probe-credential" },
+    );
+    assert.equal(result.exitCode, 7);
+    assert.equal(result.stdout, "[redacted]");
+    assert.equal(result.stderr, "[redacted]");
+  });
+
   it("cleans up descendants left by an offline command before resolving", async () => {
     const result = await runProbeCommand(process.execPath, [
       "-e",
