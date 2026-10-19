@@ -353,3 +353,23 @@ PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run ch
 ```
 
 Typecheck and lint passed; **697 tests passed, 75 suites, zero failures/cancellations/skips**. Biome checked **113 files**, with **115 informational suggestions** and no errors. These tests are offline; they neither retried the failed authenticated path nor authorized further live execution.
+
+## Remaining milestone 0.5 — offline omp authentication investigation
+
+Started from clean `main` at `a16463b`, following `2bb70d0` and `27cd439`, matching the requested checkout. Read the required guidance/evidence in order. No subagents, handoff document, Phase 7, daemon, management CLI or UI work.
+
+Read versioned official omp 18.12.2 provider, environment, model and CLI references, plus the public bundled catalog. Context7 rejected its configured API key. Independently exercised the installed binary's offline `read omp://docs/providers.md` surface with `env -i`, disposable HOME/agent/XDG directories/cwd/TMPDIR, no credentials and telemetry initialization disabled. It exited 0 and confirmed provider-scoped authentication/precedence. Explicitly removed the owned `.tmp-omp-auth-docs-GjcLOs` scratch directory and checked that it no longer existed; no deferred EXIT trap was relied on.
+
+Graph-first discovery and exact-path coverage for `home-phagmaier-Code-workflowz` still reported adapter source `not_tracked`; direct source reads verified the existing omp selection in `src/adapters/pi.ts`. Both OpenAI credential variables are already forwarded when supplied. No exported symbol or runtime code changed.
+
+Recorded [offline findings and a minimal unapproved execution proposal](harness-compatibility.md#omp-authentication-prerequisite--offline-findings): `openai` uses `OPENAI_API_KEY`, while `OPENAI_CODEX_OAUTH_TOKEN` belongs to the separate `openai-codex` provider. The public versioned Luna row supports low effort; that is catalog evidence, not account entitlement or live compatibility. Credential precedence, profile/broker selection and launch-cwd dotenv discovery remain owner-controlled and uninspected. The disposable smoke target cannot assume another project's dotenv credentials.
+
+Usable authentication for the intended omp `openai` path remains the prerequisite. No credential files, global configuration, normal harness state or retained live artifacts were inspected or changed; no authentication check, login, model refresh, provider request or failed-path retry was performed. The stopped authorization was not resumed. All three remaining-harness correction scenarios remain unrun; milestone 0.5 is unchecked and the satisfied Phase 6 gate is unchanged. The proposed future pass omits successful paid scenarios: omp report, then Claude/OpenCode/omp corrections, at most seven sequential invocations with 60-second originals/30-second corrections, stop at first failure. Provisioning and execution both require new authorization.
+
+Offline verification using Node.js **v26.8.2**:
+
+```bash
+PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run check
+```
+
+Typecheck/lint passed; **697 tests passed, 75 suites, zero failures/cancellations/skips**. Biome checked **113 files**, with **115 informational suggestions** and no fixes applied. The installed documentation read and public-catalog inspection made no inference/provider requests. Only these two evidence documents changed; no tests, dependencies, migrations, schema or architecture contracts changed.

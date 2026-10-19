@@ -375,3 +375,36 @@ omp `18.12.2` launched once with requested `openai/gpt-6-luna`/low and `yolo`, t
 **Observed diagnostic credential exposure:** OpenCode's normal MCP startup diagnostics included a configured MCP API key not known to the runner's injected-value scrubber. The value is deliberately omitted here and was not committed; do not publish the raw log or database. The containing artifact directory is mode 0700; the runner-owned log and database were additionally restricted to 0600 without rewriting their contents. This confirms the documented unknown-secret limitation, not an all-secrets scrub guarantee. Treat the exposed MCP key as sensitive and rotate/revoke it through its owner if valid; no global config/authentication change or automatic revocation was performed.
 
 Milestone **0.5 stays unchecked** for the unverified correction/session paths and omp authentication. Phase 6's Codex/Pi gate remains satisfied. Any further execution requires new authorization; resolving omp credentials or selecting another provider is not authorized by this stopped pass.
+
+### omp authentication prerequisite — offline findings
+
+Investigated on 2026-10-19 without retrying the failed execution or inspecting user credentials/configuration. The installed 18.12.2 bundled provider documentation agrees with the versioned official references below.
+
+- **Provider identity matters.** `openai/gpt-6-luna` selects provider `openai`; its documented environment credential is `OPENAI_API_KEY`. `openai-codex` is a separate provider whose environment credential is `OPENAI_CODEX_OAUTH_TOKEN`. Codex/Pi/current-assistant authentication is not evidence of an available credential for omp's `openai` provider. Changing to an `openai-codex/...` selector would be a provider change requiring new approval, not an authentication repair for the approved selector.
+- **The selector exists in the versioned public catalog.** The v18.12.2 `models.json` entry for `openai/gpt-6-luna` specifies `openai-responses`, `https://api.openai.com/v1`, reasoning support and effort levels including `low`. This establishes bundled catalog metadata only—not this account's entitlement, effective local catalog/configuration, actual model usage or successful inference. Exact provider/model references precede fuzzy matching; preserve the explicit selector and verify actual-model evidence when available.
+- **Credentials have precedence.** Documented resolution is runtime override, configured `models.yml` key, stored OAuth, login-sourced stored API key, extension config fallback, provider environment, then other stored API keys. Supplying an environment variable need not override higher-priority credentials. Profiles/config roots and auth-broker mode can change the active store. No active store, key value, profile setting or broker configuration was inspected.
+- **No runner allowlist fix is indicated.** `src/adapters/pi.ts` already selects both `OPENAI_API_KEY` and `OPENAI_CODEX_OAUTH_TOKEN` for omp when supplied by the caller's environment, alongside the existing config/profile/broker names. The failed run proves only that native resolution found no usable credential for `openai` on that invocation; it does not identify which credential source was absent or why.
+- **The disposable target changes project discovery.** omp documents launch-cwd `.env` discovery, followed by active agent/config-root/home `.env` files, with nonempty process values first. The smoke runs under its generated `wf-*/project`, not this checkout or another existing project. A key available only through another project's `.env` therefore cannot be assumed available to this path. This is a documented distinction, not an observed cause; no `.env` file was read or copied.
+
+The owner-controlled prerequisite is usable authentication for **omp provider `openai`** in the normal environment/profile used by the smoke. The owner can provision it through their normal secret-management/harness setup; do not paste secrets into chat, put keys in workflow YAML/argv, copy another harness's auth files, add dummy credentials or change providers to bypass this prerequisite. No provisioning or login is authorized here. Native login can refresh the catalog online, so it is not an offline diagnostic. Catalog availability alone is not credential validation; no new auth/status/usage/model-refresh command was run against user state.
+
+Sources:
+
+- [v18.12.2 providers](https://github.com/can1357/oh-my-pi/blob/v18.12.2/docs/providers.md#credentials-and-precedence) — provider-scoped auth, precedence, provider environment mapping and dotenv discovery. Independently read with the installed binary's `read omp://docs/providers.md` command using empty inherited environment and disposable HOME/config/state/cache/cwd/TMPDIR.
+- [v18.12.2 model resolution](https://github.com/can1357/oh-my-pi/blob/v18.12.2/docs/models.md#runtime-model-resolution) and [public bundled catalog](https://github.com/can1357/oh-my-pi/blob/v18.12.2/packages/catalog/src/models.json) — exact selector and Luna metadata, not a live account probe.
+- [v18.12.2 environment reference](https://github.com/can1357/oh-my-pi/blob/v18.12.2/docs/environment-variables.md#1-modelprovider-authentication) and [CLI reference](https://github.com/can1357/oh-my-pi/blob/v18.12.2/docs/cli-reference.md#model-selection) — credential namespaces, discovery and model/thinking selectors.
+
+Context7 again rejected its configured API key; public versioned sources and installed bundled documentation supplied the evidence. The isolated documentation command exited 0; its owned scratch directory was explicitly removed and absence checked. No normal harness state or retained live artifacts were opened, changed or published.
+
+#### Minimal remaining execution proposal — not authorized
+
+Only after owner-controlled authentication provisioning and **new explicit approval** of these exact selections/bounds:
+
+| Order | Harness | Scenario | Model / effort | Maximum invocations |
+| --- | --- | --- | --- | --- |
+| 1 | omp | report | `openai/gpt-6-luna` / low | 1 |
+| 2 | Claude Code | correction | `claude-haiku-5-5` / low | 2 |
+| 3 | OpenCode | correction | `openai/gpt-6-luna` / low | 2 |
+| 4 | omp | correction | `openai/gpt-6-luna` / low | 2 |
+
+This omits successful Codex/Pi scenarios and successful Claude/OpenCode direct reports. Four standalone workflows, at most **seven sequential harness invocations**, originals at most 60 seconds and corrections at most 30 seconds: **330 seconds maximum configured agent execution**, excluding builds/probes/status/cleanup. Preserve the existing artifact parent, normal resources, unrestricted permissions, real helper acknowledgment, exact-session and durable-reopen assertions. Review each result before advancing; stop on first failure, uncertain cleanup or observed model substitution. No fallback, increased reasoning, provider switch, extra paid diagnostics or runner retries. Native retries/resources can add requests; no dollar cap is enforceable. OpenCode still lacks independent actual-model evidence and its private artifacts must not be published. This proposal authorizes neither provisioning nor execution; milestone 0.5 remains unchecked.
