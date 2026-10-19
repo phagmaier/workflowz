@@ -1,2 +1,5 @@
 #!/bin/sh
-exec node "$(dirname "$0")/../dist/app/report-cli.js" "$@"
+case "$1" in
+  report) exec node "$(dirname "$0")/../dist/app/report-cli.js" "$@" ;;
+  *) exec node "$(dirname "$0")/../dist/app/management-cli.js" "$@" ;;
+esac

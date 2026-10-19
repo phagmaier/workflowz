@@ -534,3 +534,58 @@ npm run smoke:boundaries
 The complete 16-file implementation/documentation change set was reviewed. **7.2 is checked only after these acceptance results**; 7.3–7.5 remain unchecked and require new authorization.
 
 No provider/authentication execution, real credential-file inspection, global harness configuration changes, dependencies, management daemon/CLI/UI or Phase 7.3–7.5 implementation was added. Adapter/report/session contracts and unrestricted permission selections remain unchanged; no post-change live compatibility claim is made. Operator confirmation is trust, not an automated absence/isolation guarantee: false assertions or escaped descendants can still permit overlapping external work. `/proc` checks and signalling remain non-atomic, and no rollback or successful-side-effect inference is claimed.
+
+## Phase 7.3 — management CLI and its local daemon/API
+
+The owner's current request explicitly authorized 7.3 and the minimum daemon/API scaffolding required by independent management clients. It did not authorize 7.4–7.5, UI work, subagents, provider execution, or commit/push. Began on clean `main` at `012666b`, read the required guidance/design/example/acceptance files, and independently confirmed the 736-test / 81-suite baseline, example validation and recovery/reporting/boundary smokes. Initial sandbox checks could not bind loopback (`EPERM`); expanded offline execution was allowed. A sandbox test process was stopped before cleaning its session-owned failed fixture scratch and rerunning. No automatic approval rejection occurred.
+
+Graph-first discovery initially found no relevant source symbols and coverage reported `not_tracked`; source reads supplied the implementation evidence. Later refreshed graph metadata covered the relevant files and tracing confirmed reuse of the existing factory/service path. No subagents, live harness calls, real credential-file inspection, global config edits or new dependencies were used.
+
+Design and implementation:
+
+- Explicit foreground `wf daemon start`, without auto-start/detachment. State selection is explicit flag, then `WF_STATE_DIR`, then XDG/user state default `workflowz`. A private current-user directory contains SQLite/lease/WAL, logs/session artifacts and atomically published owner-only discovery. The existing canonical database lease admits exactly one writer; competing startup cannot replace discovery. Restart rotates management authority and reconciles without dispatch/signals.
+- Strict management RPC contracts live in contracts; the loopback HTTP/CLI plumbing lives in app. The daemon owns one reusable `RunService`, serializes async controls and rejects overlap while inspection stays available. Start/resume acknowledge the run ID and retain daemon-owned drive; no queue or automatic client retry. The service stop flag now resets before a subsequent admitted drive. Stop awaits only the drive belonging to the requested run, not an unrelated active run.
+- Workflow validate/import/list, task preview, ready-run creation from text/imported revision, run listing/status/events/tasks/reports, pause/stop/resume, explicit overrides, task settings, revisions and the existing strict recovery actions are exposed. Import reuses immutable revision storage; no named-workflow CRUD, new schema migration, task re-import or YAML/report fields were added. Local CLI/API validation and the existing npm validator share one implementation.
+- Existing-run control checks the inspected event cursor, including after async offline adapter probes. Interrupted runs cannot bypass exact-attempt recovery via normal resume/override/stop. Existing outcomes, audited reasons, task-compatible cursor checks, process barriers and transaction rules remain authoritative. Event listing uses an exclusive cursor and bounded page; status exposes executor/model, elapsed time and meaningful task counts.
+- SIGINT/SIGTERM/API shutdown requests pause-after-current, drains admitted control and drive/report/log settlement, then closes discovery/database. Shutdown acknowledgment is admission; a stage without a timeout can delay exit. Unexpected drive failures expose a safe notice and conservatively reconcile; retained reports never route uncertain work.
+- `bin/wf` routes only its first-argument `report` to the unchanged report client. Management tokens stay out of attempt environment/argv/state/history and use a separate listener. Real-token tests reject an attempt token at management (401) and the owner token at reporting (410). Same-user file access and escaped-descendant/non-atomic process limits remain explicit; no isolation/rollback claim is added.
+
+Focused verification initially passed 8/9 new tests; the failing test helper incorrectly put management flags before `report`. Corrected the helper to invoke the preserved report syntax; all 13 focused management/validation tests then passed. Review added actual cross-token assertions, an interrupted-stop barrier test, and a regression case for stopping a saved run while an unrelated drive remains held. Command fixtures now await an explicit release file with a bounded timeout instead of assuming CLI calls finish inside a fixed sleep window. The first complete post-implementation gate passed 745 tests / 83 suites before these final review additions.
+
+Final acceptance on Node.js **v26.8.2**, executed sequentially with `TMPDIR=/home/phagmaier/Code/workflowz/.tmp-phase73-work` and expanded permission for offline loopback/process fixtures:
+
+```bash
+npm run check
+npm run smoke:recovery
+npm run smoke:reporting
+npm run validate -- examples/overnight.yaml
+npm run smoke:boundaries
+```
+
+- **Full gate: 746 tests / 83 suites passed**, zero failures/cancellations/skips; typecheck and Biome lint passed. Biome checked 134 files, with 129 informational suggestions, no errors and no gate-time fixes. All five adapters retain their complete offline conformance. Earlier 745-test gates also passed before the final shutdown-admission test.
+- **Management process coverage:** 10 tests in two suites, covering strict contracts/default selection, local validation without daemon, immutable definition import, checklist preview/create, run listing/status, event pagination, wrong-state/unknown/stale failures, competing writer/discovery protection, one active drive, owned stop and service reuse, unrelated saved-run stop, SIGTERM pause-after-current and explicit restart/resume, task settings/manual actions/revisions, real reporting with one exact-session correction, actual cross-token refusal, unsafe discovery/origin/body refusal, and agent crash/reopen without replay with retained report and exact recovery termination/end. API shutdown closes control admission before acknowledgment, remains inspectable while draining and never dispatches the next stage.
+- **Recovery smoke:** all four real owner-crash boundaries passed with explicit recovery decisions, durable reopen, no automatic replay, and owned process/artifact cleanup. **Reporting smoke:** durable acknowledgment before settlement, direct reporting, exactly one successful correction and one failed correction routing `system.report_error` passed. **Boundary smoke:** OpenCode/Claude synthetic correction and provider-failure paths retained scrubbing, selected environment, sequential settlement and SQLite reopen.
+- **Canonical example:** valid, **8 steps, zero warnings**, unchanged definition hash prefix `8a4912284968`. Workflow/report schemas and harness compatibility evidence remain unchanged; no paid/live scenario was repeated.
+
+Reviewed the complete implementation/documentation changes and retained append-only migrations 1–8 without edits. Test/fixture cleanup explicitly reaped daemon children and checked attempt process identities before terminating any surviving owned group. Inspected session scratch (verification logs and Node compile cache), removed it explicitly and verified absence of both the session scratch and `.tmp-management-*` fixture directories. Final diff/format checks passed. **Only 7.3 is checked** after these results; 7.4–7.5 and Phases 8–9 remain unchecked. Changes remain uncommitted/unpushed pending the owner's requested approval gate.
+
+### Phase 7.3 review fixes
+
+Resolved all four review findings within the existing uncommitted management implementation:
+
+- Shutdown admission now synchronously requests pause before the daemon acknowledges shutdown. Teardown rechecks after admitted controls settle, then awaits the drive. A gated real fake-agent attempt proves settlement before deferred teardown cannot dispatch the next command.
+- Existing-run start/resume and revision exclude the consumed checklist from path checks. Creation still requires the source; live prompt/instruction inputs still receive their existing checks. A separate-process CLI test removes the checklist before start, pauses, revises and resumes, then verifies the same imported task ID reaches completion.
+- The management client uses the HTTP response's streaming UTF-8 decoder. Success and error responses split into one-byte HTTP chunks preserve accented text, CJK characters and emoji.
+- Status without an active attempt uses the current task's saved settings. Tests cover paused model overrides, replacement, clearing to the base model, and agreement with the model passed to the resumed fake adapter. Active attempts retain their frozen settings.
+
+All four findings reproduced in focused regression tests before the fixes. Added six tests in total; the focused management/path run passed **21 tests / 5 suites**. The initial sandbox run could not execute the local listener/process fixtures; the expanded offline execution path passed without provider calls.
+
+Final verification on Node.js **v26.8.2**:
+
+- `npm run check`: typecheck/lint passed; **752 tests / 85 suites passed**, zero failures/cancellations/skips. Biome checked 136 files with existing informational suggestions only. Output: `/tmp/workflowz-review-check.log`.
+- `node dist/app/validate-cli.js examples/overnight.yaml`: valid, **8 steps, zero warnings**, unchanged definition hash prefix `8a4912284968`.
+- `git diff --check`: passed. Management fixture directories were removed by test cleanup.
+
+README, specification and architecture now state the immutable-task admission and effective-status behavior and the shutdown ordering. No further milestone, provider execution, subagent, dependency, migration or global harness configuration change was introduced. Changes remain uncommitted/unpushed.
+
+Final owner-approval review covered all 24 changed files, including 11 untracked implementation/test files, and found no additional actionable issues. A fresh expanded offline `npm run check` passed typecheck/lint and **752 tests / 85 suites**, with zero failures/cancellations/skips; output is `/tmp/workflowz-phase73-owner-review-check.log`. The canonical example again validated with 8 steps, zero warnings and hash prefix `8a4912284968`; `git diff --check` passed and management fixture cleanup was confirmed. The owner then explicitly approved committing and pushing Phase 7.3. This approval does not authorize Phase 7.4 implementation or additional provider execution.

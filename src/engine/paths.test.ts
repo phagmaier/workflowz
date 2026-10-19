@@ -62,6 +62,29 @@ describe("checkReferencedPaths", () => {
     );
   });
 
+  it("excludes a consumed task source while still checking live instruction and prompt files", () => {
+    const result = checkWorkflowText(
+      workflowText(
+        "tasks:\n  source: {kind: markdown_checklist, path: tasks.md}\nstart: work\nsteps:\n  work:\n    kind: agent\n    harness: codex\n    session: fresh\n    instructions: [instructions.md]\n    prompt_file: prompt.md\n    outcomes: [complete]\n    on:\n      complete: {goto: done}\n  done: {kind: end}\n",
+      ),
+      { workflowDir: "/project" },
+    );
+    assert.ok(result.compiled);
+    const diagnostics = checkReferencedPaths(
+      result.compiled,
+      fakeFs({ "/project": "directory" }),
+      result.locate,
+      { taskSourceConsumed: true },
+    );
+    assert.deepEqual(
+      diagnostics.map((diagnostic) => diagnostic.path),
+      [
+        ["steps", "work", "prompt_file"],
+        ["steps", "work", "instructions", 0],
+      ],
+    );
+  });
+
   it("reports a missing project root or a root that is not a directory", () => {
     const result = checkWorkflowText(
       workflowText("start: done\nsteps:\n  done:\n    kind: end\n"),

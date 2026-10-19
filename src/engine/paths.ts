@@ -20,6 +20,7 @@ export function checkReferencedPaths(
   compiled: CompiledWorkflow,
   stat: StatFn,
   locate?: (diagnosticPath: DiagnosticPath) => SourceLocation | undefined,
+  options: { taskSourceConsumed?: boolean } = {},
 ): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const report = (diagnosticPath: DiagnosticPath, message: string) => {
@@ -40,7 +41,8 @@ export function checkReferencedPaths(
     );
   }
 
-  if (compiled.tasksSourcePath !== undefined) {
+  // Existing runs use their immutable task import; only live inputs still require the source.
+  if (compiled.tasksSourcePath !== undefined && !options.taskSourceConsumed) {
     expectFile(compiled.tasksSourcePath, ["tasks", "source", "path"], "task source");
   }
   compiled.instructions.forEach((absolutePath, index) => {

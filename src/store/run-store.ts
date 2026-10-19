@@ -654,10 +654,24 @@ export class RunStore {
       );
   }
 
-  listEvents(runId: string): EventRow[] {
+  listRuns(): RunRow[] {
     const rows = this.database
-      .prepare("SELECT * FROM events WHERE run_id = ? ORDER BY event_id")
-      .all(runId) as Raw[];
+      .prepare("SELECT run_id FROM runs ORDER BY created_at, run_id")
+      .all() as { run_id: string }[];
+    return rows.map((row) => this.getRun(row.run_id));
+  }
+
+  listRevisions(): RevisionRow[] {
+    const rows = this.database
+      .prepare("SELECT revision_id FROM workflow_revisions ORDER BY revision_id")
+      .all() as { revision_id: number }[];
+    return rows.map((row) => this.getRevision(row.revision_id));
+  }
+
+  listEvents(runId: string, after = 0, limit = -1): EventRow[] {
+    const rows = this.database
+      .prepare("SELECT * FROM events WHERE run_id = ? AND event_id > ? ORDER BY event_id LIMIT ?")
+      .all(runId, after, limit) as Raw[];
     return rows.map((row) => ({
       eventId: row["event_id"] as number,
       revisionId: (row["revision_id"] as number | null) ?? null,

@@ -44,7 +44,7 @@ Monorepo packages are optional organizational boundaries; use a single repositor
 
 ## 2. Durable state model
 
-SQLite is authoritative. Store DB and run artifacts under a user-level application state directory, not inside the target project repository, e.g. `${XDG_STATE_HOME:-~/.local/state}/agent-workflow/`. The project contains only user-authored workflow files and optional input docs. File paths stored in DB should be absolute or normalized at run creation.
+SQLite is authoritative. The production default for DB and run artifacts is `${XDG_STATE_HOME:-~/.local/state}/workflowz/`, with `WF_STATE_DIR` and higher-precedence `--state-dir` overrides. The project contains user-authored workflow files and optional input docs; offline tests use explicit disposable project-local directories. File paths stored in DB are absolute or normalized at run creation.
 
 **Tables (conceptual; normalize fields sensibly):**
 
@@ -175,7 +175,7 @@ Adapter responsibilities are uniform across harnesses; only the four harness-spe
 
 Every adapter must pass the offline **adapter conformance suite** (see §9) before it is registered as supported. Adapters must also pass the child process only a deliberate environment allowlist, never the daemon's full environment, so nested-harness variables and credentials cannot leak between harnesses.
 
-**Adapter acceptance (2026-10-19):** Authorized Codex/Pi Luna/low reporting and exact-session correction passed the Phase 6 gate. The later explicitly authorized omp/OpenCode Meta Contributor/low pass also completed direct reporting and exact-session correction, including actual helper acknowledgment, sequential process settlement, durable SQLite reopen and target cleanup. The all-adapter offline gate at milestone 0.5 completion passed **704 tests**. Claude's separately authorized Haiku/low correction passed after its earlier direct report, closing **milestone 0.5**: one logical attempt, one exact-session correction after original settlement, one accepted report before final settlement, completed run, durable reopen and removed target. The earlier omp OpenAI credential failure remains historical evidence, not an automatic retry or provider fallback. The owner's named Meta secret source is loaded locally without sourcing shell code or persisting its value; global configuration is unchanged. omp assistant metadata matched the Contributor provider/model; Claude assistant and terminal model evidence matched Haiku. OpenCode's transport lacks independent actual-model evidence. Earlier unknown MCP credential exposure remains outside known-value scrubbing; private artifacts must not be published. These results supersede only exercised paths' historical live-pending notes below. Exact evidence and limits are in `docs/harness-compatibility.md`. The subsequently authorized Phase 7.1 lifecycle implementation and append-only migration 7 are described in §7.5; Phase 7.2 onward and further paid execution still require new authorization.
+**Adapter acceptance (2026-10-19):** Authorized Codex/Pi Luna/low reporting and exact-session correction passed the Phase 6 gate. The later explicitly authorized omp/OpenCode Meta Contributor/low pass also completed direct reporting and exact-session correction, including actual helper acknowledgment, sequential process settlement, durable SQLite reopen and target cleanup. The all-adapter offline gate at milestone 0.5 completion passed **704 tests**. Claude's separately authorized Haiku/low correction passed after its earlier direct report, closing **milestone 0.5**: one logical attempt, one exact-session correction after original settlement, one accepted report before final settlement, completed run, durable reopen and removed target. The earlier omp OpenAI credential failure remains historical evidence, not an automatic retry or provider fallback. The owner's named Meta secret source is loaded locally without sourcing shell code or persisting its value; global configuration is unchanged. omp assistant metadata matched the Contributor provider/model; Claude assistant and terminal model evidence matched Haiku. OpenCode's transport lacks independent actual-model evidence. Earlier unknown MCP credential exposure remains outside known-value scrubbing; private artifacts must not be published. These results supersede only exercised paths' historical live-pending notes below. Exact evidence and limits are in `docs/harness-compatibility.md`. The subsequently authorized Phase 7.1 lifecycle implementation and append-only migration 7 are described in §7.5; headless 7.2 and management 7.3 were later authorized separately; 7.4 onward and further paid execution still require new authorization.
 
 ### 4.1 Codex integration
 
@@ -277,7 +277,7 @@ Limits: this is environment selection, not isolation. Only values known at this 
 
 ## 5. Reporting channel
 
-`wf report` talks to the local daemon using a loopback HTTP endpoint (reused from the local UI API), authenticated with an **attempt-scoped opaque token** passed to the child environment. The token authorizes only *report submission for that attempt*, not run control or arbitrary DB modification. `wf report` always waits for server acknowledgment.
+`wf report` talks to the local daemon using its private per-drive loopback HTTP listener, separate from the management API and authenticated with an **attempt-scoped opaque token** passed to the child environment. The token authorizes only *report submission for that attempt*, not run control or arbitrary DB modification. `wf report` always waits for server acknowledgment.
 
 - `POST /internal/reports` payload: `{outcome,summary,issue?,handoff?,data?}`.
 - Validate attempt token, active attempt, schema version, length limits, outcome membership, and report uniqueness.
@@ -302,7 +302,7 @@ This design allows an agent to fix a rejected report *during its original turn* 
 ### 5.2 Phase 4 implementation notes
 
 - `src/contracts/report.ts` defines report v1 and bounded JSON validation. The contract version is engine-owned; the body has no authoritative IDs or transition fields. Exact limits and HTTP response codes are recorded in `docs/schema-v1.md` decisions 27–29.
-- `RunService` owns a private loopback report server for its headless drive lifetime. `bin/wf` reads the endpoint and token from environment and waits for synchronous acknowledgment. Tokens are opaque, memory-only and limited to one attempt invocation, rotated for correction and revoked before routing or on stop. This channel is not a management daemon; daemon lifecycle remains Phase 7.
+- `RunService` owns a private loopback report server for its headless drive lifetime. `bin/wf` reads the endpoint and token from environment and waits for synchronous acknowledgment. Tokens are opaque, memory-only and limited to one attempt invocation, rotated for correction and revoked before routing or on stop. This channel remains separate from the management listener in §8.1.
 - `RunCoordinator.acceptReport` validates and writes the immutable report and `report_accepted` event in one transaction. It never writes a cursor. The runner waits for confirmed process/group/pipe settlement and applies the report only after a clean result. Earlier reports survive process failures for diagnosis.
 - Migration 3 adds a durable correction count (0 or 1); existing session columns store adapter-issued persisted identity. Correction reserves its budget/event before launch and uses a separate log path. A failed follow-up, including timeout/provider/process failure, becomes `system.report_error` with invocation failure metadata. This makes the bounded correction's failure behavior explicit (spec §4.3.6); the original invocation's technical failures keep their technical system codes and never enter correction.
 - The shared process wrapper redacts injected secrets across arbitrary stdout/stderr boundaries. Adapters must supply their report token as a process secret. The fake fixture invokes the actual `wf` executable, persists a session file and verifies it on resume. Stdout outcome parsing has been removed.
@@ -377,7 +377,43 @@ Rationale: distinguish **what the OS observed**, **what the operator asserts abo
 
 ## 8. Local API and UI boundary
 
-HTTP over `127.0.0.1` only by default. Use REST actions or lightweight RPC plus SSE for state/events. Minimum operations:
+### 8.1 Implemented daemon and management RPC (Phase 7.3)
+
+`app/daemon.ts` is an explicit foreground owner (`wf daemon start`), with no auto-start/detach/service manager. It first opens `state.sqlite` under the existing kernel-backed writer lease, constructs one `ManagementService`/`RunService` (which reconciles startup state), then binds an ephemeral HTTP port on `127.0.0.1`. It atomically replaces `daemon.json` with `{version:1,port,token}` only after ownership/listen succeeds. The directory must be current-user-owned with mode 0700; new discovery/artifact files use owner-only permissions. Clients reject unsafe ownership/modes/symlink discovery and validate its shape before connecting. A competing daemon cannot replace discovery; a restarted owner rotates authority. Stale files never trigger PID signalling or lease deletion. Foreground stdout/stderr holds daemon lifecycle diagnostics; `logs/` contains existing per-attempt logs/session artifacts. No new database migration or dependency is needed.
+
+All management operations use authenticated `POST /api/v1` with a strict discriminated `{op,...}` contract in `contracts/management.ts`. Bearer authority is separate from the private per-drive report server. Management requires JSON, rejects browser Origin headers, bounds bodies to 2 MiB and request reads to five seconds, and exposes no CORS/raw-execution endpoint. No token is printed or placed in child environment/argv/database/event history. Same-user unrestricted workflows can access user files; this is local authority separation, not isolation from malicious same-user code. The existing report endpoint/token lifetime and `wf report` client remain unchanged.
+
+| RPC `op` | Additional fields / behavior |
+| --- | --- |
+| `ping`, `shutdown` | Lifecycle inspection / acknowledge pause-after-current shutdown |
+| `validate`, `import` | `workflowText` (up to 1 MiB), absolute `workflowDir`; validate or save immutable revision |
+| `workflows`, `runs` | Saved revisions / run list |
+| `preview`, `create` | Workflow fields, optional `includeCompleted`; preview or freeze actual checklist into a ready run |
+| `create-import` | `revisionId`, optional `includeCompleted`; use saved source directory/definition, read current checklist |
+| `status`, `tasks`, `reports`, `recovery` | `runId`; durable inspection, no process observation/signalling |
+| `events` | `runId`, `after` (nonnegative exclusive cursor), `limit` (1–1000); `{events,nextAfter,hasMore}` |
+| `start`, `pause`, `reconcile` | `runId`, inspected `expectedEventId` |
+| `stop`, `resume` | Same cursor plus nonblank bounded `reason` |
+| `override` | Same cursor plus strict `edit`: jump/skip/mark-task-complete and reason |
+| `revise` | Same cursor plus existing `WorkflowRevisionInput` as `edit` |
+| `task-overrides` | Same cursor, `taskId`, existing `TaskOverrideEdit` as `edit` |
+| `recovery-terminate`, `recovery-confirm`, `recovery-decide` | `runId`, existing exact-attempt/event/reason contract as `request` |
+
+Replies are JSON: 200 success, 202 shutdown admission, 401 invalid management authority, 404 unknown route, 409 wrong state/stale or settling control, 413 oversized body, 422 invalid request/definition, 400 other operation rejection. Diagnostics preserve code/path/location; transport failures are not retried. CLI exit/option/output conventions are in README. CLI local validation and RPC validation share `app/workflow-validation.ts`.
+
+`ManagementService` serializes mutations by rejecting overlap during asynchronous control settlement, while durable reads remain available. It checks `expectedEventId` before action and again after offline adapter construction. It delegates lifecycle, overrides, revisions and recovery to existing coordinator/service APIs. Start/resume install selected existing adapter factories lazily and acknowledge the run ID while retaining the drive promise. A new drive is refused until the old drive, report server and stop operation have settled. The coordinator independently enforces one active run and the database enforces one active attempt. The same service instance resets its stop flag only when admitting a subsequent drive. No queue or hidden retry is introduced.
+
+Resume through management requires paused state; interrupted runs first need an explicit Phase 7.2 disposition and separate resume. Manual jump checks task-compatible cursor selection. Existing-run edits retain reason/audit, declared-outcome and unresolved-process barriers. All state/event writes stay with the coordinator and its transactions. `workflow import` reuses immutable revision storage; listing includes revisions also saved by run creation/editing. It does not add mutable named-workflow CRUD or re-import tasks.
+
+Existing-run admission and revision validate live referenced inputs but exclude the checklist already frozen at creation. Status uses the active attempt's frozen settings, or the active task's current saved settings when there is no attempt, so paused model inspection agrees with subsequent execution.
+
+SIGINT/SIGTERM or shutdown admission marks the facade closing, rejects new mutations and synchronously requests pause-after-current before acknowledgment. Teardown awaits any admitted control, rechecks pause and awaits drive settlement before closing connections/discovery/database. Shutdown acknowledgment precedes exit; a stage without a timeout can delay exit indefinitely. Clients may inspect while draining. Stop-now remains the explicit run termination action. If drive fails unexpectedly, its released guard permits conservative reconciliation into interruption; a safe failure notice remains visible in ping/status. No accepted report routes uncertain work, and restart never replays dispatch/signals.
+
+Rationale: foreground ownership plus private loopback RPC is the smallest process model that lets independent CLI invocations control the actual child owner and lets a future browser share the same application facade. Existing kernel ownership, SQLite revisions and recovery contracts avoid a second state authority or migration. SSE/browser authorization integration, detachment, service-manager setup and broader daemon reliability remain later milestones.
+
+### 8.2 Planned browser routes
+
+HTTP remains on `127.0.0.1`. A later browser client can use this same RPC facade or thin REST wrappers, plus SSE for state/events. Planned operations include:
 
 - `POST /workflows/validate`, `/workflows/save`, `GET /workflows`.
 - `POST /tasks/preview-import`.

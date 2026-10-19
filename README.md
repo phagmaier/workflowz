@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: project tooling, strict YAML/schema validation, policy compilation, SQLite persistence, transactional run coordination, sequential command/agent execution, strict reporting with one same-session correction, immutable task import/context, run-local task parameters, paused revisions, and all five harness adapters. Milestone 0.5 and Phase 6 are complete. Separately authorized Phases 7.1–7.2 add headless ownership, Linux process identity, conservative startup reconciliation and explicit recovery decisions. This is not a complete MVP: daemon management, management CLI/UI and remaining reliability work stay on the [`todo.md`](todo.md) roadmap and require new authorization.
+**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6 and Phases 7.1–7.2 are complete. Separately authorized Phase 7.3 adds the management CLI and its local daemon/API. This is not a complete MVP: 7.4–7.5, the UI and remaining reliability work stay on the [`todo.md`](todo.md) roadmap and require new authorization.
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -142,11 +142,60 @@ Once every process barrier is resolved, `decideRecovery` supports `retry` for an
 
 Legacy histories may contain multiple unresolved attempts; inspect and resolve each one in turn before choosing a continuation.
 
-These are in-process APIs, not a management CLI, HTTP management server, UI or service manager. No provider calls are needed for `npm run smoke:recovery`.
+Phase 7.3 exposes these same recovery operations through the management CLI below. No provider calls are needed for `npm run smoke:recovery`.
+
+### Management CLI and local daemon (Phase 7.3)
+
+Build with `npm run build`. Start the owner explicitly in a separate terminal; it stays in the foreground and does not auto-start or detach:
+
+```bash
+bin/wf daemon start
+bin/wf workflow validate examples/overnight.yaml
+bin/wf tasks preview examples/overnight.yaml
+bin/wf workflow import examples/overnight.yaml
+bin/wf workflow list
+bin/wf run create --revision 1       # or: run create path/to/workflow.yaml
+bin/wf run list
+bin/wf run status RUN_ID --json      # includes expectedEventId
+bin/wf run start RUN_ID --expected-event EVENT_ID
+bin/wf run events RUN_ID --after 0 --limit 100 --json
+bin/wf run pause RUN_ID --expected-event CURRENT_EVENT_ID
+bin/wf run resume RUN_ID --expected-event CURRENT_EVENT_ID --reason "Continue from paused cursor"
+bin/wf run stop RUN_ID --expected-event CURRENT_EVENT_ID --reason "End this run"
+bin/wf daemon status
+bin/wf daemon stop
+```
+
+`run create` freezes the checklist it actually reads and returns a ready run ID. Existing runs use that snapshot for start, resume and revision even if the original checklist is moved or removed. `workflow import` saves an immutable definition revision, including its original absolute source directory; `run create --revision ID` reads the current checklist at that saved location. Neither command executes stages. Start/resume acknowledge the run ID after admission; the daemon drives it independently of the client. Poll status for completion. There is no job queue or automatic continuation after restart. Starting/resuming an agent workflow invokes its configured harness/provider; the offline tests use fixtures only.
+
+State selection is `--state-dir DIR` > `WF_STATE_DIR` > `${XDG_STATE_HOME:-~/.local/state}/workflowz`. The selected directory must belong to the current user with mode `0700`; a new one is created that way. It contains `state.sqlite`, SQLite WAL/lease files, `logs/` (attempt logs and adapter session artifacts), and private `daemon.json`. The daemon binds an ephemeral `127.0.0.1` port and atomically publishes a fresh owner-only token/port file (mode `0600`) after acquiring the database writer lease. Never publish that file. Competing owners fail without replacing it. Stale discovery does not authorize takeover: start a new owner explicitly; the kernel-backed lease decides ownership. The foreground terminal holds daemon diagnostics; no separate rotating daemon log/service manager is installed.
+
+SIGINT, SIGTERM and `daemon stop` request pause-after-current and wait for the step, report channel and log streams to settle before releasing the database. `daemon stop` acknowledges the shutdown request; it does not wait for daemon exit. A stage without a timeout can delay shutdown indefinitely. `run stop` is the explicit process-tree termination action and waits for settlement. Client disconnect has no effect. On crash/reopen, uncertain runs become interrupted and no stage/report/signal is replayed.
+
+Normal run controls use `--expected-event` from a fresh status inspection; recovery decision files carry the exact event/attempt cursor themselves. Changed state rejects the request; inspect again before making another decision. Resume requires paused state; interrupted runs first need an explicit recovery disposition. `run tasks RUN_ID`, `run reports RUN_ID`, and `run recovery RUN_ID` expose durable details. Events are ordered by increasing global `eventId`, filtered by run and exclusive `--after` cursor. `--limit` defaults to 100 (1–1000); JSON returns `{events,nextAfter,hasMore}`. No live event stream is added in this milestone.
+
+Further controls:
+
+```bash
+bin/wf run override RUN_ID --expected-event EVENT_ID --request edit.json
+bin/wf run task-overrides RUN_ID --task TASK_ID --expected-event EVENT_ID --request settings.json
+bin/wf run revise RUN_ID --expected-event EVENT_ID --file revised.yaml --reason "Revise remaining steps"
+# Add --cursor STEP_ID if the old cursor is incompatible.
+bin/wf run reconcile RUN_ID --expected-event EVENT_ID
+bin/wf run recovery-terminate RUN_ID --request recovery.json
+bin/wf run recovery-confirm RUN_ID --request confirmation.json
+bin/wf run recovery-decide RUN_ID --request decision.json
+```
+
+Override JSON is exactly one of `{"action":"jump","stepId":"review","reason":"Inspect next"}`, `{"action":"skip","outcome":"complete","reason":"Explicitly skip this stage"}`, or `{"action":"mark-task-complete","taskId":"TASK_ID","reason":"Accept task manually"}`. Task-settings JSON uses the existing `{overrides:{steps:{...}},reason}` contract; `{steps:{}}` clears settings. Revisions resolve relative paths against the original workflow directory. Controls preserve the coordinator's state, outcome, task-compatibility and unresolved-process checks.
+
+Recovery files use the exact inspected `expectedEventId`, `attemptId` (null between steps), and reason described above. Confirmation additionally requires `confirmedNoSurvivingOperation:true` after independent cleanup. Decision adds `action` (`retry`, `continue`, `skip`, `jump`, `end`), plus the declared `outcome` or compatible `stepId` where required. Non-ending decisions leave the run paused for separate resume. A retained report never settles interrupted work.
+
+Management `--json` writes one result to stdout or one `{error,...}` object to stderr. Success exits 0; validation/control/transport rejection exits 1; malformed CLI fields/options or unreadable input files exit 2. Human validation retains `file:line:column` diagnostics. `wf --help` lists commands. Use `wf report ...` with its existing report options, without management flags; its acknowledgment/exit behavior is unchanged. Management never accepts the attempt token.
 
 ### Codex adapter (Phase 6.1)
 
-`await createCodexAdapter()` from `src/adapters/codex.ts` runs only offline version/help probes. Register the returned adapter as `new Map([["codex", adapter]])` in `RunService` options. Creating/driving a run is still through the headless API; the management CLI comes later. Calling `drive` with this adapter launches the installed Codex and can use the configured account/provider.
+`await createCodexAdapter()` from `src/adapters/codex.ts` runs only offline version/help probes. Register the returned adapter as `new Map([["codex", adapter]])` in `RunService` options. The management daemon uses these same factories for the harnesses selected by an explicitly started/resumed workflow. Calling `drive` with this adapter launches the installed Codex and can use the configured account/provider.
 
 The adapter uses stdin for prompts, JSONL for session/failure evidence, and `wf report` for authoritative outcomes. It waits for process-group/pipe settlement after terminal events. It resumes only explicit persisted UUIDs, passes model/reasoning effort, records CLI version and unrestricted permission mode in invocation events, and scrubs injected authorization from output. Per-invocation configuration keeps report environment available to tools, excludes the Codex API key from tool inheritance, and disables shell snapshots; global config files are never edited. The child inherits the existing common environment allowlist plus `CODEX_HOME` and `CODEX_API_KEY` when set. Other harness variables/credentials are withheld.
 

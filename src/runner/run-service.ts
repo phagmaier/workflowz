@@ -133,6 +133,7 @@ export class RunService {
     if (drivingDatabases.has(this.database)) {
       throw new Error("this state database is already driving a run");
     }
+    this.stopRequested = false;
     this.drivingRunId = runId;
     drivingDatabases.add(this.database);
     try {

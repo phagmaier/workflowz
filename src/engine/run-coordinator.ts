@@ -1059,6 +1059,12 @@ export class RunCoordinator {
     return this.compiledFor(this.store.getRun(runId).revisionId);
   }
 
+  /** Effective settings for the current task before an attempt freezes its own snapshot. */
+  workflowForCurrentTask(runId: string): CompiledWorkflow {
+    const run = this.store.getRun(runId);
+    return this.taskWorkflow(run.revisionId, this.store.taskOverrides(run.activeTaskId));
+  }
+
   /** Task rows for a run, in source order. */
   tasks(runId: string): TaskRow[] {
     return this.store.listTasks(runId);
