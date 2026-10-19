@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Approved architecture for a personal-use MVP. Phases 0–1 of [`todo.md`](todo.md) are implemented: the project tooling, the strict YAML workflow parser, the typed v1 schema, and the policy compiler. No runtime, reducer, or harness adapter exists yet.
+**Status:** Approved architecture for a personal-use MVP. Phases 0–2 of [`todo.md`](todo.md) are implemented: project tooling, the strict YAML parser, the typed v1 schema, the policy compiler, and the SQLite store with a transactional run coordinator. The simulated task loop runs end to end without any harness. No process execution or harness adapter exists yet (Phase 3 onward).
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -62,7 +62,8 @@ npm run probe:harnesses      # offline version and help-text probe of codex, pi,
 | Path | Contents |
 | --- | --- |
 | `src/contracts/` | Strict YAML loader, typed v1 schema, diagnostics, placeholder grammar. No engine or process imports. |
-| `src/engine/` | Pure compiler and routing: transition table, policy precedence and conflicts, graph checks, referenced-path checks. No filesystem or process imports. |
+| `src/engine/` | Pure compiler, routing, and reducer, plus the run coordinator. The coordinator is the only writer of run state; it has no process or filesystem access. |
+| `src/store/` | SQLite migrations (`user_version`), transaction wrapper, and the run repository. The only module that opens the database. |
 | `src/adapters/` | Harness registry (data only) and the offline harness probe, the only module that starts child processes. |
 | `src/app/` | Command-line entry points. |
 | `src/architecture.test.ts` | Fails the build if an import crosses one of these boundaries. |
@@ -79,4 +80,4 @@ npm run probe:harnesses      # offline version and help-text probe of codex, pi,
 | `@types/node` | 26.6.5 | Node API types, matching the Node version in use. |
 | `@biomejs/biome` | 2.5.15 | One tool for lint and formatting. |
 
-SQLite (phase 2) will use the built-in `node:sqlite` module, which needs no native build step and was confirmed to load on Node v26.8.2 without flags. Tests use the built-in `node:test` runner.
+SQLite uses the built-in `node:sqlite` module, which needs no native build step and loads on Node v26.8.2 without flags. Tests use the built-in `node:test` runner.

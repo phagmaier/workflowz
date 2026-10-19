@@ -62,6 +62,18 @@ SQLite is authoritative. Store DB and run artifacts under a user-level applicati
 
 Use foreign keys and DB constraints. Prefer WAL with bounded busy timeout. Transactions wrap transitions, completion of task state, and cursor updates. Event entries accompany state mutations within the **same transaction**, so a state advance and its log cannot disagree.
 
+### 2.0 Phase 2 implementation notes
+
+These record the adjustments made when the store was built (todo Phase 2). The rationale is given so later changes can be judged against it.
+
+- **Storage.** `node:sqlite` (built into Node) with `PRAGMA user_version` migrations. The migration file is append-only. Each run's writes go through `WorkflowDatabase.transaction`, which uses `BEGIN IMMEDIATE`.
+- **Extra table: `transitions`.** Every routing decision is one row, with `revision_id`. `attempt_id` is UNIQUE, so the database itself forbids two transitions for one attempt. Engine-only steps have `attempt_id` NULL.
+- **One active attempt, enforced by the database.** A unique index on `(status IN (active states))`, restricted by a `WHERE` to active rows, allows at most one active attempt across the whole database. The architecture's "one active attempt globally" is therefore a constraint, not only coordinator logic.
+- **Single writer.** `RunCoordinator` is the only code that changes run state. For each step it reads the run, decides with the pure reducer (`engine/reducer.ts`), and writes the decision with its event in one transaction. A settlement with an undeclared outcome is refused before any write (spec §4.2).
+- **Retries.** A `retry` action reruns the step while its attempt count within the current task is below `max_attempts`. The count includes the attempt that just settled. When the budget is spent, `system.retry_exhausted` routes. If that route also asks for a retry, the run pauses. Backoff is recorded but not waited on yet (todo 7.4). Engine-only steps do not retry; a retry there pauses the run.
+- **Limits.** `max_step_executions` counts committed transitions. `max_wall_time_seconds` counts elapsed time since the run started. Reaching either pauses the run with an attention item.
+- **Clock and ids are injected.** Tests use a deterministic clock and ids. Production uses wall-clock time and random ids.
+
 ### 2.1 State reducer
 
 The engine should implement a pure function or similarly deterministic reducer:

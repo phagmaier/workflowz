@@ -27,12 +27,12 @@
 
 ## Phase 2 — Event store and pure execution reducer
 
-- [ ] 2.1 Create SQLite migrations for workflow revisions, runs, tasks, attempts, accepted reports, events, and attention items.
-- [ ] 2.2 Implement append-only event recording and state mutations in the **same transaction**. Add uniqueness and foreign-key constraints.
-- [ ] 2.3 Implement pure transition reducer independent of subprocesses or HTTP.
-- [ ] 2.4 Implement run/attempt lifecycle, cursor, recorded stage outcomes, completed tasks, current workflow revision, limits, and task loop primitives.
-- [ ] 2.5 Implement revisions/snapshots. Associate every attempt and transition with the appropriate immutable workflow revision.
-- [ ] 2.6 Unit-test repeated transitions, duplicate events, transaction rollback, restart/reopen and state reconstruction.
+- [x] 2.1 Create SQLite migrations for workflow revisions, runs, tasks, attempts, accepted reports, events, and attention items.
+- [x] 2.2 Implement append-only event recording and state mutations in the **same transaction**. Add uniqueness and foreign-key constraints.
+- [x] 2.3 Implement pure transition reducer independent of subprocesses or HTTP.
+- [x] 2.4 Implement run/attempt lifecycle, cursor, recorded stage outcomes, completed tasks, current workflow revision, limits, and task loop primitives.
+- [x] 2.5 Implement revisions/snapshots. Associate every attempt and transition with the appropriate immutable workflow revision.
+- [x] 2.6 Unit-test repeated transitions, duplicate events, transaction rollback, restart/reopen and state reconstruction.
 
 **Gate:** A simulated flow executes from task to task, persists across DB reopen, and never commits two transitions for one finalized attempt.
 

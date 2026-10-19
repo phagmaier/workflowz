@@ -43,7 +43,7 @@ function productionFiles(): SourceFile[] {
 
 const PURE_BUILTINS = new Set(["node:crypto", "node:path"]);
 const PROCESS_OR_IO =
-  /^(node:)?(child_process|fs|fs\/promises|net|http|https|os|worker_threads|cluster|dgram|dns|tls)$/;
+  /^(node:)?(child_process|fs|fs\/promises|net|http|https|os|worker_threads|cluster|dgram|dns|tls)$|^node:sqlite$/;
 
 describe("module boundaries", () => {
   it("contracts import only sibling contract modules, zod, yaml, and pure built-ins", () => {
@@ -68,6 +68,7 @@ describe("module boundaries", () => {
         const ok =
           specifier.startsWith("./") ||
           specifier.startsWith("../contracts/") ||
+          specifier.startsWith("../store/") ||
           specifier === "../adapters/harness-registry.js" ||
           PURE_BUILTINS.has(specifier);
         assert.ok(
@@ -78,9 +79,13 @@ describe("module boundaries", () => {
     }
   });
 
-  it("only the adapter probe and the app layer may touch processes or the filesystem", () => {
+  it("only the adapter probe, the store, and the app layer may touch processes or the filesystem", () => {
     for (const file of productionFiles()) {
-      if (file.relative.startsWith("app/") || file.relative === path.join("adapters", "probe.ts")) {
+      if (
+        file.relative.startsWith("app/") ||
+        file.relative.startsWith("store/") ||
+        file.relative === path.join("adapters", "probe.ts")
+      ) {
         continue;
       }
       for (const specifier of file.imports) {
