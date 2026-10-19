@@ -12,6 +12,8 @@
 
   The authorized [remaining-harness pass](docs/harness-compatibility.md#remaining-milestone-05-results--stopped-at-omp-authentication) completed Claude/OpenCode direct reporting, then stopped at omp's `No API key found for openai.` failure. All three correction/session checks remain unrun; no provider switch, login or retry was attempted. Milestone 0.5 stays incomplete; further execution requires new authorization.
 
+  Current standing choice: [Meta Muse Spark 1.3 Contributor/low](docs/harness-compatibility.md#standing-meta-contributor-selection-and-secret-source) for OpenCode/omp, using the already identified `MUSE_SPARK_API_KEY` in `~/.config/secrets.zsh` through `smoke:meta`. Do not request the key again. Offline preparation/local named-key loading is authorized; exact live verification bounds still need approval. This does not check milestone 0.5 or change the completed Phase 6 gate.
+
 **Gate:** Fresh clone installs, typechecks, tests, and has a short local development README; version probe works or explains missing binaries.
 
 ## Phase 1 — Workflow data contract and compiler

@@ -190,6 +190,18 @@ The offline smoke tests exercise all five actual factories through synthetic CLI
 
 The authorized [Claude/OpenCode/omp pass](docs/harness-compatibility.md#remaining-milestone-05-results--stopped-at-omp-authentication) stopped at omp's missing OpenAI credential after Claude and OpenCode direct reporting passed. All three correction scenarios remain unrun; further execution requires new authorization. Requested model selectors are not a guarantee against native substitution. OpenCode's private diagnostic log exposed an unknown configured MCP credential; do not publish raw artifacts.
 
+#### Standing local smoke selection: Meta Contributor
+
+The owner selected **`meta/muse-spark-1.3-contributor` / low** for OpenCode and omp, using **`MUSE_SPARK_API_KEY` in `~/.config/secrets.zsh`**. Reuse that approved source; do not ask the owner to paste, relocate or rediscover the key. Contributor mode permits Meta to use submitted prompts/code/responses for training. This supersedes the earlier OpenAI/Luna proposal for these two harnesses, not Codex/Pi preferences or other users' workflow settings.
+
+```bash
+npm run smoke:meta -- --harness omp --scenario report --timeout-seconds 60 \
+  --artifacts-dir "$HOME/.local/state/workflowz/live-smoke-meta"
+# Plan only. --execute still requires approval of the exact live scenarios/bounds.
+```
+
+`smoke:meta` pins that account selection and reuses the existing smoke/runner, not a new provider client. Only execution reads the one named literal assignment; the shell file is never sourced and its other credentials are not imported. The source must be an owner-only regular file; missing/ambiguous/expanded assignments fail without credential output or fallback. The key is mapped to `MODEL_API_KEY` only in adapter memory/environment, not global environment, argv, configuration or evidence. OpenCode receives a credential-free v2 Meta Responses configuration inside the disposable target, including the low variant and encrypted reasoning replay; global settings are unchanged. Both adapters forward/scrub `MODEL_API_KEY` and `META_API_KEY` through their existing known-secret boundary. Normal resources remain enabled: not isolation or an all-secrets guarantee. See [standing decision and authorization limits](docs/harness-compatibility.md#standing-meta-contributor-selection-and-secret-source).
+
 ### Layout
 
 | Path | Contents |

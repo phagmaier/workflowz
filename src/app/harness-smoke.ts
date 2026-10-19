@@ -135,6 +135,8 @@ interface SmokeDependencies {
   readonly adapterOptions?: CodexAdapterOptions;
   readonly authentication?: (selection: SmokeSelection, project: string) => Promise<Authentication>;
   readonly signal?: AbortSignal;
+  /** Developer-only, credential-free config inside the disposable target; never global config. */
+  readonly prepareProject?: (project: string) => void;
 }
 
 /** Documented harness-owned checks only. Never use credential-printing commands or refresh Pi auth. */
@@ -255,6 +257,7 @@ export async function runHarnessSmoke(
     }
   };
   try {
+    dependencies.prepareProject?.(project);
     const adapter = await createInstalledAdapter(descriptor, dependencies.adapterOptions);
     evidence.version = adapter.compatibility.version;
     evidence.capabilities = adapter.capabilities;

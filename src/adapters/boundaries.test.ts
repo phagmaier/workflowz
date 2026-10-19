@@ -50,6 +50,13 @@ describe("adapter environment and diagnostic boundaries", () => {
         try {
           const config = path.join(root, "fixture.json");
           const capture = path.join(root, "capture.json");
+          const metaCredentials =
+            id === "omp" || id === "opencode"
+              ? {
+                  MODEL_API_KEY: "synthetic-meta-model-key",
+                  META_API_KEY: "synthetic-meta-alias-key",
+                }
+              : {};
           writeFileSync(
             config,
             JSON.stringify({
@@ -66,6 +73,7 @@ describe("adapter environment and diagnostic boundaries", () => {
               HOME: root,
               [configName]: root,
               [keyName]: KEY,
+              ...metaCredentials,
               NODE_OPTIONS: "--not-a-real-node-option",
               CLAUDECODE: "nested parent",
               GITHUB_TOKEN: "unrelated-parent-credential",
@@ -138,7 +146,7 @@ steps:
           const token = inputs[0]?.reportAccess?.token;
           assert.ok(token);
           const evidence = JSON.stringify(state);
-          assertScrubbed(evidence, [KEY, RETIRED, token]);
+          assertScrubbed(evidence, [KEY, RETIRED, token, ...Object.values(metaCredentials)]);
           const logs = readdirSync(path.join(root, "logs")).filter((f) => f.endsWith(".log"));
           assert.equal(logs.length, 1);
           const log = readFileSync(path.join(root, "logs", logs[0] ?? "missing.log"), "utf8");
@@ -157,13 +165,14 @@ steps:
                   ? /"thread.started"/
                   : /"type":"session"/,
           );
-          assertScrubbed(log, [KEY, RETIRED, token]);
+          assertScrubbed(log, [KEY, RETIRED, token, ...Object.values(metaCredentials)]);
           const recorded = JSON.parse(readFileSync(capture, "utf8"));
           const expectedNames = [
             "PATH",
             "HOME",
             configName,
             keyName,
+            ...Object.keys(metaCredentials),
             "WF_REPORT_ENDPOINT",
             "WF_REPORT_TOKEN",
             ...(id === "opencode" ? ["OPENCODE_PASSWORD"] : []),
@@ -173,6 +182,7 @@ steps:
           for (const names of JSON.parse(readFileSync(config, "utf8")).probeEnvironments) {
             for (const name of [
               keyName,
+              ...Object.keys(metaCredentials),
               "WF_REPORT_TOKEN",
               "NODE_OPTIONS",
               "GITHUB_TOKEN",
