@@ -139,6 +139,11 @@ on:
 - Policy selectors accept `{tags: [...]}` (match if any listed tag), `{step_ids: [...]}`, or `{all: true}`. Two policies of equal specificity resolving the same outcome to different actions are a load-time error; do not invent ordering priority.
 - A more-specific policy can override a global rule; direct step policy always wins. Prefer named tags over ordinal step ranges.
 - Task-level overrides are stored in the **run configuration** against imported run-local task IDs (rather than in the reusable YAML, which is project-independent). They are applied when selecting a task before executing its stages and must pass the same validation before execution.
+- The implemented run-local shape is `{steps: {step_id: {model?, prompt?, skip?: {outcome}, on?}}}`. Only existing agent/command steps can be specialized; model/prompt require an agent. Inline prompt replacement supersedes `prompt_file`. Selected `on` entries override step rules using existing validated actions/outcomes/targets. Harness, session policy, outcomes, new steps and task-control steps cannot be changed through task settings.
+- A configured skip takes an explicitly chosen declared normal outcome without launching a process or fabricating a report. It writes an audit event and a transition without an attempt; the graph still controls task completion. A retry on a skipped step pauses, and skip cycles obey the engine-step bound.
+- Task settings can be replaced/cleared for unfinished tasks only while `ready` or `paused`, with no active attempt and a nonblank reason. Each attempt freezes its effective task settings. Model/prompt edits preserve the existing same-harness/run/task/revision session rule.
+- A workflow revision applies to future occurrences of remaining stages, including repeated loop stages; historical executions never change. Revisions require `ready` or `paused` with no active attempt and a reason. They retain project root, task source, imported queue and progress, and validate all unfinished task settings. Removed/kind-changed cursor steps require an explicit valid `cursorStepId`; task-control and visible task-placeholder preconditions must also hold. Files read only during preparation (such as prompt-file content) retain pre-execution validation.
+- Subsequent attempts reference the selected immutable revision. Resume never crosses revision IDs; a changed definition requiring resume must establish a session in that revision or fail before launch. Identical YAML/source-directory revisions reuse their existing identity under the store's content deduplication rule.
 
 ### 3.4 Template interpolation and handoff
 
@@ -197,7 +202,7 @@ A file/structured-final-response **adapter fallback** may normalize a harness's 
 3. On the first valid submission, persist the accepted report. Reject later submissions for the same attempt as duplicate. **Do not advance while the agent process is still active.**
 4. When the agent's execution has conclusively settled with successful process status, use the accepted report to route. If it ended without an accepted report, allow exactly **one extra follow-up turn** in the *same persisted session*, if the adapter supports it.
 5. Follow-up prompt: clearly state that the prior report was missing/invalid, list valid outcomes and schema, request only a compliant report, and explicitly say not to modify source files during correction. The engine can constrain the correction turn with a short timeout; no second correction.
-6. If the correction produces a valid report and the harness settles cleanly, route normally. Otherwise emit `system.report_error` and **pause by default** unless the workflow explicitly routes that outcome elsewhere.
+6. If the correction produces a valid report and the harness settles cleanly, route normally. Otherwise emit `system.report_error` and **pause by default** unless the workflow explicitly routes that outcome elsewhere. A failed correction invocation (including timeout/process/provider failure) also follows this rule; retain its technical cause in invocation history and preserve any earlier report for diagnosis.
 7. If session resume isn't supported or possible, emit `system.report_error` immediately (do not invent a new session that lacks context).
 8. An agent **process/provider failure** (nonzero crash, impossible launch, rate limit, timeout) is **not** treated as a mere formatting mistake; route to `system.process_error`, `system.spawn_error`, `system.timeout`, or another technical error without automatically asking the model to repair a report.
 
@@ -207,7 +212,7 @@ This correction is separate from user-configured workflow retries. `defaults.rep
 
 - Cleanly settled agent + accepted report => agent's reported outcome.
 - Cleanly settled agent + no accepted report => bounded correction, then `system.report_error` if unresolved.
-- Nonzero process exit, terminated process, timeout, or adapter-level failure => corresponding **system** error, even if a report was submitted earlier. Preserve earlier report for diagnosis; never silently call the step successful.
+- Original invocation nonzero process exit, terminated process, timeout, or adapter-level failure => corresponding **system** error, even if a report was submitted earlier. Preserve earlier report for diagnosis; never silently call the step successful.
 - User stop request => `cancelled`/`stopped` run control, not a fabricated agent success.
 - Crash before the engine can know whether a subprocess completed => `interrupted` / uncertain state on restart; do not automatically re-run side-effectful work.
 
