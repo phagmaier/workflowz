@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Approved architecture for a personal-use MVP; implementation has **not** begun.
+**Status:** Approved architecture for a personal-use MVP. Phases 0–1 of [`todo.md`](todo.md) are implemented: the project tooling, the strict YAML workflow parser, the typed v1 schema, and the policy compiler. No runtime, reducer, or harness adapter exists yet.
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -39,3 +39,44 @@ A deterministic, local workflow runner for coding agents. The runner executes a 
 TypeScript on Node.js, SQLite, YAML, a small CLI, and a local web UI. Build the **headless engine before the UI**. Supported harnesses — `codex`, `pi`, `omp`, `opencode`, and `claude` (Claude Code) — are independent process adapters behind one interface and a harness registry. Commands run as configured rather than as special-case Git features.
 
 See [`spec.md`](spec.md) §2.4 for the supported harnesses and [`architecture.md`](architecture.md) for version-dependent integration notes. Verify the exact installed version of each harness CLI during development rather than blindly copying its flags.
+
+## Development
+
+Requirements: Node.js 26 or newer (verified with v26.8.2) and npm (verified with 11.19.1). Nothing else is needed. The test suite runs offline and makes no model calls.
+
+```bash
+npm ci                       # install the exact versions in package-lock.json
+npm run check                # typecheck + Biome lint + tests (the full gate)
+npm run typecheck            # tsc --noEmit, strict mode
+npm run lint                 # Biome check (lint and formatting)
+npm run format               # Biome auto-fix
+npm test                     # build to dist/, then node:test over dist/**/*.test.js
+npm run validate -- examples/overnight.yaml   # strict parse, compile, and path checks
+npm run probe:harnesses      # offline version and help-text probe of codex, pi, omp, opencode, claude
+```
+
+`npm run validate` exits 0 for a runnable workflow (warnings allowed), 1 when it has errors, and 2 when the file cannot be read. Diagnostics are printed as `file:line:column: severity [code] path: message`.
+
+### Layout
+
+| Path | Contents |
+| --- | --- |
+| `src/contracts/` | Strict YAML loader, typed v1 schema, diagnostics, placeholder grammar. No engine or process imports. |
+| `src/engine/` | Pure compiler and routing: transition table, policy precedence and conflicts, graph checks, referenced-path checks. No filesystem or process imports. |
+| `src/adapters/` | Harness registry (data only) and the offline harness probe, the only module that starts child processes. |
+| `src/app/` | Command-line entry points. |
+| `src/architecture.test.ts` | Fails the build if an import crosses one of these boundaries. |
+| `test/fixtures/workflows/` | Invalid and warning-only workflow fixtures. Every invalid fixture must be listed with its expected code. |
+| `docs/` | [Harness compatibility note](docs/harness-compatibility.md) and [schema v1 decisions](docs/schema-v1.md). |
+
+### Dependencies
+
+| Package | Version | Why |
+| --- | --- | --- |
+| `yaml` | 2.9.1 | YAML 1.2 parser. Reports duplicate keys (`uniqueKeys`) and gives exact source offsets. |
+| `zod` | 4.6.7 | Runtime validation of the workflow schema. Every object is `strictObject`. |
+| `typescript` | 7.0.2 | Strict typecheck and build. |
+| `@types/node` | 26.6.5 | Node API types, matching the Node version in use. |
+| `@biomejs/biome` | 2.5.15 | One tool for lint and formatting. |
+
+SQLite (phase 2) will use the built-in `node:sqlite` module, which needs no native build step and was confirmed to load on Node v26.8.2 without flags. Tests use the built-in `node:test` runner.

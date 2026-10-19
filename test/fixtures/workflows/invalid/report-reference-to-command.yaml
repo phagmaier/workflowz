@@ -1,0 +1,22 @@
+version: 1
+name: fixture
+project:
+  root: "."
+start: a
+steps:
+  a:
+    kind: command
+    argv: [echo, hi]
+    on:
+      complete: { goto: b }
+      failed: { pause: true }
+  b:
+    kind: agent
+    harness: codex
+    session: fresh
+    prompt: "see {{reports.a.summary}}"
+    outcomes: [complete]
+    on:
+      complete: { goto: c }
+  c:
+    kind: end

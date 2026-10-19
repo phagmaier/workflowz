@@ -1,0 +1,12 @@
+version: 1
+name: fixture
+project:
+  root: "."
+start: a
+policies:
+  - match: { step_ids: [ghost] }
+    on:
+      failed: { pause: true }
+steps:
+  a:
+    kind: end

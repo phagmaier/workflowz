@@ -1,0 +1,18 @@
+version: 1
+name: fixture
+project:
+  root: "."
+start: a
+policies:
+  - match: { all: true }
+    on:
+      needs_fix: { pause: true }
+steps:
+  a:
+    kind: command
+    argv: [echo, hi]
+    on:
+      complete: { goto: b }
+      failed: { pause: true }
+  b:
+    kind: end

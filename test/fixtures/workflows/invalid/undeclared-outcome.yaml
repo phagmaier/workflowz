@@ -1,0 +1,17 @@
+version: 1
+name: fixture
+project:
+  root: "."
+start: a
+steps:
+  a:
+    kind: agent
+    harness: codex
+    session: fresh
+    prompt: go
+    outcomes: [complete]
+    on:
+      complete: { goto: b }
+      oops: { pause: true }
+  b:
+    kind: end

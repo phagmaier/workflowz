@@ -1,0 +1,17 @@
+version: 1
+name: fixture
+project:
+  root: "."
+start: a
+steps:
+  a:
+    kind: agent
+    harness: codex
+    session: fresh
+    prompt: go
+    prompt_file: p.md
+    outcomes: [complete]
+    on:
+      complete: { goto: b }
+  b:
+    kind: end

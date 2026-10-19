@@ -1,0 +1,15 @@
+version: 1
+name: fixture
+project:
+  root: "."
+start: a
+steps:
+  a:
+    kind: end
+  b:
+    kind: command
+    argv: [echo, hi]
+    on:
+      complete: { goto: a }
+      failed: { pause: true }
+      system.bogus: { pause: true }

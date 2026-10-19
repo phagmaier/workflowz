@@ -1,0 +1,8 @@
+version: 1
+name: "{{run.id}}"
+project:
+  root: "."
+start: a
+steps:
+  a:
+    kind: end

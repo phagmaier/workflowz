@@ -1,0 +1,16 @@
+version: 1
+name: fixture
+project:
+  root: "."
+start: a
+steps:
+  a:
+    kind: agent
+    harness: skynet
+    session: fresh
+    prompt: go
+    outcomes: [complete]
+    on:
+      complete: { goto: b }
+  b:
+    kind: end

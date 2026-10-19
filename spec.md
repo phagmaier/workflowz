@@ -85,6 +85,8 @@ The engine is deliberately harness-agnostic: every harness is an adapter behind 
 
 ## 3. Canonical workflow schema (v1 proposal)
 
+> Implementation decisions for this section (field names, open semantics, deviations) are recorded in [`docs/schema-v1.md`](docs/schema-v1.md).
+
 ### 3.1 Document top level
 
 YAML is parsed into a versioned typed data model, validated (e.g., by Zod or JSON Schema), and **compiled** into a deterministic transition table before a run. Extra unknown fields are errors, not silently accepted.

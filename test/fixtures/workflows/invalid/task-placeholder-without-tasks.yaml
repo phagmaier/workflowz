@@ -1,0 +1,14 @@
+version: 1
+name: fixture
+project:
+  root: "."
+start: a
+steps:
+  a:
+    kind: command
+    argv: [echo, "{{task.id}}"]
+    on:
+      complete: { goto: b }
+      failed: { pause: true }
+  b:
+    kind: end

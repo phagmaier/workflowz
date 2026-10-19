@@ -4,24 +4,24 @@
 
 ## Phase 0 — Project bootstrap and compatibility probe
 
-- [ ] 0.1 Initialize a project-local TypeScript / Node.js repository with reproducible package manager lockfile, `tsconfig` strict mode, formatter, lint, test runner, typecheck, and documented dev commands.
-- [ ] 0.2 Decide concrete libraries for YAML parsing (must detect duplicate keys), runtime type validation, and SQLite; record versions in README/dependency lockfile. Keep dependency count modest.
-- [ ] 0.3 Set up module/package boundaries for shared contracts, engine, adapters, CLI/daemon, and future web app. No microservices.
-- [ ] 0.4 Add smoke tests that can run entirely offline, and a CI-friendly `test`/`lint`/`typecheck` script.
+- [x] 0.1 Initialize a project-local TypeScript / Node.js repository with reproducible package manager lockfile, `tsconfig` strict mode, formatter, lint, test runner, typecheck, and documented dev commands.
+- [x] 0.2 Decide concrete libraries for YAML parsing (must detect duplicate keys), runtime type validation, and SQLite; record versions in README/dependency lockfile. Keep dependency count modest.
+- [x] 0.3 Set up module/package boundaries for shared contracts, engine, adapters, CLI/daemon, and future web app. No microservices.
+- [x] 0.4 Add smoke tests that can run entirely offline, and a CI-friendly `test`/`lint`/`typecheck` script.
 - [ ] 0.5 Probe the installed harness binaries — `codex`, `pi`, `omp`, `opencode`, and `claude` — for versions, supported flags, authentication availability (without exposing secrets), and session/resume behavior. Record a per-harness compatibility note; **do not** modify the user's global harness configuration.
 
 **Gate:** Fresh clone installs, typechecks, tests, and has a short local development README; version probe works or explains missing binaries.
 
 ## Phase 1 — Workflow data contract and compiler
 
-- [ ] 1.1 Implement typed YAML v1 schema for project, start, defaults, policies, steps, optional task source, and limits; reject unknown/duplicate keys.
-- [ ] 1.2 Define supported step kinds (`agent`, `command`, `task.next`, `task.complete`, `end`) and per-kind allowed fields.
-- [ ] 1.3 Define explicit normal outcomes and reserved `system.*` outcomes; validate declared agent outcomes against `on` transitions.
-- [ ] 1.4 Compile effective transition policy: step > scoped/tag or explicit-step rules > workflow defaults > system catch-all pause; reject ambiguous equal-priority conflicts.
-- [ ] 1.5 Validate references, start node, reserved names, missing paths, and unsupported templating; warn about unreachable nodes and cycles that might run forever.
-- [ ] 1.6 Define strict interpolation fields for current task, prior reports, command outputs, run and project metadata. No arbitrary code eval.
-- [ ] 1.7 Parse and validate [`examples/overnight.yaml`](examples/overnight.yaml) via automated fixture test. Include negative fixtures for malformed definitions.
-- [ ] 1.8 Define the harness registry contract: `harness` is validated against registered adapter ids (not a closed enum), with graceful validation errors for unknown/unsupported harnesses or unmet required capabilities.
+- [x] 1.1 Implement typed YAML v1 schema for project, start, defaults, policies, steps, optional task source, and limits; reject unknown/duplicate keys.
+- [x] 1.2 Define supported step kinds (`agent`, `command`, `task.next`, `task.complete`, `end`) and per-kind allowed fields.
+- [x] 1.3 Define explicit normal outcomes and reserved `system.*` outcomes; validate declared agent outcomes against `on` transitions.
+- [x] 1.4 Compile effective transition policy: step > scoped/tag or explicit-step rules > workflow defaults > system catch-all pause; reject ambiguous equal-priority conflicts.
+- [x] 1.5 Validate references, start node, reserved names, missing paths, and unsupported templating; warn about unreachable nodes and cycles that might run forever.
+- [x] 1.6 Define strict interpolation fields for current task, prior reports, command outputs, run and project metadata. No arbitrary code eval.
+- [x] 1.7 Parse and validate [`examples/overnight.yaml`](examples/overnight.yaml) via automated fixture test. Include negative fixtures for malformed definitions.
+- [x] 1.8 Define the harness registry contract: `harness` is validated against registered adapter ids (not a closed enum), with graceful validation errors for unknown/unsupported harnesses or unmet required capabilities.
 
 **Gate:** Compiler deterministically resolves transitions for a valid graph; invalid/ambiguous configuration gets precise error location and message; all can run offline.
 

@@ -1,0 +1,13 @@
+version: 1
+name: fixture
+project:
+  root: "."
+start: a
+steps:
+  a:
+    kind: task.next
+    on:
+      task_ready: { goto: b }
+      exhausted: { goto: b }
+  b:
+    kind: end

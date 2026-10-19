@@ -1,0 +1,8 @@
+version: 2
+name: fixture
+project:
+  root: "."
+start: a
+steps:
+  a:
+    kind: end
