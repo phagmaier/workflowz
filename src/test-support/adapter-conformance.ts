@@ -37,7 +37,11 @@ export async function until(check: () => boolean, ms = 5000): Promise<void> {
   }
 }
 
-export function describeAdapterConformance(name: string, factory: AdapterFactory): void {
+export function describeAdapterConformance(
+  name: string,
+  factory: AdapterFactory,
+  harness = "codex",
+): void {
   describe(`adapter conformance: ${name}`, () => {
     const fixtures: { root: string; database: WorkflowDatabase }[] = [];
     after(() => {
@@ -73,11 +77,14 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
           : undefined,
       };
       const service = new RunService(database, {
-        agents: new Map([["codex", wrapped]]),
+        agents: new Map([[harness, wrapped]]),
         logDir: path.join(root, "logs"),
         correctionTimeoutMs: 1000,
       });
-      const runId = service.coordinator.createRun({ workflowText: text, workflowDir: root });
+      const runId = service.coordinator.createRun({
+        workflowText: text.replace("harness: codex", `harness: ${harness}`),
+        workflowDir: root,
+      });
       service.coordinator.start(runId);
       const inspect = () => service.coordinator.inspect(runId);
       const corrections = () =>
@@ -296,7 +303,7 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
       const pidFile = path.join(f.root, "child.pid");
       // Replace the initial fixture's adapter before dispatch, retaining the same conformance factory.
       const service = new RunService(f.database, {
-        agents: new Map([["codex", await factory([{ mode: "hang-with-child", extra: pidFile }])]]),
+        agents: new Map([[harness, await factory([{ mode: "hang-with-child", extra: pidFile }])]]),
         logDir: path.join(f.root, "logs"),
       });
       const driving = service.drive(f.runId);

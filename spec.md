@@ -85,6 +85,8 @@ The engine is deliberately harness-agnostic: every harness is an adapter behind 
 
 Phase 6.1 now provides an offline-conformant Codex CLI adapter through the headless service API. It uses stdin prompts, explicit persisted session UUIDs, JSONL process/session evidence and the common `wf report` channel. Version and selected unrestricted permission mode are audited. Authentication and provider-backed stream/resume compatibility remain unverified; the other adapters and the full Phase 6 live gate remain unfinished. See `docs/harness-compatibility.md` for evidence and limits.
 
+Phase 6.2 adds the offline-conformant Pi adapter for the installed earendil package. One-shot JSON uses LF-only streaming UTF-8 decoding and requires `agent_settled` plus process/group/pipe settlement. Low-level `agent_end` and transient retry failures cannot settle the attempt. Unrecovered final provider failures, aborts or malformed streams are technical errors, including on exit zero. Resume validates the persisted session file/header/cwd and uses its exact UUID within its dedicated storage directory, without create-if-missing or latest-session flags. Model/thinking selection, report access and default unrestricted tools use the existing contract; no workflow fields or migrations change. Live provider/session verification and the remaining adapters remain unfinished.
+
 ## 3. Canonical workflow schema (v1 proposal)
 
 > Implementation decisions for this section (field names, open semantics, deviations) are recorded in [`docs/schema-v1.md`](docs/schema-v1.md).

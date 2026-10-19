@@ -52,7 +52,7 @@ const BUILT_IN: readonly HarnessDescriptor[] = [
     id: "pi",
     product: "Pi coding agent",
     binary: "pi",
-    adapter: "planned",
+    adapter: "conformance_passed",
     capabilities: {
       supportsResume: true,
       supportsEventStream: true,

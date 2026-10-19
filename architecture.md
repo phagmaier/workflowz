@@ -227,7 +227,7 @@ Version-specific behavior is a risk. Use executable compatibility tests against 
 
 The adapter forwards model/reasoning effort, injects the existing report channel and project-local `wf` PATH, and records CLI version/unrestricted mode in invocation-start events. Only base environment plus Codex home/key and report access are selected. Per-invocation config preserves report environment for tools, excludes the API key from their inheritance, and disables shell snapshots; it does not edit global files. No schema migration or workflow control change is needed. Raw scrubbed events use the existing bounded attempt log.
 
-Codex registry status is `conformance_passed` after the full shared offline suite passes against a fixture CLI. Real account/provider framing and resume remain unverified; Phase 0.5 and the live Phase 6 gate remain open. Pi is the next adapter. See `docs/harness-compatibility.md` for official sources, installed-version evidence and limitations.
+Codex registry status is `conformance_passed` after the full shared offline suite passes against a fixture CLI. Real account/provider framing and resume remain unverified; Phase 0.5 and the live Phase 6 gate remain open. Pi now has the separate implementation below; Claude Code is next (Phase 6.3). See `docs/harness-compatibility.md` for official sources, installed-version evidence and limitations.
 
 ### 4.2 Pi integration
 
@@ -240,6 +240,14 @@ Pi JSON/RPC streams are strict LF-delimited JSONL. Read with a UTF-8 byte stream
 - https://github.com/badlogic/pi-mono (verify currently installed fork)
 - https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/json.md (JSON mode reference of a Pi fork)
 - https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/rpc.md (RPC mode reference of a Pi fork)
+
+### 4.2.1 Phase 6.2 implementation
+
+`adapters/pi.ts` targets the installed `@earendil-works/pi-coding-agent` 1.3.0 CLI, using `--print --mode json` and stdin prompts rather than a long-lived RPC connection. `pi-events.ts` decodes bounded UTF-8/LF records continuously, including beyond bounded stdout capture. `agent_end` never settles execution: transient assistant failures may recover through Pi's native retries/compaction. Final assistant errors/aborts/truncation, exhausted retries, failed compaction or malformed records make a clean exit technical failure. A final non-aborted `agent_settled` and common process/group/pipe settlement are required. Streamed content never becomes a report.
+
+Fresh sessions use unique directories under a runner-owned persistent root beside logs (or explicit adapter `sessionDir`). After settlement the adapter finds the exact UUID file and validates its bounded v3 header against the streamed identity. Its absolute path is the opaque durable engine session identity. Resume rechecks header/UUID/cwd before launch and preserves the requested identity if returned evidence mismatches. Pi creates missing *paths* and `--session-id` sessions, so resume instead uses `--session <full-UUID> --session-dir <that-file-directory>`. Installed source confirms missing ID lookup exits without creating a session; the dedicated directory prevents cross-project lookup. No selector, recent-session, fork or fresh fallback is used. Existing same-run/task/revision scoping and one sequential bounded correction remain runner responsibilities.
+
+The factory isolates version/help probes with a temporary Pi config directory, offline mode and resource discovery disabled. Runtime keeps the user's normal unrestricted tools, passes model/validated thinking level, selects a deliberate environment and scrubs injected secrets through the common supervisor. Version and permission mode are audited. The common probe runner now accepts an explicit environment; existing probes keep their previous default. The shared conformance helper accepts a harness id so Pi is exercised as `pi`. Its registry status is `conformance_passed` after shared offline tests, not live verification. No schema migrations, workflow control changes, daemon or UI were added.
 
 ### 4.3 Claude Code integration
 

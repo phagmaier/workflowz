@@ -87,13 +87,17 @@ export function probeEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJ
   return env;
 }
 
-export const runProbeCommand: CommandRunner = async (binary, args) => {
+export async function runProbeCommand(
+  binary: string,
+  args: readonly string[],
+  environment: NodeJS.ProcessEnv = probeEnvironment(),
+): Promise<CommandResult> {
   try {
     const result = await startProcess({
       command: binary,
       args,
       cwd: process.cwd(),
-      env: probeEnvironment(),
+      env: environment,
       timeoutMs: PROBE_TIMEOUT_MS,
       stdoutLimit: 4 * 1024 * 1024,
       stderrLimit: 4 * 1024 * 1024,
@@ -120,7 +124,7 @@ export const runProbeCommand: CommandRunner = async (binary, args) => {
       spawnError: error instanceof Error ? error.message : String(error),
     };
   }
-};
+}
 
 export async function probeHarness(
   descriptor: HarnessDescriptor,
