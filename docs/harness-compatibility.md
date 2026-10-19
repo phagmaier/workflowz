@@ -266,17 +266,17 @@ Settled success/failure removes only its generated `project/`, preserving eviden
 
 ### Proposed live pass — authorization still required
 
-The following is a proposal, **not execution evidence**. Use Codex `gpt-6.1-sol` and Pi `openai/gpt-6.1-sol`, both at `low` reasoning. The installed Pi docs use provider ID `openai` for local OpenAI auth; model/account availability is not established by these offline checks. No alternative model/provider or retry will be selected if admission or execution fails.
+The following is a proposal, **not execution evidence**. Per the account owner's cost preference, use Codex `gpt-6-luna` and Pi `openai/gpt-6-luna`, both at `low` reasoning. Keep GPT smoke usage on Luna/low unless explicitly instructed otherwise; do not automatically upgrade models, increase reasoning or change providers. The [public Pi catalog](https://pi.dev/models/openai/gpt-6-luna) lists this selector, but local model/account availability remains unverified. The user paused execution while changing this selection; no provider-backed smoke has run.
 
 ```bash
 export PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH
 export TMPDIR=/home/phagmaier/.local/state/workflowz/live-smoke-6.8/scratch
 mkdir -p "$TMPDIR"
 for scenario in report correction; do
-  npm run smoke:harnesses -- --execute --harness codex --model gpt-6.1-sol \
+  npm run smoke:harnesses -- --execute --harness codex --model gpt-6-luna \
     --reasoning-effort low --scenario "$scenario" --timeout-seconds 60 \
     --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-6.8 || break
-  npm run smoke:harnesses -- --execute --harness pi --model openai/gpt-6.1-sol \
+  npm run smoke:harnesses -- --execute --harness pi --model openai/gpt-6-luna \
     --reasoning-effort low --scenario "$scenario" --timeout-seconds 60 \
     --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-6.8 || break
 done

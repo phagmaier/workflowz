@@ -172,11 +172,13 @@ Environment selection is not isolation. Scrubbing recognizes known injected valu
 `npm run smoke:harnesses -- ...` requires one explicit harness, model, scenario, timeout and absolute artifact parent. Without `--execute`, it prints a plan **without probes, authentication checks, smoke artifact writes or provider calls**; npm still builds `dist/` first. Live execution is never invoked by builds, `npm test`, `npm run check` or offline capability probes.
 
 ```bash
-npm run smoke:harnesses -- --harness codex --model gpt-6.1-sol \
+npm run smoke:harnesses -- --harness codex --model gpt-6-luna \
   --reasoning-effort low --scenario report --timeout-seconds 60 \
   --artifacts-dir "$HOME/.local/state/workflowz/live-smoke"
 # Add --execute only after authorizing provider usage for that exact selection.
 ```
+
+Account preference for GPT smoke runs: Luna (`gpt-6-luna`, or `openai/gpt-6-luna` in Pi) with `--reasoning-effort low`. Do not upgrade models or raise reasoning automatically; other users' explicit workflow selections remain unchanged.
 
 `report` allows one harness invocation and disables correction. `correction` deliberately requests a clean first turn without a report, then requires exactly one same-session report-only correction (at most 30 seconds). The agent runs a disposable helper that invokes the real `wf report`; success requires its acknowledgment marker, the exact durable report, clean sequential settlement, persisted session identity and SQLite reopen. An accidental original report cannot pass the correction scenario.
 

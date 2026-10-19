@@ -256,3 +256,16 @@ Verification using Node.js **v26.8.2** through the explicit mise PATH:
 An initial targeted run exposed missing explicit synthetic Claude/OpenCode config-directory environment settings; the fixtures were corrected to use their temporary roots before the passing all-five and full gates. No product workaround, retry, dependency or global installed/configuration change was introduced.
 
 **6.8 is checked for implemented opt-in tooling and offline acceptance only. No paid/provider-backed call has been authorized or made; milestone 0.5 and the full Phase 6 live gate remain open.** The [reviewable live proposal](harness-compatibility.md#proposed-live-pass--authorization-still-required) specifies Codex `gpt-6.1-sol` and Pi `openai/gpt-6.1-sol`, low reasoning, separate report/correction workflows, at most six sequential harness invocations, 60-second originals/30-second corrections, isolated target/artifact locations and no enforceable dollar cap. Actual model/account entitlement, provider framing, live tool inheritance and authenticated session correction remain unverified. No automatic live usage is authorized by committing this tooling.
+
+### Account preference update — Luna with low reasoning
+
+Before any live execution, the account owner paused the approved Sol proposal and requested Luna with `low` reasoning for all GPT usage. Updated the current README example and live proposal to Codex `gpt-6-luna` and Pi `openai/gpt-6-luna`, retaining `--reasoning-effort low`. This supersedes the Sol selections recorded above; historical verification commands/results remain unchanged. No automatic model upgrade, higher reasoning or provider fallback is authorized. This is the account's smoke-execution preference, not a hardcoded runner policy or a change to global harness configuration.
+
+Plan-only verification (Node.js v26.8.2):
+
+```bash
+PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run smoke:harnesses -- --harness codex --model gpt-6-luna --reasoning-effort low --scenario correction --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-6.8
+PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run smoke:harnesses -- --harness pi --model openai/gpt-6-luna --reasoning-effort low --scenario correction --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-6.8
+```
+
+Both commands built successfully and printed the requested Luna selector, `reasoningEffort: low`, `execute: false`, maximum two invocations and a 30-second correction bound. No harness/authentication/provider execution or smoke artifacts. The [official Codex model guidance](https://learn.chatgpt.com/docs/models) and [public Pi catalog](https://pi.dev/models/openai/gpt-6-luna) list Luna; account availability remains unverified. Live execution remains paused at the user's request, with zero provider-backed smoke calls.
