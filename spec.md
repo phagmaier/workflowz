@@ -293,6 +293,8 @@ No global retry-budget field, provider call, automatic recovery replay or workfl
 
 The browser UI is a client; closing the tab does not terminate the runner. UI is served locally, with no required cloud account. Prefer localhost binding and no open remote administrative interface by default.
 
+**Implemented shell (Phase 8.1):** `wf ui` requests a one-use browser pairing code from the explicit running daemon. Open its loopback address and paste the code; browser sessions are separate from CLI/report authority and expire on daemon restart. The shell loads an uploaded workflow with its original absolute directory or selects a saved immutable revision, selects project root and ordered instruction paths, previews Markdown tasks (including explicit prechecked inclusion), saves configured revisions, creates ready runs and lists runs. Preview creates nothing; import/create never executes. Creation rereads the current source rather than trusting an old preview. Errors expose validation diagnostics, missing paths and daemon/operation failures. Original YAML/project files are not rewritten. No stage/transition/YAML editor, dashboard/run controls or paused-run edits are included; the full Phase 8 gate remains open. See architecture §8.2 for exact-origin, Host, cookie and request protection.
+
 ## 8. MVP scope and non-goals
 
 ### Included

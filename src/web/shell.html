@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Workflowz — Local workflows</title>
+    <link rel="stylesheet" href="/ui/shell.css" />
+    <script type="module" src="/ui/shell.js"></script>
+  </head>
+  <body>
+    <header><div><p class="eyebrow">WORKFLOWZ / LOCAL</p><h1>Prepare a workflow run</h1></div><span id="connection" role="status">Connecting…</span></header>
+    <main>
+      <p class="notice">Preparation only. Preview does not save; creating a run freezes its tasks but never starts execution. Run controls remain in the CLI.</p>
+      <section id="auth">
+        <h2>Connect this browser</h2>
+        <p>Start the foreground daemon, then run <code>wf ui</code> in your terminal. Paste its one-use code here. Keep the code private.</p>
+        <form id="pair-form"><label for="code">Pairing code</label><input id="code" type="password" autocomplete="off" required /><button type="submit">Connect</button></form>
+      </section>
+      <pre id="error" role="alert" hidden></pre>
+      <p id="message" role="status"></p>
+      <div id="workspace" hidden>
+        <div class="toolbar"><button id="refresh" type="button">Refresh lists</button><button id="logout" type="button">Disconnect browser</button></div>
+        <div class="columns">
+          <section>
+            <h2>1. Choose a workflow</h2>
+            <label for="saved">Saved immutable revisions</label><select id="saved"><option value="">Select a saved workflow…</option></select><button id="load-saved" type="button">Use saved revision</button>
+            <hr />
+            <form id="upload-form">
+              <label for="workflow-file">Or select a local YAML workflow</label><input id="workflow-file" type="file" accept=".yaml,.yml,text/yaml" required />
+              <label for="workflow-dir">Original workflow directory (absolute)</label><input id="workflow-dir" placeholder="/home/you/project/workflows" required />
+              <p class="hint">Browsers cannot reveal a file’s original directory. Relative project paths resolve against this directory on the daemon machine.</p>
+              <button type="submit">Load workflow file</button>
+            </form>
+          </section>
+          <section>
+            <h2>2. Select project inputs</h2><p id="source-label">Load a workflow to select its inputs.</p>
+            <form id="inputs-form">
+              <fieldset id="input-fields" disabled>
+                <label for="project-root">Project root (absolute)</label><input id="project-root" required />
+                <label for="instructions">Instruction files — one path per line, in context order</label><textarea id="instructions" rows="4" placeholder="spec.md&#10;AGENTS.md"></textarea>
+                <label for="task-path">Markdown checklist path (blank for no tasks)</label><input id="task-path" placeholder="todo.md" />
+                <p class="hint">Instruction/checklist paths are relative to the selected project root, or absolute. Missing inputs are errors. Step-specific instructions remain unchanged.</p>
+                <label class="checkbox"><input id="include-completed" type="checkbox" />Include prechecked tasks explicitly</label>
+                <div class="actions"><button type="submit">Preview tasks &amp; validate</button><button id="save" type="button">Save configured workflow</button><button id="create" type="button">Import tasks &amp; create ready run</button></div>
+              </fieldset>
+            </form>
+            <p class="hint">Saving may normalize YAML formatting; original files are never overwritten. Stages, transitions and policies cannot be edited here. A new pairing replaces the previous browser session.</p>
+          </section>
+        </div>
+        <section aria-labelledby="preview-heading"><h2 id="preview-heading">Task preview</h2><p id="preview-summary">No preview yet.</p><div id="preview"></div></section>
+        <section aria-labelledby="runs-heading"><h2 id="runs-heading">Runs</h2><p class="hint">Saved states, refreshed on request. No execution controls or live dashboard in this shell.</p><div class="table-scroll"><table><thead><tr><th>Run</th><th>State</th><th>Project</th><th>Revision</th><th>Cursor</th><th>Created</th></tr></thead><tbody id="runs"></tbody></table></div><p id="empty-runs">No runs yet.</p></section>
+      </div>
+    </main>
+  </body>
+</html>

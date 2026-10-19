@@ -677,3 +677,56 @@ git diff --check
 **7.5 is checked only after this acceptance.** No production defect was exposed, and no runtime code, dependency or migration changed. Existing limits remain: Linux `/proc` and reliable local SQLite locks are required; identity inspection/signalling is non-atomic; escaped descendants and unidentified operations cannot be proven safe automatically; operator cleanup confirmation is a consequential assertion, not isolation or successful-side-effect evidence. SIGKILL fixtures do not simulate every power-loss/storage failure. No rollback, exactly-once external effects or new live-provider attestation is claimed. UI/later milestones remain unauthorized. Changes are uncommitted/unpushed pending owner review and approval.
 
 After the acceptance review, the owner explicitly approved committing and pushing Phase 7.5 and requested a fresh-agent prompt for the next task. This supersedes the pending-approval statements above; it does not authorize this session to implement Phase 8 or run providers.
+
+## Phase 8.1 — localhost workflow preparation shell
+
+Started from clean `main`, synchronized with `origin/main`, at the requested `a5dbe8527852673121ec16b3d9e8fa76d245fbae`. The owner's current prompt authorizes offline 8.1 implementation/testing only and supersedes historical UI-unauthorized statements. No subagents, live providers, real credential-file reads, global configuration changes, commit/push or Phase 8.2–8.5/9 work was performed.
+
+Read the required guidance/design/checklist/example in order, then management/recovery evidence and schema decisions. The installed codebase-memory skill identified a ready index at generation `2026-10-19T23:14:02Z`; all 16 named implementation/test/tooling paths had metadata-match coverage without a recorded issue. Exact graph symbol lookup plus direct source and TypeScript LSP references established the existing daemon/management/runner boundary. No second database/execution owner or migrations were needed.
+
+### Design and implementation
+
+Documented the minimum integration and browser authorization in architecture §8.2 and spec §7 **before implementation**. Chose native HTML/CSS and browser TypeScript rather than a framework, bundler, component library or extra server: existing `tsc` emits the client and a tiny build step copies its inert static assets. No dependency or lockfile changes. YAML selection mutation uses the existing library's [document API](https://github.com/eemeli/yaml/blob/main/docs/04_documents.md), consulted through current official documentation; originals remain untouched and the UI warns about normalization in saved revisions.
+
+- The explicit foreground daemon serves `/ui/`; `wf ui` obtains a separate one-use five-minute pairing code through private CLI management authority. Manual code exchange creates a single 12-hour HttpOnly/SameSite/path-scoped cookie session, rotated by successful pairing and revoked by logout/restart. Codes never appear in URLs, bundles or daemon logs; deliberate `wf ui` terminal output is private credential material.
+- Exact loopback Host rejects rebinding; exact Origin, JSON and a custom request header are mandatory on browser POSTs, with no CORS. Existing CLI Origin rejection and attempt reporting stay unchanged. The strict browser allowlist cannot dispatch, resume, stop, mutate existing runs, recover, read arbitrary files or run commands. Body size/read bounds are shared with management. Authorization is rechecked after body receipt, preventing a partially received mutation from surviving logout/session rotation/expiry. Security headers prohibit framing/external resources/inline script/caching/referrer propagation. Task/workflow text uses inert DOM text.
+- Upload an existing YAML definition with its original absolute directory, or select a saved immutable revision. Select root, ordered instruction paths, optional checklist path and explicit prechecked inclusion; all step/policy fields remain outside editing scope. Canonical validation, immutable save, task preview and ready-run creation delegate to the established management facade and runner. Preview writes no run/revision. Creation rereads the current checklist, freezes it and never starts execution. Unchanged inputs retain exact revision identity.
+- Saved workflow and run lists refresh explicitly. Errors expose useful definition/path/operation/daemon failures; timeout messaging warns that save/create may have committed and requires inspecting lists before a repeat. Browser reload discards unsaved inputs but not persisted revisions/runs. Browser disconnect has no daemon lifecycle effect.
+
+### Focused and actual-browser verification
+
+The focused build plus browser/management/client/task-import/revision run passed **34 tests / 6 suites** before the final in-flight revocation regression was added. Final browser boundary suite: **7 tests / 1 suite passed**, zero failures/cancellations/skips. Covers exact-host/origin/header/content-type enforcement, separate bearer/cookie authority, one-use/rotated/expired/revoked sessions including a held request body, read-only preview, unchanged revision identity, immutable changed-source snapshots, strict controls/unknown-fields/oversized/malformed rejection, missing inputs and graph-only creation.
+
+The initial focused host test exposed a fixture issue: Node fetch replaces a supplied Host header, so it never sent the malicious Host. Replaced that check with actual raw HTTP; the rebinding request is now exercised and rejected. No Origin/Host protection was weakened. Final review also added the held-body revocation check rather than leaving authorization checked only before an asynchronous read.
+
+Used actual Chromium against the real foreground daemon and synthetic project files in this session's `/tmp/wf-browser-81-qRaAe9`, with no execution required:
+
+- Invalid pairing and duplicate YAML errors visible; successful deliberate pairing; missing project root, instruction and checklist errors visible.
+- Project-root change to a separate synthetic directory, ordered two-file instruction selection, different checklist path, saved revision, reload and saved-source reselection preserved the configured inputs.
+- Nested/prechecked/Unicode tasks previewed correctly, prechecked exclusion and explicit inclusion both exercised. HTML-like task text remained text (zero injected image nodes). CLI inspection proved preview/save created no run.
+- Changed the checklist after preview: browser creation froze the **new** task, not the preview; a later file edit left imported tasks unchanged. Explicit prechecked creation queued both checked/unchecked items. A graph-only upload previewed without tasks and created another ready run.
+- All three created runs stayed `ready`, with null start times/no execution. Reload and tab close/reopen retained listing while daemon ping stayed healthy. Explicit owner restart required fresh pairing and preserved all three ready states. Logout returned the pairing surface; stopped-daemon refresh showed the useful transport error.
+- Desktop/full-page and 390px mobile visual inspection passed. A final mobile adjustment keeps the 760px run table inside its 320px scrolling container without page overflow (390px document/viewport). No browser page errors were observed.
+- Explicitly closed all managed tabs. Both foreground fixture daemons exited with code 0; both loopback listeners refused connections and discovery was absent. Removed only this session's fixture root and verified absence. Historical `/tmp/wf-*` evidence directories were not cleanup targets.
+
+Limits: preparation only, not the full Phase 8 gate. No stage/transition/YAML editor, dashboard/controls/streaming, paused editing, arbitrary file picker API or task re-import. Paths are typed explicitly; the browser cannot infer a selected file's original directory. One browser session at a time, manual refresh, unsaved form state resets on reload, and selection edits may normalize saved YAML. Loopback HTTP and same-user cookie boundaries are not isolation from malicious same-user programs. Existing process/recovery/external-effect limits remain unchanged.
+
+### Final acceptance
+
+Executed sequentially on Node.js **v26.8.2** / npm **11.19.1**:
+
+```bash
+npm run check
+npm run smoke:recovery
+npm run smoke:reporting
+npm run smoke:boundaries
+node dist/app/validate-cli.js examples/overnight.yaml
+git diff --check
+```
+
+- **790 tests / 88 suites passed**, zero failures/cancellations/skips; typecheck passed. Biome checked 147 files with no fixes, no errors/warnings and the existing 134 informational suggestions. All five adapters retain full offline conformance.
+- Recovery smoke passed all four owner-crash/disposition paths with no replay, durable reopen and owned cleanup. Reporting smoke passed durable acknowledgment before settlement, direct reporting and exactly one successful/failed correction with reopen and cleanup. Boundary smoke passed synthetic OpenCode/Claude correction/provider-failure paths, scrubbing, selected environment, sequential settlement and reopen.
+- Canonical overnight definition: valid, **8 steps, zero warnings**, unchanged hash prefix `8a4912284968`. Example, workflow/report contracts, migrations 1–9 and harness compatibility behavior are intentionally unchanged.
+- Required diff whitespace check passed. Browser verification used real loopback listeners/local processes without sandbox workarounds or skipped scenarios; fixture-owned daemon exits, closed tabs/listeners and removed directory were explicitly verified above. No live/paid provider was invoked.
+
+**Only 8.1 is checked** after these results. README, specification, architecture and schema decisions describe the implemented boundary and limitations. No separate handoff document was created. Changes remain uncommitted/unpushed pending separate owner approval. Proposed commit: `Implement Phase 8.1 localhost workflow preparation shell`.

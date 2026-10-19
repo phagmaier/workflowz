@@ -12,7 +12,7 @@
 
   The earlier [remaining-harness pass](docs/harness-compatibility.md#remaining-milestone-05-results--stopped-at-omp-authentication) stopped at omp's missing OpenAI credential after Claude/OpenCode reporting passed. The later explicitly authorized [Meta Contributor pass](docs/harness-compatibility.md#authorized-meta-contributor-live-results) passed omp/OpenCode direct reporting and exact-session correction. The separately authorized [Claude Haiku/low correction](docs/harness-compatibility.md#authorized-claude-correction--milestone-05-complete) now passed with exact-session identity, real acknowledgment, sequential settlement, durable reopen and target removal. **All milestone 0.5 acceptance evidence is reviewed.** No successful scenario or failed OpenAI path was repeated.
 
-  Standing choice: Meta Muse Spark 1.3 Contributor/low for OpenCode/omp, using `MUSE_SPARK_API_KEY` in `~/.config/secrets.zsh` through `smoke:meta`. Local loading and live use are verified; do not request the key/source again. Completed live passes do not authorize additional paid execution. Milestone 0.5 and the Phase 6 gate are complete. Phase 7 milestones were authorized separately, including offline 7.4 and 7.5 implementation/testing. Phase 8 onward remains unauthorized.
+  Standing choice: Meta Muse Spark 1.3 Contributor/low for OpenCode/omp, using `MUSE_SPARK_API_KEY` in `~/.config/secrets.zsh` through `smoke:meta`. Local loading and live use are verified; do not request the key/source again. Completed live passes do not authorize additional paid execution. Milestone 0.5 and the Phase 6 gate are complete. Phase 7 milestones were authorized and committed separately. The current authorization covers offline Phase 8.1 only; 8.2–8.5 and Phase 9 remain unauthorized.
 
 **Gate:** Fresh clone installs, typechecks, tests, and has a short local development README; version probe works or explains missing binaries.
 
@@ -92,7 +92,7 @@
 
 ## Phase 7 — Crash recovery, management CLI, and reliability
 
-Authorized scope: **7.1, the separately approved headless/offline 7.2 recovery API, and the owner's explicit 7.3 request including the minimum daemon/API needed by its CLI**, followed by separate offline 7.4 and 7.5 implementation/testing authorization. The owner committed/pushed 7.4 as `f9bd2b9`; earlier pending-commit and 7.5-unauthorized statements are historical. No UI, later roadmap work, provider execution or subagents is authorized. Phase 7.5 commit/push requires separate owner approval.
+Authorized scope: **7.1, the separately approved headless/offline 7.2 recovery API, and the owner's explicit 7.3 request including the minimum daemon/API needed by its CLI**, followed by separate offline 7.4 and 7.5 implementation/testing authorization. The owner committed/pushed 7.4 as `f9bd2b9` and 7.5 as `a5dbe85`; earlier pending-commit/authorization statements are historical. The subsequent authorization covers only offline 8.1, with no subagents/provider execution and separate owner approval still required for commit/push.
 
 - [x] 7.1 Implement daemon instance lock, process identity tracking (PID+start identity), in-flight attempt reconciliation, and interrupted/uncertain pause semantics.
 
@@ -114,7 +114,11 @@ Authorized scope: **7.1, the separately approved headless/offline 7.2 recovery A
 
 ## Phase 8 — Small browser UI
 
-- [ ] 8.1 Create localhost UI shell with project root, instruction selection, Markdown task preview/import, saved workflows, and run list.
+Current bounded authorization: **8.1 implementation and offline/browser verification only**. No subagents, paid/live providers, 8.2–8.5 or Phase 9. Commit/push requires separate owner approval. Completing 8.1 does not satisfy the full Phase 8 gate.
+
+- [x] 8.1 Create localhost UI shell with project root, instruction selection, Markdown task preview/import, saved workflows, and run list.
+
+  Verified on Node.js v26.8.2 / npm 11.19.1: actual Chromium against a disposable foreground daemon covered selection/save/reload, nested/prechecked preview/import, ready-only immutable snapshots, graph-only workflows, validation/path/daemon failures, tab disconnect, restart/re-pairing and logout. Final gate: **790 tests / 88 suites**, typecheck/lint passed; all three required recovery/reporting/boundary smokes and canonical example passed. [Design, browser evidence, cleanup and limits](docs/implementation-log.md#phase-81--localhost-workflow-preparation-shell). No new dependency or migration; **8.2–8.5 and the full Phase 8 gate remain open**.
 - [ ] 8.2 Add visual stage-list editor with outcome-to-transition controls, scoped policy editor, inherited effective-transition view, YAML editing and validation messages.
 - [ ] 8.3 Add run dashboard: current task/stage, harness, event stream, progress (when total known), report details, attention queue, pause/stop/resume controls.
 - [ ] 8.4 Add paused-run workflow revision editor and explicit manual override actions with warnings that repository files are unchanged.

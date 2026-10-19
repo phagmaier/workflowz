@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6 and Phases 7.1–7.5 are complete, including offline daemon crash/restart reliability coverage. This is not a complete MVP: the UI and remaining work stay on the [`todo.md`](todo.md) roadmap and require new authorization. See the [Phase 7.5 coverage matrix and acceptance evidence](docs/implementation-log.md#phase-75--daemon-crash-boundaries-and-resumed-revisions).
+**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6, Phases 7.1–7.5 and the bounded Phase 8.1 browser preparation shell are complete. This is not a complete MVP: stage editing, execution dashboard/controls, paused editing and remaining browser acceptance stay on the [`todo.md`](todo.md) roadmap. See the [implementation evidence](docs/implementation-log.md).
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -192,6 +192,23 @@ Override JSON is exactly one of `{"action":"jump","stepId":"review","reason":"In
 Recovery files use the exact inspected `expectedEventId`, `attemptId` (null between steps), and reason described above. Confirmation additionally requires `confirmedNoSurvivingOperation:true` after independent cleanup. Decision adds `action` (`retry`, `continue`, `skip`, `jump`, `end`), plus the declared `outcome` or compatible `stepId` where required. Non-ending decisions leave the run paused for separate resume. A retained report never settles interrupted work.
 
 Management `--json` writes one result to stdout or one `{error,...}` object to stderr. Success exits 0; validation/control/transport rejection exits 1; malformed CLI fields/options or unreadable input files exit 2. Human validation retains `file:line:column` diagnostics. `wf --help` lists commands. Use `wf report ...` with its existing report options, without management flags; its acknowledgment/exit behavior is unchanged. Management never accepts the attempt token.
+
+### Browser preparation shell (Phase 8.1)
+
+```bash
+npm run build
+bin/wf daemon start             # foreground owner; keep this terminal open
+# In another terminal, with the same --state-dir if selected:
+bin/wf ui
+```
+
+Open the printed `http://127.0.0.1:PORT/ui/` address and paste the separately printed pairing code. Codes expire after five minutes and work once; requesting another invalidates the unused prior code. Pairing rotates the single browser session (12-hour lifetime); logout/restart revokes it. Do not publish codes or `wf ui --json` output. Browser and CLI/report authority are separate; daemon/report credentials never enter the page.
+
+Select a saved immutable revision, or upload a YAML workflow and enter its **original absolute directory** (browsers cannot reveal that directory). Choose the absolute project root, ordered instruction paths, optional checklist path and explicit prechecked inclusion. Preview is read-only. Save stores a validated configured revision; import/create rereads the checklist into a **ready** run without starting anything. Relative instruction/checklist paths use the selected root; step-specific inputs remain in the workflow. Selection edits may normalize YAML formatting in the saved revision, never overwrite source files. Reload resets unsaved inputs; saved revisions and runs remain in the daemon.
+
+Lists refresh explicitly. If an operation times out, inspect lists before repeating save/create: a response loss does not prove that nothing committed. Missing paths and invalid workflows display diagnostics. If the daemon is unavailable, start it explicitly and request a fresh pairing code; nothing auto-starts. Tab close/reload/disconnect does not stop the daemon.
+
+This is preparation only: no stage/transition/YAML editor, execution dashboard, start/pause/stop/resume buttons, logs or paused-run edits. Use the existing CLI for execution. The full Phase 8 gate is not complete. No provider execution is needed to use or verify this shell. Exact Host/Origin checks, a separate HttpOnly SameSite cookie, JSON/custom-header requirements and CSP protect the narrow local API; this is not isolation from same-user programs. No new frontend/runtime dependencies are introduced.
 
 ### Limits and stage retries (Phase 7.4)
 

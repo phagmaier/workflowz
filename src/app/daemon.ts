@@ -9,10 +9,10 @@ import { scrubSecrets } from "../adapters/secrets.js";
 import { managementRequestSchema } from "../contracts/management.js";
 import { RunStateError, WorkflowInvalidError } from "../engine/run-coordinator.js";
 import { WorkflowDatabase } from "../store/database.js";
+import { BrowserTransport } from "./browser-transport.js";
+import { HttpRequestError, readJsonBody } from "./http-body.js";
 import { ManagementService } from "./management-service.js";
 import { privateStateDirectory, readDaemonAccess } from "./state-directory.js";
-
-export const MANAGEMENT_BODY_LIMIT = 2 * 1024 * 1024;
 
 export async function startDaemon(directory: string, agents?: Map<string, AgentAdapter>) {
   const dir = privateStateDirectory(directory, true);
@@ -35,6 +35,7 @@ export async function startDaemon(directory: string, agents?: Map<string, AgentA
     process.umask(oldMask);
     throw error;
   }
+  const browser = new BrowserTransport(management);
   let closing: Promise<void> | undefined;
   let finish: () => void = () => {};
   let fail: (error: unknown) => void = () => {};
@@ -73,6 +74,7 @@ export async function startDaemon(directory: string, agents?: Map<string, AgentA
   };
   async function receive(req: IncomingMessage, res: ServerResponse) {
     try {
+      if (await browser.receive(req, res)) return;
       if (req.method !== "POST" || req.url !== "/api/v1") {
         reply(res, 404, { error: "unknown management route" });
         return;
@@ -87,26 +89,14 @@ export async function startDaemon(directory: string, agents?: Map<string, AgentA
         reply(res, 422, { error: "management requires application/json without browser origin" });
         return;
       }
-      req.setTimeout(5000, () => req.destroy());
-      const chunks: Buffer[] = [];
-      let size = 0;
-      for await (const chunk of req) {
-        const bytes = Buffer.from(chunk as Buffer);
-        size += bytes.length;
-        if (size > MANAGEMENT_BODY_LIMIT) {
-          reply(res, 413, { error: "management body exceeds 2 MiB" });
-          return;
-        }
-        chunks.push(bytes);
-      }
-      let body: unknown;
-      try {
-        body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-      } catch {
-        reply(res, 422, { error: "management body must be valid JSON" });
+      const body = await readJsonBody(req);
+      const request = managementRequestSchema.parse(body);
+      if (request.op === "browser-access") {
+        if (((await management.handle({ op: "ping" })) as { closing: boolean }).closing)
+          throw new RunStateError("daemon is shutting down");
+        reply(res, 200, browser.access(req.socket.localPort as number));
         return;
       }
-      const request = managementRequestSchema.parse(body);
       if (request.op === "shutdown") {
         management.requestShutdown();
         res.once("finish", () => {
@@ -120,6 +110,10 @@ export async function startDaemon(directory: string, agents?: Map<string, AgentA
       reply(res, 200, await management.handle(request));
     } catch (error) {
       if (res.headersSent || res.destroyed) return;
+      if (error instanceof HttpRequestError) {
+        reply(res, error.status, { error: error.message });
+        return;
+      }
       if (error instanceof WorkflowInvalidError)
         reply(res, 422, { error: "invalid workflow definition", diagnostics: error.diagnostics });
       else if (error instanceof ZodError)

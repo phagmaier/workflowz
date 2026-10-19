@@ -423,22 +423,19 @@ Existing-run admission and revision validate live referenced inputs but exclude 
 
 SIGINT/SIGTERM or shutdown admission marks the facade closing, rejects new mutations and synchronously requests pause-after-current before acknowledgment. Teardown awaits any admitted control, rechecks pause and awaits drive settlement before closing connections/discovery/database. Shutdown acknowledgment precedes exit; a stage without a timeout can delay exit indefinitely. Clients may inspect while draining. Stop-now remains the explicit run termination action. If drive fails unexpectedly, its released guard permits conservative reconciliation into interruption; a safe failure notice remains visible in ping/status. No accepted report routes uncertain work, and restart never replays dispatch/signals.
 
-Rationale: foreground ownership plus private loopback RPC is the smallest process model that lets independent CLI invocations control the actual child owner and lets a future browser share the same application facade. Existing kernel ownership, SQLite revisions and recovery contracts avoid a second state authority or migration. SSE/browser authorization integration, detachment, service-manager setup and broader daemon reliability remain later milestones.
+Rationale: foreground ownership plus private loopback RPC is the smallest process model that lets independent CLI invocations control the actual child owner and lets the browser share the same application facade. Existing kernel ownership, SQLite revisions and recovery contracts avoid a second state authority or migration. Browser authorization integration is now described in §8.2; SSE, detachment and service-manager setup remain deferred.
 
-### 8.2 Planned browser routes
+### 8.2 Browser shell integration (Phase 8.1)
 
-HTTP remains on `127.0.0.1`. A later browser client can use this same RPC facade or thin REST wrappers, plus SSE for state/events. Planned operations include:
+The same foreground daemon serves dependency-free HTML/CSS and compiled browser TypeScript at `/ui/`. There is no frontend server, database connection, second runner or new dependency. Build copies static assets alongside the compiled modules. Browser reload/disconnect has no lifecycle effect.
 
-- `POST /workflows/validate`, `/workflows/save`, `GET /workflows`.
-- `POST /tasks/preview-import`.
-- `POST /runs`, `POST /runs/:id/start`, `GET /runs/:id`, `GET /runs/:id/events`, `GET /runs/:id/reports`, `GET /runs/:id/tasks`.
-- `POST /runs/:id/pause`, `/stop`, `/resume`, `/override`, `/revise`.
-- `GET /runs/:id/events/stream` (SSE) for live UI.
-- Private `POST /internal/reports` as above, authenticated by attempt token.
+`wf ui` uses private CLI management authority to request a fresh, single-use, random browser pairing code (five-minute expiry). It prints the non-secret loopback address and code for deliberate entry into the page; neither daemon nor report credentials enter the browser. Codes are never URLs, bundles or daemon logs. Issuing a new code invalidates the previous unconsumed code. Pairing exchanges it for a memory-only session cookie (`HttpOnly; SameSite=Strict; Path=/ui`, 12-hour expiry); successful pairing rotates the single browser session. Restart revokes both. Loopback HTTP is not protection against malicious same-user processes.
 
-API mutating requests must validate run state server-side. The visual editor and CLI use the same route/engine service; no UI-only business logic. Avoid exposing raw command execution endpoint independent of a validated workflow.
+Every browser route requires the exact `127.0.0.1:PORT` Host (DNS-rebinding protection). Browser POSTs additionally require the exact daemon Origin, JSON and a custom request header, with no CORS. API access requires the separate browser cookie, never management/report bearer authority. Pairing and API bodies use the existing 2 MiB/five-second bounds. Static responses prohibit framing, external resources, inline scripts, caching and referrer propagation via CSP and security headers. Workflow/task strings render as text, never HTML.
 
-UI uses a small component library only if it helps. Stage **list editor** is enough for MVP; no heavyweight flowchart canvas required. Show effective transitions, including inherited policies, and allow manual YAML edit + parse errors. Save YAML through a parser/serializer that warns if comments/style may be reformatted; do not silently destroy custom source formatting on first load.
+The browser API is a separate strict allowlist: session inspection/logout, saved revisions, run list, source loading, configured task preview, save immutable revision and create ready run. It delegates validation, preview/import and creation to the existing management facade. There are no start/resume/control/recovery/log endpoints, arbitrary filesystem browsing/reading, commands or new migrations. A workflow file is explicitly uploaded as text with its absolute original directory, or selected from saved revisions. Project root, ordered instruction paths and optional Markdown source are the only editable configuration fields; YAML steps/policies remain untouched. These selections produce canonical validated YAML before saving/creating. Preview writes nothing; create rereads and freezes the actual checklist, never starts execution. Source imports and configuration changes are shown explicitly; original project files are not rewritten.
+
+Phase 8.2 owns stage/transition/policy/YAML editing, 8.3 owns dashboard/control/streaming, and 8.4 owns paused-run editing. These and the full Phase 8 gate are not implemented by this shell.
 
 ## 9. Testing strategy
 

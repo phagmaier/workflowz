@@ -11,6 +11,7 @@ import { validateWorkflow } from "./workflow-validation.js";
 
 const HELP = `usage: wf [--state-dir DIR] [--json] <command>
   daemon start|status|stop                  start runs in the foreground
+  ui                                       print browser address and one-use pairing code
   workflow validate|import FILE             validate or save an immutable revision
   workflow list
   tasks preview FILE [--include-completed]
@@ -118,6 +119,8 @@ export async function managementMain(argv = process.argv.slice(2)): Promise<void
       else if (action === "status") input = { op: "ping" };
       else if (action === "stop") input = { op: "shutdown" };
       else throw new UsageError("unknown daemon command");
+    } else if (group === "ui" && !action) {
+      input = { op: "browser-access" };
     } else if (group === "workflow") {
       if (action === "validate") localValidation = validateWorkflow(workflow(needTarget()));
       else if (action === "import") input = { op: "import", ...workflow(needTarget()) };
@@ -232,7 +235,12 @@ export async function managementMain(argv = process.argv.slice(2)): Promise<void
     const request: ManagementRequest = managementRequestSchema.parse(input);
     const result = await managementRequest(directory, request);
     if (json) console.log(JSON.stringify(result));
-    else if (request.op === "status") {
+    else if (request.op === "browser-access") {
+      const access = result as { url: string; code: string };
+      console.log(
+        `Open ${access.url}\nPairing code (single-use, expires in 5 minutes):\n${access.code}\nTreat this browser-only code as a credential; do not publish it.`,
+      );
+    } else if (request.op === "status") {
       const status = result as {
         run: { runId: string; status: string; cursorStepId: string; activeTaskId: string | null };
         expectedEventId: number;

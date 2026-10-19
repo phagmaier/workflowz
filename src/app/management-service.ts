@@ -146,6 +146,8 @@ export class ManagementService {
         return { version: 1, closing: this.closing, driveFailure: this.driveFailure ?? null };
       case "shutdown":
         throw new Error("shutdown is handled by daemon lifecycle");
+      case "browser-access":
+        throw new Error("browser access is handled by daemon transport");
       case "validate":
         return validateWorkflow(request);
       case "import": {

@@ -28,6 +28,7 @@ export const overrideSchema = z.discriminatedUnion("action", [
 export const managementRequestSchema = z.discriminatedUnion("op", [
   z.strictObject({ op: z.literal("ping") }),
   z.strictObject({ op: z.literal("shutdown") }),
+  z.strictObject({ op: z.literal("browser-access") }),
   z.strictObject({ op: z.literal("validate"), ...workflow }),
   z.strictObject({ op: z.literal("import"), ...workflow }),
   z.strictObject({ op: z.literal("workflows") }),
