@@ -38,13 +38,13 @@ These selections come from installed help or the versioned API contract linked b
 
 Offline inventory does not check authentication. Earlier unverified status-command exits are not authentication evidence. The opt-in Phase 6.8 tool uses documented Codex/Pi/Claude status checks, discards all status output, and retains only the classification below. No credential files are inspected or copied; no login/logout or global configuration change is performed.
 
-## Live verification — Codex and Pi passed
+## Live verification — Phase 6 passed; milestone 0.5 incomplete
 
 The account owner explicitly authorized the revised Luna/low pass on 2026-10-19. Codex `0.163.0` with `gpt-6-luna` and Pi `1.3.0` with `openai/gpt-6-luna` each completed both report and exact-session correction scenarios. All four workflows returned `complete`, acknowledged actual `wf report`, reopened SQLite successfully and removed their settled targets. No alternate model, higher reasoning or runner retry was used.
 
-This verifies the exercised Codex/Pi authentication, provider framing, helper tool/report environment and persisted-session correction paths—not arbitrary tools, managed settings or every provider. Together with the current 697-test offline gate, including all registered adapters' conformance suites, it satisfies the Phase 6 gate. Claude Code, OpenCode and omp were not executed against providers; milestone 0.5 remains open. Detailed artifacts and gate evidence are recorded below and in [implementation verification](implementation-log.md#phase-6-live-acceptance--authorized-lunalow-pass).
+The Codex/Pi evidence verifies their exercised authentication, provider framing, helper tool/report environment and persisted-session correction paths—not arbitrary tools, managed settings or every provider. Together with the 697-test offline gate, including all registered adapters' conformance suites, it satisfies the Phase 6 gate. A separately authorized remaining-harness pass then completed Claude and OpenCode direct reporting but stopped at omp's missing OpenAI credential; no remaining-harness correction ran. Milestone 0.5 remains open. See [remaining-pass results](#remaining-milestone-05-results--stopped-at-omp-authentication) and [Codex/Pi verification](implementation-log.md#phase-6-live-acceptance--authorized-lunalow-pass).
 
-The Phase 6.1–6.7 implementation sections below preserve their implementation-time evidence and limitations. Their Codex/Pi live-pending and Phase 6 gate statements are superseded by the authorized pass above; synthetic evidence alone still does not establish live compatibility.
+The Phase 6.1–6.7 implementation sections below preserve their implementation-time evidence and limitations. Their live-pending statements are superseded only for the paths actually exercised above and in the results below; synthetic evidence alone still does not establish live compatibility.
 
 
 ## Codex adapter implementation (Phase 6.1)
@@ -303,11 +303,13 @@ Retained artifact parent: `/home/phagmaier/.local/state/workflowz/live-smoke-6.8
 
 Each retained `evidence.json` records authentication `available`, helper acknowledgment, durable reopen and target removal. Both correction runs have matching original/correction session fingerprints; their SQLite histories show original settlement, correction request, correction start, report acceptance and correction settlement in that order, with both exits zero. Original logs show `READY` without a report; correction logs show the helper invocation and clean terminal framing. Status admission alone is not entitlement evidence; the subsequent successful provider execution supplies evidence for these selected models on this account.
 
-### Remaining milestone 0.5 pass — proposal only, not authorized
+<a id="remaining-milestone-05-pass--proposal-only-not-authorized"></a>
 
-The account owner authorized **compatibility preparation only**, not additional authentication checks or provider execution. The completed Codex/Pi pass above is unchanged. The following selections are proposed for the remaining harnesses; plan-only checks do not establish local catalog availability, credentials, provider entitlement or successful execution.
+### Remaining milestone 0.5 pass — authorized plan
 
-| Harness | Installed offline version | Proposed explicit model | Reasoning effort |
+After the preparation-only checks, the account owner explicitly approved these selections and bounds on 2026-10-19. The completed Codex/Pi pass above is unchanged. The first three report scenarios ran in order; execution stopped at omp's failure, so none of the three correction scenarios ran. The following preserves the authorized plan, not a claim that all six workflows passed; actual results and limits follow below.
+
+| Harness | Installed offline version | Requested explicit model | Reasoning effort |
 | --- | --- | --- | --- |
 | Claude Code | `2.1.303` | `claude-haiku-5-5` | `low` |
 | OpenCode | `2.0.32` | `openai/gpt-6-luna` | `low` (named variant) |
@@ -321,7 +323,7 @@ Selection evidence and remaining risks:
 - No runner retry, fallback model, provider switch, reasoning increase, login/logout, global config change or additional paid diagnostic run is included. If a selection is unavailable, stop and report the incompatibility.
 - **Native substitution is not prevented by this smoke tool.** Claude documents that a restricted `--model` can be replaced by the default; normal harness configuration/resources may also alter model behavior or make auxiliary requests. Evidence records requested settings, not an attestation of every provider request. Review available actual-model evidence before claiming the selected model passed; any observed substitution invalidates that claim and stops the pass, but may already have incurred usage. OpenCode's current transport has no provider event stream, so do not invent actual-model evidence from the requested selector alone.
 
-Exact proposed execution, **only after explicit approval of these selections and bounds**:
+Exact authorized command plan, preserved for review. Only the first three smoke commands below ran; **do not restart or continue it without new authorization** after the stop-on-first-failure boundary:
 
 ```bash
 export PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH
@@ -351,3 +353,25 @@ Bounds and acceptance:
 - Milestone 0.5 remains unchecked until its per-harness evidence is reviewed against the acceptance criteria. Plan-only output, help flags, unsupported auth status or partial success cannot close it. Phase 7, daemon management, management CLI, UI and subagent delegation remain outside this preparation.
 
 Preparation verification on 2026-10-19: all five isolated installed factories passed again with the versions above (Codex/Pi unchanged). All six smoke selections built and printed `execute: false`, the proposed exact model and `reasoningEffort: low`; report plans allowed one invocation and correction plans two with a 30-second correction bound. No authentication checks, provider calls or smoke artifact writes occurred. The temporary offline-probe scratch directory was removed. Context7 lookup rejected its configured API key; the linked official sources supplied documentation instead.
+
+### Remaining milestone 0.5 results — stopped at omp authentication
+
+Executed separately with Node.js v26.8.2, reviewing each result before advancing. Artifact parent: `/home/phagmaier/.local/state/workflowz/live-smoke-0.5`.
+
+| Harness / scenario | Result | Invocations / corrections | Authentication classification | Artifact directory |
+| --- | --- | --- | --- | --- |
+| Claude / report | passed / `complete` | 1 / 0 | `available` | `wf-claude-report-p8hwmh` |
+| OpenCode / report | passed / `complete` | 1 / 0 | `status_unsupported` | `wf-opencode-report-H5Cedr` |
+| omp / report | `execution_failure` / `system.process_error` | 1 / 0 | `status_unsupported` | `wf-omp-report-qbmi0O` |
+
+Claude `2.1.303` used requested `claude-haiku-5-5`/low and `bypassPermissions`. Its streamed assistant model and terminal `modelUsage.canonicalModel` both identify `claude-haiku-5-5`, with no other model usage reported. Actual helper acknowledgment, one accepted report before exit-zero settlement, completed run, durable reopen and settled-target removal passed. This establishes the exercised live reporting/tool path, not authenticated correction/resume.
+
+OpenCode `2.0.32` completed its private API/helper/report path with requested `openai/gpt-6-luna`/low and `session-allow-all`. One accepted report preceded exit-zero settlement and run completion; helper acknowledgment, durable reopen and target removal passed. `status_unsupported` is not an authentication-status pass; successful execution establishes usable authentication for this path. The transport does not expose provider-model usage, so the requested Luna selector is **not independent proof of the actual model used**.
+
+omp `18.12.2` launched once with requested `openai/gpt-6-luna`/low and `yolo`, then exited **1** with **`No API key found for openai.`** SQLite records one settled invocation, `system.process_error`, a paused run, one logical attempt and zero reports. No correction was requested, no report acknowledgment occurred and no durable session fingerprint was established. Cleanup settled and removed the generated target. This is a native credential-resolution failure, not evidence that Luna is unsupported, an adapter protocol defect or proof of a billable provider request. No credential file was inspected, login attempted, provider switched or retry added.
+
+**Stopped after three invocations. All Claude/OpenCode/omp correction scenarios remain unrun.** The failed omp evidence does not claim the smoke's success-only durable-reopen assertion; separate read-only SQLite inspection recovered its paused history. Private evidence/logs/databases and scratch remain; harness-owned state was not copied, rewritten or removed.
+
+**Observed diagnostic credential exposure:** OpenCode's normal MCP startup diagnostics included a configured MCP API key not known to the runner's injected-value scrubber. The value is deliberately omitted here and was not committed; do not publish the raw log or database. The containing artifact directory is mode 0700; the runner-owned log and database were additionally restricted to 0600 without rewriting their contents. This confirms the documented unknown-secret limitation, not an all-secrets scrub guarantee. Treat the exposed MCP key as sensitive and rotate/revoke it through its owner if valid; no global config/authentication change or automatic revocation was performed.
+
+Milestone **0.5 stays unchecked** for the unverified correction/session paths and omp authentication. Phase 6's Codex/Pi gate remains satisfied. Any further execution requires new authorization; resolving omp credentials or selecting another provider is not authorized by this stopped pass.

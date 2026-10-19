@@ -320,3 +320,36 @@ Offline verification using Node.js **v26.8.2**:
   All six built and printed `execute: false`, the requested model, low reasoning, 60-second original timeout, maximum one/report or two/correction invocations and a 30-second correction bound. No authentication/provider execution or smoke artifact creation occurred.
 
 Documented the unapproved six-workflow proposal: at most nine sequential invocations, stop at first failure, at most 450 seconds configured agent execution plus probes/status/build/cleanup, no enforceable dollar cap, no Codex/Pi repeats and no additional paid diagnostics/retries. Local model/catalog/variant availability and account entitlement remain unverified; milestone 0.5 remains unchecked. Phase 6's completed acceptance evidence is unchanged. No runtime code/tests, credential files, login/logout, global harness configuration, Phase 7, daemon management, management CLI or UI changed.
+
+## Remaining milestone 0.5 — authorized execution stopped at omp
+
+Verified clean `main` at `2bb70d0`, following `27cd439` and `247fe13`. The account owner explicitly approved the prepared Claude/OpenCode/omp model selections, low reasoning, six-workflow/nine-invocation ceiling, 60-second originals/30-second corrections, no fallback/additional paid diagnostics and stop at first failure. Preserved the required guidance, completed Codex/Pi evidence, absence of handoff documents and prohibition on subagents/Phase 7/management/UI work.
+
+Created only the named scratch parent and ran the first three authorized commands separately with Node.js **v26.8.2**:
+
+```bash
+mkdir -p /home/phagmaier/.local/state/workflowz/live-smoke-0.5/scratch
+env PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH TMPDIR=/home/phagmaier/.local/state/workflowz/live-smoke-0.5/scratch npm run smoke:harnesses -- --execute --harness claude --model claude-haiku-5-5 --reasoning-effort low --scenario report --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-0.5
+env PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH TMPDIR=/home/phagmaier/.local/state/workflowz/live-smoke-0.5/scratch npm run smoke:harnesses -- --execute --harness opencode --model openai/gpt-6-luna --reasoning-effort low --scenario report --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-0.5
+env PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH TMPDIR=/home/phagmaier/.local/state/workflowz/live-smoke-0.5/scratch npm run smoke:harnesses -- --execute --harness omp --model openai/gpt-6-luna --reasoning-effort low --scenario report --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-0.5
+```
+
+Reviewed each retained `evidence.json`, scrubbed log and SQLite invocation ordering before advancing:
+
+- **Claude `2.1.303`: passed**, one invocation, zero corrections, `complete`, authentication `available`, `bypassPermissions`, actual helper acknowledgment and durable reopen. Artifact: `wf-claude-report-p8hwmh`. Streamed assistant and terminal `modelUsage.canonicalModel` both identify `claude-haiku-5-5`, with no other model usage reported. Report acceptance preceded exit-zero settlement and completion. Authenticated correction/resume was not exercised.
+- **OpenCode `2.0.32`: passed**, one invocation, zero corrections, `complete`, `session-allow-all`, actual helper acknowledgment and durable reopen. Artifact: `wf-opencode-report-H5Cedr`. Authentication remains classified `status_unsupported`, not a fabricated status pass; actual successful execution establishes usable authentication for this path. Requested selector was `openai/gpt-6-luna`/low; the private API transport does not expose provider-model usage, so no independent actual-model claim is made.
+- **omp `18.12.2`: failed**, CLI exit 1, `execution_failure`, outcome `system.process_error`, one invocation, zero corrections, `yolo`. Artifact: `wf-omp-report-qbmi0O`. The log reports `No API key found for openai.` Native credential resolution failed; this is not a demonstrated Luna incompatibility or adapter framing defect. SQLite reopened read-only with one attempt, zero accepted reports and paused status; events show exit 1, technical settlement and pause, without correction. Evidence has no acknowledgment/session fingerprint and does not claim the smoke's success-only durable-reopen assertion.
+
+**Stopped immediately after omp failed. None of the three correction scenarios ran.** No provider switch, model upgrade, increased reasoning, retry, extra paid diagnosis, login/logout or credential-file inspection followed. All three generated targets were removed after confirmed settlement; evidence/logs/databases and named scratch remain. Normal harness-owned state was not copied, rewritten or removed. Milestone 0.5 stays unchecked; the previously satisfied Codex/Pi Phase 6 gate is unchanged.
+
+**Security observation:** OpenCode's normal MCP startup diagnostics logged a configured MCP API key unknown to the injected-value scrubber. Its value is deliberately excluded from documentation and commits; raw artifacts must not be published. Verified the containing artifact directory is 0700, and tightened its runner-owned log and SQLite file to 0600 without rewriting their contents. Treat that key as sensitive and rotate/revoke it through its owner if valid; no global configuration/authentication or automatic revocation was performed. This is concrete evidence of the already documented unknown-secret limitation, not proof that the known-injected-value filter failed. No all-secrets or isolation guarantee is claimed.
+
+Only documentation changed in this checkout; no runtime code, tests, migrations, correction policy, provider choice or harness permissions changed. Further provider execution or credential/provider changes require new authorization.
+
+Offline verification after the stopped live pass:
+
+```bash
+PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run check
+```
+
+Typecheck and lint passed; **697 tests passed, 75 suites, zero failures/cancellations/skips**. Biome checked **113 files**, with **115 informational suggestions** and no errors. These tests are offline; they neither retried the failed authenticated path nor authorized further live execution.
