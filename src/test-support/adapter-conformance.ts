@@ -13,7 +13,7 @@ import { workflowText } from "./workflows.js";
 export type AdapterFactory = (
   plan: readonly AgentScript[],
   options?: ScriptedOptions,
-) => AgentAdapter;
+) => AgentAdapter | Promise<AgentAdapter>;
 const FLOW = workflowText(`start: build
 steps:
   build:
@@ -46,12 +46,16 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
         rmSync(root, { recursive: true, force: true });
       }
     });
-    function fixture(plan: readonly AgentScript[], options: ScriptedOptions = {}, text = FLOW) {
+    async function fixture(
+      plan: readonly AgentScript[],
+      options: ScriptedOptions = {},
+      text = FLOW,
+    ) {
       const root = mkdtempSync(path.join(os.tmpdir(), "wf-conf-"));
       const logFile = path.join(root, "agent.log");
       const database = new WorkflowDatabase(path.join(root, "state.sqlite"));
       fixtures.push({ root, database });
-      const adapter = factory(plan, { ...options, logFile });
+      const adapter = await factory(plan, { ...options, logFile });
       const inputs: AgentInput[] = [];
       const wrapped: AgentAdapter = {
         id: adapter.id,
@@ -95,7 +99,7 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
     }
 
     it("launches, invokes wf report, receives acknowledgment and persists one declared report", async () => {
-      const f = fixture([{ mode: "report", outcome: "blocked" }]);
+      const f = await fixture([{ mode: "report", outcome: "blocked" }]);
       await f.service.drive(f.runId);
       assert.equal(f.report()?.outcome, "blocked");
       assert.match(f.notes(), /ack 0/);
@@ -104,7 +108,7 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
     });
 
     it("persists a report while active and routes only after the process settles", async () => {
-      const f = fixture([{ mode: "report-then-delay", extra: "400" }]);
+      const f = await fixture([{ mode: "report-then-delay", extra: "400" }]);
       const driving = f.service.drive(f.runId);
       await until(() => f.report() !== undefined);
       assert.equal(f.inspect().run.cursorStepId, "build");
@@ -118,7 +122,7 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
     });
 
     it("rejects undeclared reports synchronously and accepts an in-turn correction", async () => {
-      const f = fixture([{ mode: "invalid-then-valid" }]);
+      const f = await fixture([{ mode: "invalid-then-valid" }]);
       await f.service.drive(f.runId);
       assert.match(f.notes(), /ack 1\nack 0/);
       assert.equal(f.report()?.outcome, "complete");
@@ -127,7 +131,7 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
     });
 
     it("rejects duplicate submissions while retaining exactly one report", async () => {
-      const f = fixture([{ mode: "duplicate" }]);
+      const f = await fixture([{ mode: "duplicate" }]);
       await f.service.drive(f.runId);
       assert.match(f.notes(), /ack 0\nack 1/);
       assert.equal(f.inspect().events.filter((e) => e.type === "report_accepted").length, 1);
@@ -135,7 +139,7 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
     });
 
     it("resumes the persisted session once after clean execution, without overlap", async () => {
-      const f = fixture([{ mode: "silent" }, { mode: "report" }]);
+      const f = await fixture([{ mode: "silent" }, { mode: "report" }]);
       await f.service.drive(f.runId);
       assert.equal(f.inspect().run.status, "completed");
       assert.equal(f.inspect().attempts.length, 1);
@@ -146,7 +150,7 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
         events.map((e) => e.type),
         ["invocation_started", "invocation_settled", "invocation_started", "invocation_settled"],
       );
-      assert.equal(events[0]?.data["sessionId"], events[2]?.data["sessionId"]);
+      assert.equal(events[1]?.data["sessionId"], events[2]?.data["sessionId"]);
       assert.notEqual(events[0]?.data["pid"], events[2]?.data["pid"]);
       assert.notEqual(events[0]?.data["logPath"], events[2]?.data["logPath"]);
       assert.match(f.notes(), /start .* silent\nend .*\nstart .* report\ncorrection/);
@@ -155,7 +159,11 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
 
     for (const mode of ["silent", "report", "crash", "hang"] as const) {
       it(`pauses after one failed correction (${mode}), with no third invocation`, async () => {
-        const f = fixture([{ mode: "silent" }, { mode, outcome: "bogus" }, { mode: "report" }]);
+        const f = await fixture([
+          { mode: "silent" },
+          { mode, outcome: "bogus" },
+          { mode: "report" },
+        ]);
         await f.service.drive(f.runId);
         assert.equal(f.inspect().run.status, "paused");
         assert.equal(f.inspect().transitions[0]?.outcome, "system.report_error");
@@ -167,7 +175,7 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
 
     for (const options of [{ supportsResume: false }, { missingSession: true }]) {
       it(`does not launch fresh correction when resume is unavailable (${JSON.stringify(options)})`, async () => {
-        const f = fixture([{ mode: "silent" }], options);
+        const f = await fixture([{ mode: "silent" }], options);
         await f.service.drive(f.runId);
         assert.equal(f.inspect().transitions[0]?.outcome, "system.report_error");
         assert.equal(f.corrections(), 0);
@@ -175,7 +183,7 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
     }
 
     it("expires the original token before same-session correction accepts a report", async () => {
-      const f = fixture([{ mode: "silent" }, { mode: "report-then-delay", extra: "150" }]);
+      const f = await fixture([{ mode: "silent" }, { mode: "report-then-delay", extra: "150" }]);
       const driving = f.service.drive(f.runId);
       await until(() => f.inputs.length === 2);
       const old = f.inputs[0]?.reportAccess;
@@ -194,7 +202,7 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
     });
 
     it("preserves a correction's report for diagnosis if its process fails", async () => {
-      const f = fixture([{ mode: "silent" }, { mode: "report-then-crash" }]);
+      const f = await fixture([{ mode: "silent" }, { mode: "report-then-crash" }]);
       await f.service.drive(f.runId);
       assert.equal(f.report()?.outcome, "complete");
       assert.equal(f.inspect().transitions[0]?.outcome, "system.report_error");
@@ -202,14 +210,14 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
     });
 
     it("routes provider failure without correction even with a clean process status", async () => {
-      const f = fixture([{ mode: "provider-error" }]);
+      const f = await fixture([{ mode: "provider-error" }]);
       await f.service.drive(f.runId);
       assert.equal(f.inspect().transitions[0]?.outcome, "system.process_error");
       assert.equal(f.corrections(), 0);
     });
 
     it("does not create a new session if the persisted session cannot be reopened", async () => {
-      const f = fixture([{ mode: "silent" }], { resumeError: true });
+      const f = await fixture([{ mode: "silent" }], { resumeError: true });
       await f.service.drive(f.runId);
       assert.equal(f.inspect().transitions[0]?.outcome, "system.report_error");
       assert.equal(f.corrections(), 1);
@@ -223,7 +231,7 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
     });
 
     it("scrubs tokens split across output chunks from stdout, stderr, events and disk logs", async () => {
-      const f = fixture([{ mode: "leak-token" }]);
+      const f = await fixture([{ mode: "leak-token" }]);
       await f.service.drive(f.runId);
       const token = f.inputs[0]?.reportAccess?.token;
       assert.ok(token);
@@ -241,7 +249,7 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
     });
 
     it("honors disabled correction and explicit system.report_error routing", async () => {
-      const f = fixture(
+      const f = await fixture(
         [{ mode: "silent" }],
         {},
         FLOW.replace(
@@ -261,7 +269,7 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
     for (const mode of ["crash", "report-then-crash", "hang", "report-then-hang"] as const) {
       it(`routes ${mode} without correction, preserving any earlier report`, async () => {
         const timeout = mode.includes("hang");
-        const f = fixture(
+        const f = await fixture(
           [{ mode }],
           {},
           FLOW.replace("    prompt: go", `    prompt: go\n    timeout_seconds: ${timeout ? 1 : 5}`),
@@ -277,18 +285,18 @@ export function describeAdapterConformance(name: string, factory: AdapterFactory
     }
 
     it("routes a missing executable as spawn failure without correction", async () => {
-      const f = fixture([{ mode: "report" }], { binary: "/nonexistent/workflowz-harness" });
+      const f = await fixture([{ mode: "report" }], { binary: "/nonexistent/workflowz-harness" });
       await f.service.drive(f.runId);
       assert.equal(f.inspect().transitions[0]?.outcome, "system.spawn_error");
       assert.equal(f.corrections(), 0);
     });
 
     it("ends the whole owned process tree on stop", async () => {
-      const f = fixture([]);
+      const f = await fixture([]);
       const pidFile = path.join(f.root, "child.pid");
       // Replace the initial fixture's adapter before dispatch, retaining the same conformance factory.
       const service = new RunService(f.database, {
-        agents: new Map([["codex", factory([{ mode: "hang-with-child", extra: pidFile }])]]),
+        agents: new Map([["codex", await factory([{ mode: "hang-with-child", extra: pidFile }])]]),
         logDir: path.join(f.root, "logs"),
       });
       const driving = service.drive(f.runId);

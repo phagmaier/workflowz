@@ -52,6 +52,46 @@ const sh = (script: string, options: { timeoutMs?: number; cwd?: string; logPath
   });
 
 describe("startProcess", () => {
+  it("writes stdin to completion and streams scrubbed output beyond the capture limit", async () => {
+    const prompt = "prompt🙂\n".repeat(100_000);
+    const observed: Buffer[] = [];
+    const result = await startProcess({
+      command: process.execPath,
+      args: [
+        "-e",
+        "let count=0; process.stdin.on('data', b=>count+=b.length); process.stdin.on('end',()=>{process.stdout.write(String(count)+'\\n'+'x'.repeat(100000)+'secret-split');process.stderr.write('secret-split')})",
+      ],
+      cwd: os.tmpdir(),
+      env: childEnvironment(),
+      stdin: prompt,
+      secrets: ["secret-split"],
+      stdoutLimit: 64,
+      onStdout: (chunk) => observed.push(chunk),
+    }).completed;
+    const streamed = Buffer.concat(observed).toString();
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdinError, undefined);
+    assert.match(streamed, new RegExp(`^${Buffer.byteLength(prompt)}\\n`));
+    assert.equal(result.stdoutTruncated, true);
+    assert.equal(streamed.includes("secret-split"), false);
+    assert.ok(streamed.endsWith("[redacted]"));
+    assert.equal(result.stderr, "[redacted]");
+  });
+
+  it("handles a closed stdin pipe without an unhandled error or overlapping settlement", async () => {
+    const running = startProcess({
+      command: process.execPath,
+      args: ["-e", "process.exit(3)"],
+      cwd: os.tmpdir(),
+      env: childEnvironment(),
+      stdin: "large".repeat(500_000),
+    });
+    const result = await running.completed;
+    assert.equal(result.exitCode, 3);
+    assert.equal(result.spawnError, null);
+    await running.terminate();
+  });
+
   it("captures stdout and reports a clean exit", async () => {
     const result = await sh("echo hello").completed;
     assert.equal(result.exitCode, 0);

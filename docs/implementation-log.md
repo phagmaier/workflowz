@@ -51,3 +51,21 @@ Final verification using Node.js **v26.8.2** via the explicit mise PATH:
 - `git diff --check`: passed.
 
 Loopback/process checks used the approved execution path outside the sandbox. Graph coverage still reports source files as `not_tracked`; implementation findings were verified with direct source reads. Phase 5.5 and 5.6 are checked only after their acceptance coverage and the full gate passed. Milestone 0.5 stays unchecked; no live model calls, credential reads, global harness changes, real adapters, daemon management or UI work were introduced. All earlier uncommitted implementation remains in place; this session made no commits or pushes.
+
+
+## Phase 6.1 — Codex CLI adapter, offline conformance
+
+The previously uncommitted reporting/task/revision implementation was committed and pushed to `origin/main` as `d8ec593`; matching spec synchronization was committed/pushed as `0cd02da`. Development then continued in checklist order with the Codex adapter. This section and `docs/handoff.md` accompany the subsequent adapter commit.
+
+Added `adapters/codex.ts`, an offline-probed factory, bounded UTF-8/LF event decoder, and a synthetic Codex CLI fixture that exercises the real adapter through the existing HTTP/CLI reporting channel. It forwards model/reasoning effort, captures UUID session identity, requires terminal turn evidence for a clean invocation, resumes only the supplied session, and waits for shared group/pipe settlement rather than interpreting streamed messages as completion. Missing/failed reporting retains the same one-correction policy; protocol/provider failures bypass correction. Versions/permission mode are audited, and the deliberate environment includes only base names, selected Codex home/key and report access. Runtime config disables shell snapshots and preserves report environment for tools without writing global config. No workflow schema fields, migrations, new mandatory gates or daemon/UI work were introduced.
+
+The shared process supervisor gained optional stdin and a continuous scrubbed stdout observer; other executors keep ignored stdin. The shared conformance factory can now probe adapters asynchronously. Session matching compares original settlement identity to correction-start identity, allowing harnesses that learn the session ID from streaming output after launch. Codex now has `conformance_passed` registry status after passing the full common suite.
+
+Verification using Node.js **v26.8.2** with the explicit mise PATH:
+
+- `npm run check`: typecheck/lint passed; **336 tests passed, 0 failed/cancelled/skipped**. This includes the complete existing suite, Codex conformance, malformed/oversized/UTF-8 event framing, capture-limit independence, stdin/closed-pipe handling, terminal-before-exit behavior, env/argv selection, wrong-session rejection and durable launch metadata.
+- `createCodexAdapter()` against the installed binary performed only version/help probes and returned `{version: "codex-cli 0.163.0", supportsResume: true}`.
+- Installed `codex --version`, `codex exec --help`, `codex exec resume --help` confirmed advertised launch/resume flags. Official CLI/non-interactive/config references were fetched and are linked in `docs/harness-compatibility.md`.
+- `git diff --check`: passed.
+
+The loopback/process suite ran through approved execution outside the sandbox; fixtures remove their temporary project/log/session/database data. No live provider/model calls were made, no credential files were read, and no global harness configuration was changed. The fixture is synthetic, not a recorded live stream. Authentication, actual provider framing/session persistence, managed-config interactions and tool environment propagation remain live-smoke checks. Milestone 0.5 and the full Phase 6 gate stay unchecked. Phase 6.2 (Pi) is next; 6.6–6.8 have partial foundations but remain unchecked for the other harnesses and live coverage.

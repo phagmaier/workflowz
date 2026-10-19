@@ -361,6 +361,7 @@ export class RunService {
       }
       try {
         this.coordinator.recordInvocation(attemptId, invocation, "started", {
+          ...running.launchInfo,
           pid: running.pid,
           sessionId,
           logPath: input.logPath,

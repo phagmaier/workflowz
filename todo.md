@@ -73,7 +73,7 @@
 
 ## Phase 6 — Harness adapters
 
-- [ ] 6.1 Implement Codex CLI adapter: headless launch, JSONL events, exit/settle status, session ID, model/config selection, report endpoint injection, optional permitted unrestricted mode, and same-session follow-up.
+- [x] 6.1 Implement Codex CLI adapter: headless launch, JSONL events, exit/settle status, session ID, model/config selection, report endpoint injection, optional permitted unrestricted mode, and same-session follow-up.
 - [ ] 6.2 Implement Pi CLI adapter: JSON/RPC parsing with **LF-only** record splitting, correct `agent_settled` semantics, session persistence, model/config selection, report endpoint injection, and same-session follow-up.
 - [ ] 6.3 Implement Claude Code adapter: `claude -p` with `--output-format stream-json`, session-id capture, `--resume` follow-up, permission-mode selection, and settle detection on the terminal `result` message.
 - [ ] 6.4 Implement OpenCode adapter: `opencode run --format json` with `--session` reuse for correction (or the `serve`/SDK path if the one-shot settle boundary is unreliable), plus permission selection.

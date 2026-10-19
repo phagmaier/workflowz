@@ -221,6 +221,14 @@ Codex docs describe `codex exec` headless mode, JSONL through `--json`, `--outpu
 
 Version-specific behavior is a risk. Use executable compatibility tests against the user's installed Codex version and avoid pinning assumptions in the workflow file.
 
+### 4.1.1 Phase 6.1 implementation
+
+`adapters/codex.ts` provides an async offline-probed factory and an executable `AgentAdapter`. It uses the common supervisor with stdin prompt delivery and a scrubbed continuous stdout observer. `codex-events.ts` independently decodes bounded LF records across UTF-8 chunks, captures explicit UUID identity and terminal/failure evidence, and never extracts reports. Completion still requires the supervised process/group/streams to settle. Parser/provider failure on an otherwise clean exit bypasses report correction; clean missing report/session behavior continues through existing runner rules. Resume requests never select the latest session or silently start fresh.
+
+The adapter forwards model/reasoning effort, injects the existing report channel and project-local `wf` PATH, and records CLI version/unrestricted mode in invocation-start events. Only base environment plus Codex home/key and report access are selected. Per-invocation config preserves report environment for tools, excludes the API key from their inheritance, and disables shell snapshots; it does not edit global files. No schema migration or workflow control change is needed. Raw scrubbed events use the existing bounded attempt log.
+
+Codex registry status is `conformance_passed` after the full shared offline suite passes against a fixture CLI. Real account/provider framing and resume remain unverified; Phase 0.5 and the live Phase 6 gate remain open. Pi is the next adapter. See `docs/harness-compatibility.md` for official sources, installed-version evidence and limitations.
+
 ### 4.2 Pi integration
 
 Start with the **Pi headless CLI** (`--mode json` for one-shot turns, or `--mode rpc` for a long-lived session/correction). For a TypeScript runner, RPC isolates Pi in a child process and exposes structured events; the SDK is optional later. Check the exact user's Pi fork/package before coding against a hardcoded import name.

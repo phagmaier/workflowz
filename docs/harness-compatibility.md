@@ -41,3 +41,23 @@ The probe does not check authentication. `codex login status`, `claude auth stat
 ## Live verification (not yet done)
 
 No paid model call has been made. The live smoke test for each adapter (todo 6.8) is the place to confirm event framing, the settle boundary, and resume behavior against the versions above.
+
+
+## Codex adapter implementation (Phase 6.1)
+
+`createCodexAdapter` probes `--version`, `exec --help`, and `exec resume --help` before registration. Current installed evidence remains `codex-cli 0.163.0`; the adapter-specific offline probe returned `{version: "codex-cli 0.163.0", supportsResume: true}`. Required launch markers include JSONL, model/config selection, non-Git working directories, unrestricted mode and stdin. Missing launch capabilities reject creation with a useful error. Missing resume markers disable correction resume and reject an explicitly requested persisted session before launch. No exact minor version is required; advertised features gate use.
+
+The adapter launches `codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox ... -`, or `codex exec resume ... <persisted-UUID> -`. Prompts go through stdin; report endpoint/token only through the environment. Optional `--model` and TOML-quoted `model_reasoning_effort` select workflow parameters. No `--last`, session-name lookup, `--ephemeral` or fresh-session fallback is used. A mismatched session is an error. Version and permission mode are written in invocation events.
+
+The bounded LF JSONL decoder consumes the whole stream independently of bounded stdout capture. It accepts CRLF and UTF-8 split across chunks, ignores unknown future event types, captures `thread.started.thread_id`, and requires `turn.completed` for a clean turn. Malformed/oversized records, `turn.failed` and `error` fail the invocation without report correction. A clean terminal turn without a session identity cannot receive correction. Item payloads and outcome-looking stdout have no reporting authority. No event settles the process; exit/group reaping/pipe closure still control settlement. Timeout/spawn/nonzero process failures retain technical routing.
+
+The Codex process receives only the shared base allowlist plus explicitly selected `CODEX_HOME`, `CODEX_API_KEY`, and report access. `bin/wf` is prepended to PATH. Per-invocation `shell_environment_policy` inherits this reduced environment, permits report-token inheritance, and excludes `CODEX_API_KEY` from tool subprocess inheritance. `features.shell_snapshot=false` avoids capturing invocation authorization in shell snapshots. These overrides edit no global config and do not provide isolation; user/managed configuration or shell startup behavior still needs live compatibility verification. Known injected key/token values are scrubbed from stdout/stderr/logs across chunks.
+
+Sources consulted for this implementation:
+
+- [Official non-interactive mode documentation](https://learn.chatgpt.com/docs/non-interactive-mode) — JSONL event names and explicit-session resume.
+- [Official CLI reference](https://learn.chatgpt.com/docs/cli/reference) — stdin, model/config and unrestricted flags.
+- [Official configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference) — reasoning effort, shell snapshots and environment policy.
+- Installed `codex --version`, `codex exec --help`, `codex exec resume --help`, plus the adapter's own offline factory probe. Help execution in the sandbox printed an inability to create PATH aliases; it still exited 0 and advertised the expected interface. No configuration or credential file was inspected.
+
+The adapter passes the shared offline conformance suite using `test/fixtures/fake-codex.mjs`, which exercises the real adapter argv/stdin/JSONL/environment/process paths and actual `wf` reports. Fixtures are synthetic, not captured provider streams. This supports `conformance_passed` registry status, **not live support verification**. Milestone 0.5, authentication, actual stream/session compatibility, and opt-in live smoke remain unfinished. Do not mark the full Phase 6 gate complete on this evidence.

@@ -83,6 +83,8 @@ The engine is deliberately harness-agnostic: every harness is an adapter behind 
 - Adapters must not leak report tokens or credentials into logs, and must pass each child process only a deliberate environment allowlist.
 - MVP ordering: `codex` and `pi` are implemented first; `claude`, `opencode`, and `omp` follow the same interface and must pass the same conformance suite.
 
+Phase 6.1 now provides an offline-conformant Codex CLI adapter through the headless service API. It uses stdin prompts, explicit persisted session UUIDs, JSONL process/session evidence and the common `wf report` channel. Version and selected unrestricted permission mode are audited. Authentication and provider-backed stream/resume compatibility remain unverified; the other adapters and the full Phase 6 live gate remain unfinished. See `docs/harness-compatibility.md` for evidence and limits.
+
 ## 3. Canonical workflow schema (v1 proposal)
 
 > Implementation decisions for this section (field names, open semantics, deviations) are recorded in [`docs/schema-v1.md`](docs/schema-v1.md).

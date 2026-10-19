@@ -522,6 +522,8 @@ export class RunCoordinator {
       exitCode?: number | null;
       timedOut?: boolean;
       failure?: SystemOutcome | undefined;
+      harnessVersion?: string;
+      permissionMode?: string;
     },
   ): void {
     this.database.transaction(() => {

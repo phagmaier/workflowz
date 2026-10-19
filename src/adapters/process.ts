@@ -29,6 +29,10 @@ export interface ProcessSpec {
   readonly stderrLimit?: number | undefined;
   /** Secrets injected by the runner; scrub across arbitrary stream chunk boundaries. */
   readonly secrets?: readonly string[] | undefined;
+  /** Optional prompt input; close the pipe after writing it. Other executors keep stdin ignored. */
+  readonly stdin?: string | undefined;
+  /** Continuous scrubbed output before bounded capture. Observers must not throw. */
+  readonly onStdout?: ((chunk: Buffer) => void) | undefined;
 }
 
 export interface ProcessResult {
@@ -44,6 +48,7 @@ export interface ProcessResult {
   readonly stdoutTruncated: boolean;
   readonly stderr: string;
   readonly stderrTruncated: boolean;
+  readonly stdinError?: string | undefined;
 }
 
 export interface RunningProcess {
@@ -80,7 +85,7 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
       env: spec.env,
       detached: true,
       shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: [spec.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
       windowsHide: true,
     });
   } catch (error) {
@@ -97,6 +102,11 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
   let settled = false;
   let escalation: ReturnType<typeof setTimeout> | undefined;
   let spawnError: string | null = null;
+  let stdinError: string | undefined;
+  child.stdin?.on("error", (error) => {
+    stdinError = errorCode(error);
+  });
+  if (spec.stdin !== undefined) child.stdin?.end(spec.stdin);
 
   const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null } | undefined>(
     (resolve) => {
@@ -110,6 +120,7 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
   const streamsClosed = new Promise<void>((resolve) => child.once("close", () => resolve()));
 
   const stdoutFilter = new SecretFilter(spec.secrets ?? [], (chunk) => {
+    spec.onStdout?.(chunk);
     output.push(chunk);
     log?.write(chunk);
   });
@@ -170,6 +181,7 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
       stdoutTruncated: output.truncated(),
       stderr: stderr.text(),
       stderrTruncated: stderr.truncated(),
+      ...(stdinError === undefined ? {} : { stdinError }),
     };
   })();
 

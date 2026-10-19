@@ -45,6 +45,10 @@ export interface AgentRunResult {
 export interface AgentHandle {
   readonly pid: number | null;
   readonly sessionId?: string | undefined;
+  readonly launchInfo?: {
+    readonly harnessVersion: string;
+    readonly permissionMode: string;
+  };
   readonly completed: Promise<AgentRunResult>;
   /** Ends the attempt's whole process tree. Resolves once it has been reaped. */
   terminate(): Promise<void>;
