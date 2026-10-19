@@ -201,7 +201,7 @@ Adapter responsibilities are uniform across harnesses; only the four harness-spe
 | --- | --- | --- | --- | --- |
 | `codex` | `codex exec` | JSONL via `--json`; final message + process exit | `codex exec resume` | resume, event stream, structured output, permission mode, model selection |
 | `pi` | `pi --print --mode json` / `--mode rpc` | LF-delimited JSONL/RPC; `agent_settled` | resume by persisted session id/path | resume, event stream, permission mode, model selection |
-| `omp` | `omp --print --mode json` / `--mode rpc` | Pi-family JSON/RPC framing | `--resume <id>` / `--continue` | verify against installed fork |
+| `omp` | `omp --print --mode json` | LF JSON; final successful assistant and `agent_end.isTerminal: true` + process settlement | `--resume <exact-persisted-path>` | offline conformance passed; live provider/tool behavior unverified |
 | `opencode` | private `serve --stdio` child + v2 API | prompt admission, wait-for-idle, persisted terminal outcome + process settlement | exact session API, never create on resume | resume, permission mode, model/variant selection; no provider event stream in this slice |
 | `claude` | `claude -p --output-format stream-json` | stream-json lines; terminal `result` message | `--resume <session-id>` | resume, event stream, permission mode, model selection |
 
@@ -275,7 +275,13 @@ OpenCode is `conformance_passed` after the entire shared offline suite through a
 
 ### 4.5 omp integration
 
-`omp` (oh-my-pi) is a Pi-family harness: it uses the same `--print` non-interactive mode and `--mode json|rpc` output framing as Pi, and resumes with `--resume <id>` or `--continue`. The Pi adapter should therefore cover `omp` as a distinct `HarnessId` variant with launch/capability differences rather than a from-scratch implementation; verify the installed fork's exact flags instead of assuming parity.
+`createOmpAdapter` probes installed oh-my-pi 18.12.2 offline with temporary home/config and no credentials, then selects `omp` on the existing `PiAdapter` runtime. This is a bounded two-dialect implementation, not a harness plugin framework. stdin delivery, deliberate environment selection, secret scrubbing, persistent session directories and common supervision are reused. The CLI uses `--print --mode json --approval-mode yolo`; optional model/thinking include omp's `auto`. Version and `yolo` are audited. Explicit tool/user restrictions and provider safety policies still apply.
+
+**Verified differences:** omp print JSON has no Pi `agent_settled` frame. `PiEvents("omp")` requires successful assistant evidence and a final `agent_end` with explicit `isTerminal: true`, tracks native retry lifecycles and `auto_compaction_start/end`, and invalidates terminal evidence when more work starts. Failed assistant stops, exhausted retries, failed compaction, error notices and malformed/oversized/truncated/invalid-UTF-8 records fail even on exit zero. RPC's `session_settled` is not a print-mode substitute. Print mode itself drains recovery/event persistence, stdout and disposal; the runner additionally waits for process/group/pipe settlement. Reports remain out of band.
+
+`omp-session.ts` reads v3 UUID journals, accepting the optional physical title slot before the logical header. It retains only header/transfer metadata while checking bounded records. Dedicated directories default to `omp-sessions` beside logs. The absolute persisted file path is the engine identity; header/UUID/cwd are revalidated. Resume uses `--resume <absolute-path>` with its exact directory. Installed source and deletion-after-precheck smoke confirm strict open rejects missing files, unlike prefix/global ID lookup's permissive open. No continue/restore/selector/fork fallback is used. Latest valid departed-transfer markers make a journal unavailable before launch because the CLI would implicitly fork it. Returned mismatches never replace the durable target.
+
+The complete shared synthetic offline suite runs as `omp`; additional framing, native-recovery, persistence/identity, environment/secret and settlement coverage supports `conformance_passed`. Independent service smoke proves one sequential correction and durable reporting; installed negative smoke proves missing/deleted paths do not create replacements. Fresh isolated installed startup failed in database initialization, so the negative check used an empty schema fixture from official source; no runtime workaround or global change was introduced. Authentication, successful live sessions/streams, tool environment and resource interactions remain unverified. No coordinator, report contract, workflow fields, migrations, daemon or UI changes are needed; 0.5 and 6.6–6.8 remain open.
 
 ### 4.6 Harness capabilities and graceful incompatibilities
 

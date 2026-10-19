@@ -1,4 +1,4 @@
-/** Pi JSON mode evidence. LF alone frames records; low-level agent_end never settles a run. */
+/** Pi-family JSON evidence. LF frames records; each CLI dialect supplies different terminal evidence. */
 import { StringDecoder } from "node:string_decoder";
 
 export const PI_EVENT_LINE_LIMIT = 1024 * 1024;
@@ -28,6 +28,7 @@ export function isPiSessionHeader(value: unknown): value is PiSessionHeader {
 
 export class PiEvents {
   private readonly decoder = new StringDecoder("utf8");
+  private readonly strictDecoder = new TextDecoder("utf8", { fatal: true });
   private pending = "";
   private pendingBytes = 0;
   private discarding = false;
@@ -37,7 +38,11 @@ export class PiEvents {
   private retryFailed = false;
   private retrying = false;
   private compactionFailed = false;
+  private compacting = false;
+  private sawAssistant = false;
   private header: PiSessionHeader | undefined;
+
+  constructor(private readonly harness: "pi" | "omp" = "pi") {}
 
   get session(): PiSessionHeader | undefined {
     return this.header;
@@ -49,15 +54,29 @@ export class PiEvents {
       !this.assistantFailed &&
       !this.retryFailed &&
       !this.retrying &&
-      !this.compactionFailed
+      !this.compactionFailed &&
+      !this.compacting &&
+      (this.harness !== "omp" || this.sawAssistant)
     );
   }
 
   push(chunk: Buffer): void {
-    this.consume(this.decoder.write(chunk));
+    try {
+      this.consume(
+        this.harness === "omp"
+          ? this.strictDecoder.decode(chunk, { stream: true })
+          : this.decoder.write(chunk),
+      );
+    } catch {
+      this.failed = true;
+    }
   }
   end(): void {
-    this.consume(this.decoder.end());
+    try {
+      this.consume(this.harness === "omp" ? this.strictDecoder.decode() : this.decoder.end());
+    } catch {
+      this.failed = true;
+    }
     // The installed protocol requires LF termination. A truncated last record is not evidence.
     if (this.pending.length || this.discarding) this.failed = true;
     this.pending = "";
@@ -83,6 +102,7 @@ export class PiEvents {
 
   private assistant(message: unknown): void {
     if (isRecord(message) && message.role === "assistant") {
+      this.sawAssistant = true;
       // A transient failed message may recover inside Pi's own retry/overflow loop.
       this.assistantFailed = !["stop", "toolUse"].includes(String(message.stopReason));
     }
@@ -120,6 +140,7 @@ export class PiEvents {
         this.assistant(value.message);
         break;
       case "message_update":
+        if (this.harness === "omp") this.settled = false;
         if (isRecord(value.assistantMessageEvent)) {
           if (value.assistantMessageEvent.type === "error") this.assistantFailed = true;
           else if (value.assistantMessageEvent.type === "done")
@@ -127,7 +148,7 @@ export class PiEvents {
         }
         break;
       case "agent_end":
-        this.settled = false;
+        this.settled = this.harness === "omp" && value.isTerminal === true;
         if (Array.isArray(value.messages))
           for (const message of value.messages) this.assistant(message);
         break;
@@ -140,6 +161,21 @@ export class PiEvents {
         this.retrying = false;
         this.retryFailed = value.success !== true;
         break;
+      case "auto_compaction_start":
+        if (this.harness === "omp") {
+          this.settled = false;
+          this.compacting = true;
+        }
+        break;
+      case "auto_compaction_end":
+        if (this.harness === "omp") {
+          this.compacting = false;
+          this.compactionFailed =
+            value.aborted !== false ||
+            (typeof value.errorMessage === "string" && value.skipped !== true);
+          if (value.willRetry === true) this.settled = false;
+        }
+        break;
       case "compaction_end":
         this.compactionFailed = value.aborted === true || typeof value.errorMessage === "string";
         break;
@@ -151,7 +187,10 @@ export class PiEvents {
           this.settled = false;
         break;
       case "agent_settled":
-        this.settled = value.aborted === false;
+        if (this.harness === "pi") this.settled = value.aborted === false;
+        break;
+      case "notice":
+        if (this.harness === "omp" && value.level === "error") this.failed = true;
         break;
       case "error":
       case "extension_error":

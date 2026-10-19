@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: project tooling, strict YAML/schema validation, policy compilation, SQLite persistence, transactional run coordination, a sequential runner for command steps and fake agents, mandatory CLI/HTTP reporting with one same-session correction, immutable Markdown task import, selected input context, run-local task parameters, and paused workflow revisions, and offline-conformant Codex, Pi, Claude Code and OpenCode adapters. This is not a complete MVP: live harness verification, the omp adapter, management CLI, and UI remain on the [`todo.md`](todo.md) roadmap.
+**Status:** Implemented core: project tooling, strict YAML/schema validation, policy compilation, SQLite persistence, transactional run coordination, a sequential runner for command steps and fake agents, mandatory CLI/HTTP reporting with one same-session correction, immutable Markdown task import, selected input context, run-local task parameters, paused workflow revisions, and offline-conformant Codex, Pi, Claude Code, OpenCode and omp adapters. This is not a complete MVP: live harness verification, management CLI, and UI remain on the [`todo.md`](todo.md) roadmap.
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -70,7 +70,7 @@ wf report complete --summary "Implemented validation" --handoff-file handoff.md
 wf report blocked --summary "Need input" --issue "Missing requirement" --data '{"area":"auth"}'
 ```
 
-The CLI waits for acknowledgment. Rejected reports exit 1 with a useful message; acceptance exits 0. Identity comes from the opaque token; reports cannot supply run/attempt IDs or transitions. Acceptance writes one immutable report and event, then waits for process settlement before routing. Clean missing reports allow one same-session correction, bounded to 30 seconds (or less); failed/unavailable correction routes `system.report_error`. Original process/provider failures bypass correction. The offline fake harness, Codex, Pi, Claude and OpenCode fixtures exercise this path. All four real adapters have offline launch/session conformance coverage; live provider verification and omp remain Phase 6 work.
+The CLI waits for acknowledgment. Rejected reports exit 1 with a useful message; acceptance exits 0. Identity comes from the opaque token; reports cannot supply run/attempt IDs or transitions. Acceptance writes one immutable report and event, then waits for process settlement before routing. Clean missing reports allow one same-session correction, bounded to 30 seconds (or less); failed/unavailable correction routes `system.report_error`. Original process/provider failures bypass correction. The offline fake harness and all five real adapters' synthetic CLI fixtures exercise this path. All five adapters have offline launch/session conformance coverage; live provider verification remains Phase 6 work.
 
 `RunService.previewTasks({workflowText, workflowDir})` exposes checklist counts and source metadata without creating a run. `RunService.createRun` reads and freezes the configured checklist; prechecked tasks are excluded unless `includeCompleted: true` is explicit. The lower-level coordinator still accepts supplied task records for offline fixtures. Instructions and selected same-task reports are assembled at attempt preparation and persisted with the task context; future attempts read current configured instruction content. Run-local task parameters and paused revisions are available through the headless service API (below). Automatic re-import remains unimplemented.
 
@@ -135,6 +135,16 @@ Model selection accepts `provider/model#variant`; `reasoning_effort` selects a n
 
 The synthetic CLI passes the full shared conformance suite. Installed offline checks verified create-if-missing CLI behavior, non-creating exact API resume failure and terminal provider failure against an invalid provider without credentials. Authentication, successful live persistence/resume, actual provider execution and tool environment propagation remain unverified. See [compatibility details](docs/harness-compatibility.md). Milestones 0.5 and 6.6–6.8 remain open.
 
+
+### omp adapter (Phase 6.5)
+
+`await createOmpAdapter()` from `src/adapters/omp.ts` performs isolated offline version/help probes. Register it as `new Map([["omp", adapter]])` in `RunService` options. It targets installed `@oh-my-pi/pi-coding-agent` **18.12.2**, reusing the Pi-family process/report implementation while keeping harness identity `omp`. Driving a real workflow can use configured providers and incur usage.
+
+Launch uses stdin with `--print --mode json --approval-mode yolo`, optionally `--model` / `--thinking` (including omp's `auto`). Unlike Pi, omp emits no `agent_settled`: final assistant evidence and `agent_end` with `isTerminal: true` are required, followed by successful process/group/pipe settlement. Native retries and `auto_compaction_*` can recover; final provider/protocol failures bypass correction. Only `wf report` supplies outcomes.
+
+Dedicated persistent directories live under `omp-sessions` beside logs, or explicit `sessionDir`. The durable identity is an absolute journal path with matching UUID/header/cwd; the reader accepts omp's leading title slot. Resume passes that exact path to `--resume`, whose installed strict-open branch cannot create an absent file. Prefix/UUID/global/latest selectors, restore and forks are not used. Moved-away transcripts are refused before launch because omp otherwise forks them. Journals with malformed, truncated or over-1-MiB records are unavailable rather than partially trusted.
+
+Version and `yolo` are audited; explicit tool/user denials and provider safety policies still apply. Deliberate omp/provider environment selection and common secret scrubbing preserve report access without changing global configuration. The full shared offline suite and independent service/deletion-race smokes pass. Installed isolated startup needed an empty-schema fixture to get past a fresh-database initialization failure; no workaround was added to the adapter. Authentication, successful live sessions, actual provider framing and tool environment remain unverified. See [compatibility details](docs/harness-compatibility.md); 0.5 and 6.6–6.8 remain open.
 
 ### Layout
 

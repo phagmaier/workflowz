@@ -1,4 +1,4 @@
-/** One-shot Pi JSON adapter for @earendil-works/pi-coding-agent; persistence is runner-owned. */
+/** One-shot Pi-family JSON adapter; CLI dialects differ, common process/report ownership does not. */
 import {
   closeSync,
   mkdirSync,
@@ -18,6 +18,7 @@ import {
   ResumeUnavailableError,
 } from "./agent-adapter.js";
 import { childEnvironment } from "./environment.js";
+import { readOmpSession } from "./omp-session.js";
 import { isPiSessionHeader, PiEvents, type PiSessionHeader } from "./pi-events.js";
 import { type CommandRunner, probeEnvironment, runProbeCommand } from "./probe.js";
 import { startProcess } from "./process.js";
@@ -27,7 +28,7 @@ export interface PiAdapterOptions {
   readonly prefixArgs?: readonly string[];
   readonly environment?: NodeJS.ProcessEnv;
   readonly wfBinDir?: string;
-  /** Persistent session root. Defaults to pi-sessions beside the invocation log. */
+  /** Persistent session root. Defaults to <harness>-sessions beside the invocation log. */
   readonly sessionDir?: string;
 }
 export interface PiCompatibility {
@@ -47,6 +48,20 @@ const PI_ENV_NAMES = [
   "ANTHROPIC_OAUTH_TOKEN",
   "GEMINI_API_KEY",
   "OPENROUTER_API_KEY",
+] as const;
+const OMP_ENV_NAMES = [
+  "PI_CODING_AGENT_DIR",
+  "PI_CONFIG_DIR",
+  "OMP_PROFILE",
+  "PI_NO_TITLE",
+  "OPENAI_API_KEY",
+  "OPENAI_CODEX_OAUTH_TOKEN",
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_OAUTH_TOKEN",
+  "GEMINI_API_KEY",
+  "OPENROUTER_API_KEY",
+  "OMP_AUTH_BROKER_URL",
+  "OMP_AUTH_BROKER_TOKEN",
 ] as const;
 const THINKING = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
@@ -105,11 +120,11 @@ export async function createPiAdapter(
 }
 
 export class PiAdapter implements AgentAdapter {
-  readonly id = "pi";
   readonly resumeForReportCorrection: AgentAdapter["resumeForReportCorrection"];
   constructor(
     private readonly options: PiAdapterOptions,
     readonly compatibility: PiCompatibility,
+    readonly id: "pi" | "omp" = "pi",
   ) {
     this.resumeForReportCorrection = compatibility.supportsResume
       ? (input) => this.start(input)
@@ -118,9 +133,10 @@ export class PiAdapter implements AgentAdapter {
 
   start(input: AgentInput): AgentHandle {
     const prior = input.priorSessionId;
-    const header = prior === undefined ? undefined : readHeader(prior);
-    // Pi can create a fresh session for a missing path. Validate the file, then use its exact UUID
-    // inside its private session directory: a missing UUID fails lookup instead of creating a session.
+    const readSession = this.id === "omp" ? readOmpSession : readHeader;
+    const header = prior === undefined ? undefined : readSession(prior);
+    // Pi needs UUID lookup to avoid missing-path creation. omp's strict path branch throws if
+    // missing; ID lookup instead permits prefixes/global search and a create-on-delete race.
     if (
       prior !== undefined &&
       (!this.compatibility.supportsResume ||
@@ -128,22 +144,28 @@ export class PiAdapter implements AgentAdapter {
         path.resolve(header.cwd) !== path.resolve(input.cwd))
     )
       throw new ResumeUnavailableError();
-    if (!input.reportAccess) throw new Error("Pi requires the runner's report channel");
-    if (input.reasoningEffort !== undefined && !THINKING.has(input.reasoningEffort))
-      throw new Error("Pi thinking level must be off, minimal, low, medium, high, xhigh, or max");
+    if (!input.reportAccess) throw new Error(`${this.id} requires the runner's report channel`);
+    if (
+      input.reasoningEffort !== undefined &&
+      !THINKING.has(input.reasoningEffort) &&
+      !(this.id === "omp" && input.reasoningEffort === "auto")
+    )
+      throw new Error(`${this.id} thinking level is unsupported`);
     const root =
       this.options.sessionDir ??
-      (input.logPath ? path.join(path.dirname(input.logPath), "pi-sessions") : undefined);
+      (input.logPath ? path.join(path.dirname(input.logPath), `${this.id}-sessions`) : undefined);
     let sessionDir: string;
     if (prior) sessionDir = path.dirname(prior);
     else {
-      if (!root) throw new Error("Pi requires sessionDir or logPath for persistent sessions");
+      if (!root)
+        throw new Error(`${this.id} requires sessionDir or logPath for persistent sessions`);
       mkdirSync(path.resolve(root), { recursive: true });
       sessionDir = mkdtempSync(path.join(path.resolve(root), "session-"));
     }
     const source = this.options.environment ?? process.env;
     const extra: Record<string, string> = {};
-    for (const name of PI_ENV_NAMES) if (source[name] !== undefined) extra[name] = source[name];
+    for (const name of this.id === "omp" ? OMP_ENV_NAMES : PI_ENV_NAMES)
+      if (source[name] !== undefined) extra[name] = source[name];
     const env = childEnvironment(
       {
         ...extra,
@@ -153,9 +175,9 @@ export class PiAdapter implements AgentAdapter {
       },
       source,
     );
-    const events = new PiEvents();
+    const events = new PiEvents(this.id);
     const running = startProcess({
-      command: this.options.binary ?? "pi",
+      command: this.options.binary ?? this.id,
       args: [
         ...(this.options.prefixArgs ?? []),
         "--print",
@@ -163,7 +185,12 @@ export class PiAdapter implements AgentAdapter {
         "json",
         "--session-dir",
         sessionDir,
-        ...(header ? ["--session", header.id] : []),
+        ...(this.id === "omp" ? ["--approval-mode", "yolo"] : []),
+        ...(header
+          ? this.id === "omp"
+            ? ["--resume", prior as string]
+            : ["--session", header.id]
+          : []),
         ...(input.model === undefined ? [] : ["--model", input.model]),
         ...(input.reasoningEffort === undefined ? [] : ["--thinking", input.reasoningEffort]),
       ],
@@ -185,7 +212,7 @@ export class PiAdapter implements AgentAdapter {
       sessionId: prior,
       launchInfo: {
         harnessVersion: this.compatibility.version,
-        permissionMode: "default-unrestricted-tools",
+        permissionMode: this.id === "omp" ? "yolo" : "default-unrestricted-tools",
       },
       terminate: running.terminate,
       completed: running.completed.then((result) => {
@@ -196,12 +223,14 @@ export class PiAdapter implements AgentAdapter {
           !result.spawnError &&
           !result.timedOut &&
           !result.terminated;
+        const stored = prior === undefined ? undefined : readSession(prior);
         const wrongSession =
           prior !== undefined &&
           (events.session?.id !== header?.id ||
             events.session?.cwd !== header?.cwd ||
-            readHeader(prior)?.id !== header?.id);
-        const sessionId = prior ?? persistedSession(sessionDir, events.session);
+            stored?.id !== header?.id ||
+            stored?.cwd !== header?.cwd);
+        const sessionId = prior ?? persistedSession(sessionDir, events.session, readSession);
         return {
           exitCode: result.exitCode,
           signal: result.signal,
@@ -211,8 +240,15 @@ export class PiAdapter implements AgentAdapter {
           sessionId,
           stdout: result.stdout,
           ...(clean && wrongSession ? { resumeUnavailable: true } : {}),
-          ...(clean && (!events.successful || result.stdinError)
-            ? { providerError: "Pi event stream did not confirm a successful settled run" }
+          ...(clean &&
+          (!events.successful ||
+            result.stdinError ||
+            (this.id === "omp" &&
+              events.session !== undefined &&
+              path.resolve(events.session.cwd) !== path.resolve(input.cwd)))
+            ? {
+                providerError: `${this.id} event stream did not confirm a successful completed run`,
+              }
             : {}),
         };
       }),
@@ -244,13 +280,14 @@ function readHeader(file: string): PiSessionHeader | undefined {
 function persistedSession(
   directory: string,
   header: PiSessionHeader | undefined,
+  readSession: (file: string) => PiSessionHeader | undefined,
 ): string | undefined {
   if (!header) return undefined;
   try {
     const files = readdirSync(directory).filter((file) => file.endsWith(`_${header.id}.jsonl`));
     if (files.length !== 1) return undefined;
     const file = path.join(directory, files[0] as string);
-    const stored = readHeader(file);
+    const stored = readSession(file);
     return stored?.id === header.id && stored.cwd === header.cwd ? file : undefined;
   } catch {
     return undefined;
