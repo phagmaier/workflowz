@@ -165,6 +165,7 @@ export class ClaudeAdapter implements AgentAdapter {
       env,
       stdin: input.prompt,
       timeoutMs: input.timeoutMs,
+      idleTimeoutMs: input.idleTimeoutMs,
       logPath: input.logPath,
       secrets,
       onStdout: (chunk) => events.push(chunk),
@@ -189,6 +190,7 @@ export class ClaudeAdapter implements AgentAdapter {
           exitCode: result.exitCode,
           signal: result.signal,
           timedOut: result.timedOut,
+          timeoutReason: result.timeoutReason,
           terminated: result.terminated,
           spawnError: result.spawnError,
           // No mismatched identity can replace the requested durable session, even on provider failure.

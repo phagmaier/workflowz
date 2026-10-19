@@ -183,6 +183,7 @@ export class CodexAdapter implements AgentAdapter {
       env,
       stdin: input.prompt,
       timeoutMs: input.timeoutMs,
+      idleTimeoutMs: input.idleTimeoutMs,
       logPath: input.logPath,
       secrets,
       onStdout: (chunk) => events.push(chunk),
@@ -210,6 +211,7 @@ export class CodexAdapter implements AgentAdapter {
           exitCode: result.exitCode,
           signal: result.signal,
           timedOut: result.timedOut,
+          timeoutReason: result.timeoutReason,
           terminated: result.terminated,
           spawnError: result.spawnError,
           // Never make an unexpected fresh identity eligible for a later workflow resume.

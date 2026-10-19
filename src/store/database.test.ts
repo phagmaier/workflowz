@@ -47,6 +47,30 @@ function insertAttempt(
 }
 
 describe("WorkflowDatabase", () => {
+  it("upgrades schema 8 with no invented retry wait or changed execution history", () => {
+    const file = tempFile("schema8.sqlite");
+    const old = new DatabaseSync(file);
+    for (const migration of MIGRATIONS.filter((m) => m.version <= 8)) old.exec(migration.sql);
+    old.exec(`PRAGMA user_version = 8;
+      INSERT INTO workflow_revisions VALUES (1, 'hash', 'definition', '/root', 'time');
+      INSERT INTO runs (run_id, revision_id, project_root, status, cursor_step_id, created_at, updated_at) VALUES ('r', 1, '/root', 'paused', 'work', 'time', 'time');
+      INSERT INTO attempts (attempt_id, run_id, step_id, revision_id, sequence_no, status, started_at, correction_count) VALUES ('a', 'r', 'work', 1, 1, 'failed', 'time', 1);
+      INSERT INTO transitions (run_id, revision_id, attempt_id, from_step_id, outcome, action_json, to_step_id, committed_at) VALUES ('r', 1, 'a', 'work', 'failed', '{"kind":"retry","maxAttempts":2,"backoffSeconds":10}', 'work', 'time');`);
+    const attempts = old.prepare("SELECT * FROM attempts").all();
+    const transitions = old.prepare("SELECT * FROM transitions").all();
+    old.close();
+    const database = new WorkflowDatabase(file);
+    try {
+      const store = new RunStore(database, () => "now");
+      assert.equal(store.getRun("r").retryNotBefore, null);
+      assert.equal(store.countAttempts("r", "work", null), 1);
+      assert.equal(store.countTransitions("r"), 1);
+      assert.deepEqual(database.prepare("SELECT * FROM attempts").all(), attempts);
+      assert.deepEqual(database.prepare("SELECT * FROM transitions").all(), transitions);
+    } finally {
+      database.close();
+    }
+  });
   it("upgrades schema 5 without changing historical attempts, reports or input snapshots", () => {
     const file = tempFile("schema5.sqlite");
     const old = new DatabaseSync(file);

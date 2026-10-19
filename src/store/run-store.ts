@@ -42,6 +42,8 @@ export interface RunRow {
   readonly updatedAt: string;
   readonly startTime: string | null;
   readonly endTime: string | null;
+  /** Committed retry admission deadline; pauses/restarts do not restart its clock. */
+  readonly retryNotBefore: string | null;
 }
 
 export interface TaskRow {
@@ -240,6 +242,7 @@ export class RunStore {
       updatedAt: row["updated_at"] as string,
       startTime: (row["start_time"] as string | null) ?? null,
       endTime: (row["end_time"] as string | null) ?? null,
+      retryNotBefore: (row["retry_not_before"] as string | null) ?? null,
     };
   }
 
@@ -257,7 +260,13 @@ export class RunStore {
     patch: Partial<
       Pick<
         RunRow,
-        "status" | "cursorStepId" | "activeTaskId" | "startTime" | "endTime" | "revisionId"
+        | "status"
+        | "cursorStepId"
+        | "activeTaskId"
+        | "startTime"
+        | "endTime"
+        | "revisionId"
+        | "retryNotBefore"
       >
     >,
   ): void {
@@ -265,7 +274,7 @@ export class RunStore {
     const next = { ...current, ...patch };
     this.database
       .prepare(
-        "UPDATE runs SET status = ?, cursor_step_id = ?, active_task_id = ?, start_time = ?, end_time = ?, revision_id = ?, updated_at = ? WHERE run_id = ?",
+        "UPDATE runs SET status = ?, cursor_step_id = ?, active_task_id = ?, start_time = ?, end_time = ?, revision_id = ?, retry_not_before = ?, updated_at = ? WHERE run_id = ?",
       )
       .run(
         next.status,
@@ -274,6 +283,7 @@ export class RunStore {
         next.startTime,
         next.endTime,
         next.revisionId,
+        next.retryNotBefore,
         this.clock(),
         runId,
       );

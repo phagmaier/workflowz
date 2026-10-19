@@ -311,6 +311,24 @@ export function describeAdapterConformance(
       assert.equal(f.corrections(), 0);
     });
 
+    it("enforces configured idle silence after an accepted report without correction or early success", async () => {
+      const f = await fixture(
+        [{ mode: "report-then-hang" }],
+        {},
+        FLOW.replace("start: build", "limits: {agent_idle_timeout_seconds: 1}\nstart: build"),
+      );
+      await f.service.drive(f.runId);
+      const state = f.inspect();
+      assert.equal(state.transitions[0]?.outcome, "system.timeout");
+      assert.equal(f.report()?.outcome, "complete");
+      assert.equal(f.corrections(), 0);
+      assert.ok(
+        state.events.some(
+          (e) => e.type === "invocation_settled" && e.data["timeoutReason"] === "idle",
+        ),
+      );
+    });
+
     it("ends the whole owned process tree on stop", async () => {
       const f = await fixture([]);
       const pidFile = path.join(f.root, "child.pid");

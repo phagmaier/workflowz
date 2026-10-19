@@ -589,3 +589,36 @@ Final verification on Node.js **v26.8.2**:
 README, specification and architecture now state the immutable-task admission and effective-status behavior and the shutdown ordering. No further milestone, provider execution, subagent, dependency, migration or global harness configuration change was introduced. Changes remain uncommitted/unpushed.
 
 Final owner-approval review covered all 24 changed files, including 11 untracked implementation/test files, and found no additional actionable issues. A fresh expanded offline `npm run check` passed typecheck/lint and **752 tests / 85 suites**, with zero failures/cancellations/skips; output is `/tmp/workflowz-phase73-owner-review-check.log`. The canonical example again validated with 8 steps, zero warnings and hash prefix `8a4912284968`; `git diff --check` passed and management fixture cleanup was confirmed. The owner then explicitly approved committing and pushing Phase 7.3. This approval does not authorize Phase 7.4 implementation or additional provider execution.
+
+## Phase 7.4 — run limits and durable bounded stage retries
+
+After Phase 7.3 was committed/pushed as `d9dc297`, the owner explicitly approved offline implementation/testing of 7.4, with commit/push still requiring separate review/approval. Began from clean `main`; read the required guidance/design/example files and used the installed codebase-memory skill with coverage checks and source verification. No subagents, provider calls, real credential-file inspection or global harness configuration changes were used.
+
+The existing reducer already bounded stage retries by the durable attempt count for run/step/task. The coordinator already counted committed transitions for run step limits and retained original start time for elapsed wall limits. These remain authoritative; no redundant counters or new workflow/report fields were added. The missing pieces were backoff admission, active-invocation run wall budgets and agent idle timeout.
+
+- Append-only migration **9** adds only `runs.retry_not_before`; migrations 1–8 remain unchanged. Retry settlement, deadline, transition and event commit together. `advance` checks limits before waiting and creates no attempt until due. The service waits with an abortable timer; pause/stop/daemon shutdown wake it promptly. Pause/restart and same-cursor revisions retain the deadline, while audited cursor changes/skips/end or active-task completion cancel it. Startup still interrupts rather than automatically continuing a wait. Legacy rows receive no fabricated delay or changed history.
+- Existing stage counts survive revision/reopen and stay scoped to task (or the whole taskless run). A correction/native retry is still inside its logical attempt; stage retry creates another attempt under the step's normal session policy. Explicit `goto` loops remain authored graph actions under run limits. No global retry-budget schema field or hidden retry was introduced.
+- Remaining wall time caps each command/agent/correction launch; an exhausted budget prevents dispatch and does not reserve correction. Wall time still includes pauses, downtime and waits. Settlement rechecks limits and pauses with attention even when a timeout outcome routes elsewhere. Owned process/group/stream/log settlement remains required, with cleanup grace beyond the deadline and existing uncertainty barriers on failure.
+- The shared process supervisor enforces optional idle silence on both raw stdout/stderr streams before redaction/capture limits. Every adapter forwards that duration (omp through Pi's shared path), without new harness flags or vendor assumptions. Idle expiry reaps the owned group and records bounded enum timeout diagnostics. Original timeout bypasses correction; idle correction failure remains `system.report_error`. Commands/probes receive no new idle policy. Idle is observable silence, not semantic progress: OpenCode's API transport is quieter and arbitrary output can keep a process active. Long process timers avoid Node's oversized-delay clamp.
+
+Added deterministic and real-process regression coverage before/alongside implementation. Three backoff regressions failed against the old implementation (missing durable deadline/immediate redispatch), then passed; the existing rollback behavior remained intact. The first expanded focused run passed **34 tests / 10 suites**. The expanded migration/process/management/limit run passed **61 tests / 7 suites**, including daemon shutdown during backoff. The first complete gate passed typecheck/lint and **775 tests / 87 suites**, zero failures/cancellations/skips, including idle-after-report conformance for all five real adapters plus the scripted fixture. Final review tightened timeout diagnostics to known enum values and added per-task budget/exhausted-correction boundary tests; final acceptance follows below.
+
+Final acceptance on Node.js **v26.8.2** / npm **11.19.1**, with expanded permission for offline loopback/process fixtures:
+
+```bash
+npm run check
+npm run smoke:recovery
+npm run smoke:reporting
+node dist/app/validate-cli.js examples/overnight.yaml
+npm run smoke:boundaries
+git diff --check
+```
+
+- **Final gate: 777 tests / 87 suites passed**, zero failures/cancellations/skips; typecheck/lint passed. Output: `/tmp/workflowz-phase74-final-check.log`. The last focused counter/correction run passed **13 tests / 2 suites**. Added 25 tests over the reviewed 752-test Phase 7.3 baseline.
+- Recovery smoke again passed command retry, correction skip, committed-cursor continuation and unidentified correction intent/end, with real owner SIGKILL, durable reopen and no automatic replay. Smoke-owned process/session/database artifacts were removed.
+- Reporting smoke passed acknowledgment before settlement, direct reporting, exactly one successful correction and failed correction routing `system.report_error`, with durable SQLite reopen and fixture cleanup.
+- Boundary smoke passed OpenCode/Claude synthetic correction/provider failures with retained environment selection, scrubbed diagnostics/logs, sequential settlement and SQLite reopen. No installed/live harness scenario or paid execution was invoked.
+- Canonical example remains valid: **8 steps, zero warnings**, unchanged hash prefix `8a4912284968`. README includes the existing limit/retry fields and their completed behavior; spec/architecture/schema decisions are synchronized. No dependency, YAML/report schema or global configuration change was needed.
+- Final diff checks passed. Confirmed no remaining project `.tmp-management*` or `/tmp/wf-run-limits-*` / `wf-retry-limits-*` fixture directories. Reviewed the complete tracked/untracked change set and kept migrations 1–8 unchanged.
+
+**7.4 is checked only after this acceptance.** Changes remain uncommitted/unpushed for owner review; 7.5 and UI work require new authorization. Idle is an optional observable-silence bound, not semantic progress; process cleanup may exceed a deadline, and unknown/escaped processes and non-atomic identity checks retain the existing conservative recovery limits. No rollback or automatic successful-side-effect inference is claimed.

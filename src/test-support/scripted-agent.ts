@@ -124,6 +124,7 @@ export class ScriptedAgentAdapter implements AgentAdapter {
           : {}),
       }),
       timeoutMs: input.timeoutMs,
+      idleTimeoutMs: input.idleTimeoutMs,
       logPath: input.logPath,
       secrets: input.reportAccess ? (input.reportAccess.secrets ?? [input.reportAccess.token]) : [],
     });
@@ -146,6 +147,7 @@ function toAgentResult(result: ProcessResult): AgentRunResult {
     exitCode: result.exitCode,
     signal: result.signal,
     timedOut: result.timedOut,
+    timeoutReason: result.timeoutReason,
     terminated: result.terminated,
     spawnError: result.spawnError,
     stdout: result.stdout,

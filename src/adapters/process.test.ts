@@ -52,6 +52,68 @@ const sh = (script: string, options: { timeoutMs?: number; cwd?: string; logPath
   });
 
 describe("startProcess", () => {
+  it("reaps a silent process group when its idle timeout expires", async () => {
+    const childFile = path.join(scratch(), "idle-child");
+    const running = startProcess({
+      command: "sh",
+      args: ["-c", `sleep 30 & echo $! > ${childFile}; wait`],
+      cwd: os.tmpdir(),
+      env: childEnvironment(),
+      idleTimeoutMs: 300,
+      graceMs: 100,
+    });
+    const result = await running.completed;
+    assert.equal(result.timedOut, true);
+    assert.equal(result.timeoutReason, "idle");
+    assert.equal(alive(Number(readFileSync(childFile, "utf8"))), false);
+    assert.equal(alive(running.pid ?? 0), false);
+  });
+
+  it("resets idle on both raw streams even when redaction buffers and captures are full", async () => {
+    const result = await startProcess({
+      command: process.execPath,
+      args: [
+        "-e",
+        "let n=0; const t=setInterval(()=>{ (++n%2 ? process.stdout : process.stderr).write('x'); if(n===8)clearInterval(t); },100)",
+      ],
+      cwd: os.tmpdir(),
+      env: childEnvironment(),
+      idleTimeoutMs: 500,
+      stdoutLimit: 0,
+      stderrLimit: 0,
+      secrets: ["xxxxxxxxxx"],
+    }).completed;
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.timedOut, false);
+    assert.equal(result.stdoutTruncated, true);
+    assert.equal(result.stderrTruncated, true);
+  });
+
+  it("does not extend the execution timeout when output keeps the idle timer alive", async () => {
+    const result = await startProcess({
+      command: process.execPath,
+      args: ["-e", "process.stdout.write('ready'); setInterval(()=>process.stdout.write('.'),50)"],
+      cwd: os.tmpdir(),
+      env: childEnvironment(),
+      idleTimeoutMs: 300,
+      timeoutMs: 600,
+    }).completed;
+    assert.equal(result.timedOut, true);
+    assert.equal(result.timeoutReason, "execution");
+  });
+
+  it("preserves timeouts longer than Node's single-timer range", async () => {
+    const result = await startProcess({
+      command: "sleep",
+      args: ["0.1"],
+      cwd: os.tmpdir(),
+      env: childEnvironment(),
+      timeoutMs: 2_147_483_648,
+    }).completed;
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.timedOut, false);
+  });
+
   it("bounds durable diagnostics in bytes without splitting a final Unicode code point", async () => {
     const result = await startProcess({
       command: process.execPath,

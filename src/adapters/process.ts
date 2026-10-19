@@ -27,6 +27,8 @@ export interface ProcessSpec {
   readonly cwd: string;
   readonly env: NodeJS.ProcessEnv;
   readonly timeoutMs?: number | undefined;
+  /** Maximum silence on both stdout and stderr; raw bytes count before scrubbing/capture. */
+  readonly idleTimeoutMs?: number | undefined;
   /** Time between SIGTERM and SIGKILL. */
   readonly graceMs?: number | undefined;
   readonly logPath?: string | undefined;
@@ -45,6 +47,7 @@ export interface ProcessResult {
   readonly exitCode: number | null;
   readonly signal: NodeJS.Signals | null;
   readonly timedOut: boolean;
+  readonly timeoutReason?: "execution" | "idle" | undefined;
   /** True when `terminate()` was called, whether by a stop or by the timeout. */
   readonly terminated: boolean;
   /** Set when the process never started: `cwd_not_found` or a spawn error code such as `ENOENT`. */
@@ -122,7 +125,11 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
 
   let terminated = false;
   let timedOut = false;
+  let timeoutReason: "execution" | "idle" | undefined;
+  let cancelTimeout = () => {};
+  let cancelIdle = () => {};
   let settled = false;
+  let executionEnded = false;
   let escalation: ReturnType<typeof setTimeout> | undefined;
   let spawnError: string | null = null;
   let stdinError: string | undefined;
@@ -157,14 +164,27 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
     stderr.push(chunk);
     logFilter.push(chunk);
   });
-  child.stdout?.on("data", (chunk: Buffer) => stdoutFilter.push(chunk));
-  child.stderr?.on("data", (chunk: Buffer) => stderrFilter.push(chunk));
+  const activity = () => {
+    if (terminated || settled || executionEnded || spec.idleTimeoutMs === undefined) return;
+    cancelIdle();
+    cancelIdle = deadlineTimer(spec.idleTimeoutMs, () => expire("idle"));
+  };
+  child.stdout?.on("data", (chunk: Buffer) => {
+    activity();
+    stdoutFilter.push(chunk);
+  });
+  child.stderr?.on("data", (chunk: Buffer) => {
+    activity();
+    stderrFilter.push(chunk);
+  });
 
   const beginTermination = (): void => {
     if (terminated || settled) {
       return;
     }
     terminated = true;
+    cancelTimeout();
+    cancelIdle();
     if (pgid === null) {
       return;
     }
@@ -182,19 +202,23 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
     }
   };
 
-  const timer =
-    spec.timeoutMs === undefined
-      ? undefined
-      : setTimeout(() => {
-          timedOut = true;
-          beginTermination();
-        }, spec.timeoutMs);
+  const expire = (reason: "execution" | "idle") => {
+    if (terminated || settled) return;
+    timedOut = true;
+    timeoutReason = reason;
+    beginTermination();
+  };
+  if (spec.timeoutMs !== undefined)
+    cancelTimeout = deadlineTimer(spec.timeoutMs, () => expire("execution"));
+  activity();
 
   const completed = (async (): Promise<ProcessResult> => {
     let exit: Awaited<typeof exited>;
     try {
       exit = await Promise.race([exited, terminationFailed]);
-      clearTimeout(timer);
+      executionEnded = true;
+      cancelTimeout();
+      cancelIdle();
       if (pgid !== null) {
         await reapGroup(pgid, processIdentity, graceMs);
       }
@@ -204,7 +228,8 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
       child.stderr?.destroy();
       throw error;
     } finally {
-      clearTimeout(timer);
+      cancelTimeout();
+      cancelIdle();
       clearTimeout(escalation);
       stdoutFilter.end();
       stderrFilter.end();
@@ -216,6 +241,7 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
       exitCode: exit?.code ?? null,
       signal: exit?.signal ?? null,
       timedOut,
+      ...(timeoutReason === undefined ? {} : { timeoutReason }),
       terminated,
       spawnError,
       pid,
@@ -236,6 +262,19 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
       await completed;
     },
   };
+}
+
+/** Node clamps oversized delays to 1 ms; long configured timeouts must retain their meaning. */
+function deadlineTimer(ms: number, expire: () => void): () => void {
+  const deadline = performance.now() + ms;
+  let timer: ReturnType<typeof setTimeout>;
+  const arm = () => {
+    const remaining = deadline - performance.now();
+    if (remaining <= 0) expire();
+    else timer = setTimeout(arm, Math.min(remaining, 2_147_483_647));
+  };
+  timer = setTimeout(arm, Math.min(Math.max(0, ms), 2_147_483_647));
+  return () => clearTimeout(timer);
 }
 
 function finished(result: { spawnError: string; pid: number | null }): RunningProcess {

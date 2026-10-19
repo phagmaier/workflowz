@@ -186,6 +186,10 @@ WHERE status = 'interrupted' AND error_code = 'uncertain_after_restart';`,
   confirmed_at TEXT NOT NULL
 );`,
   },
+  {
+    version: 9,
+    sql: "ALTER TABLE runs ADD COLUMN retry_not_before TEXT;",
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;

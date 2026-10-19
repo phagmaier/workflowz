@@ -37,6 +37,7 @@ export interface AgentInput {
   readonly instructionFiles: readonly string[];
   readonly allowedOutcomes: readonly string[];
   readonly timeoutMs?: number | undefined;
+  readonly idleTimeoutMs?: number | undefined;
   readonly logPath?: string | undefined;
   /** Redaction history remains in memory/private bridge stdin; only the current report token enters env. */
   readonly reportAccess?:
@@ -49,6 +50,7 @@ export interface AgentRunResult {
   readonly exitCode: number | null;
   readonly signal: string | null;
   readonly timedOut: boolean;
+  readonly timeoutReason?: "execution" | "idle" | undefined;
   readonly terminated: boolean;
   readonly spawnError: string | null;
   readonly sessionId?: string | undefined;

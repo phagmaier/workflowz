@@ -122,6 +122,7 @@ export type AdvanceResult =
       readonly taskId: string | null;
     }
   | { readonly kind: "in_progress"; readonly attemptId: string; readonly stepId: string }
+  | { readonly kind: "waiting"; readonly until: string; readonly delayMs: number }
   | { readonly kind: "completed" }
   | { readonly kind: "not_running"; readonly status: RunStatus };
 
@@ -337,6 +338,8 @@ export class RunCoordinator {
       if (run.status === "pausing" && decision.kind !== "pause") {
         this.pauseRun(run, USER_PAUSE_MESSAGE, "user_pause", attemptId, "info");
       }
+      const limit = this.exceededLimit(run, compiled);
+      if (limit) this.pauseRun(run, limit.message, limit.category, attemptId);
       return { outcome, decision };
     });
   }
@@ -458,7 +461,11 @@ export class RunCoordinator {
         checked.sourceSha256,
         sourceDir,
       );
-      this.store.updateRun(runId, { revisionId, cursorStepId });
+      this.store.updateRun(runId, {
+        revisionId,
+        cursorStepId,
+        ...(cursorStepId === run.cursorStepId ? {} : { retryNotBefore: null }),
+      });
       this.store.appendEvent({
         runId,
         revisionId,
@@ -569,6 +576,7 @@ export class RunCoordinator {
       logPath?: string | undefined;
       exitCode?: number | null;
       timedOut?: boolean;
+      timeoutReason?: "execution" | "idle" | undefined;
       failure?: SystemOutcome | undefined;
       harnessVersion?: string;
       permissionMode?: string;
@@ -688,7 +696,7 @@ export class RunCoordinator {
           data: { status: "interrupted", reason: "stopped" },
         });
       }
-      this.store.updateRun(runId, { status: "stopped", endTime: this.now() });
+      this.store.updateRun(runId, { status: "stopped", endTime: this.now(), retryNotBefore: null });
       this.store.appendEvent({
         runId,
         revisionId: run.revisionId,
@@ -967,7 +975,7 @@ export class RunCoordinator {
       if (!compiled.steps.has(stepId)) {
         throw new RunStateError(`cannot jump to '${stepId}': the workflow declares no such step`);
       }
-      this.store.updateRun(runId, { cursorStepId: stepId });
+      this.store.updateRun(runId, { cursorStepId: stepId, retryNotBefore: null });
       this.store.appendEvent({
         runId,
         revisionId: run.revisionId,
@@ -1027,7 +1035,7 @@ export class RunCoordinator {
       }
       this.store.setTaskState(taskId, "completed");
       if (run.activeTaskId === taskId) {
-        this.store.updateRun(runId, { activeTaskId: null });
+        this.store.updateRun(runId, { activeTaskId: null, retryNotBefore: null });
       }
       this.store.appendEvent({
         runId,
@@ -1063,6 +1071,15 @@ export class RunCoordinator {
   workflowForCurrentTask(runId: string): CompiledWorkflow {
     const run = this.store.getRun(runId);
     return this.taskWorkflow(run.revisionId, this.store.taskOverrides(run.activeTaskId));
+  }
+
+  /** Wall time includes pauses and downtime, measured from the original durable start time. */
+  remainingWallTimeMs(runId: string): number | undefined {
+    const run = this.store.getRun(runId);
+    const seconds = this.compiledFor(run.revisionId).limits.maxWallTimeSeconds;
+    return seconds === undefined || run.startTime === null
+      ? undefined
+      : Math.max(0, seconds * 1000 - (Date.parse(this.now()) - Date.parse(run.startTime)));
   }
 
   /** Task rows for a run, in source order. */
@@ -1145,6 +1162,18 @@ export class RunCoordinator {
     if (limitReason !== undefined) {
       this.pauseRun(run, limitReason.message, limitReason.category);
       return { kind: "not_running", status: "paused" };
+    }
+
+    if (run.retryNotBefore !== null) {
+      const delayMs = Date.parse(run.retryNotBefore) - Date.parse(this.now());
+      if (delayMs > 0)
+        return {
+          kind: "waiting",
+          until: run.retryNotBefore,
+          delayMs: Math.min(delayMs, this.remainingWallTimeMs(runId) ?? Infinity),
+        };
+      // Clearing admission and starting the next attempt commit together in this transaction.
+      this.store.updateRun(runId, { retryNotBefore: null });
     }
 
     const step = compiled.steps.get(run.cursorStepId);
@@ -1282,6 +1311,10 @@ export class RunCoordinator {
     subject: string,
   ): void {
     const toStepId = decision.kind === "pause" ? null : decision.stepId;
+    const retryNotBefore =
+      decision.kind === "retry" && decision.via.action.kind === "retry"
+        ? new Date(Date.parse(this.now()) + decision.via.action.backoffSeconds * 1000).toISOString()
+        : null;
     this.store.insertTransition({
       runId: run.runId,
       revisionId: run.revisionId,
@@ -1302,8 +1335,11 @@ export class RunCoordinator {
         decision: decision.kind,
         to: toStepId,
         reason: decision.kind === "pause" ? decision.reason : null,
+        retryNotBefore,
       },
     });
+
+    this.store.updateRun(run.runId, { retryNotBefore });
 
     if (decision.kind === "goto") {
       this.store.updateRun(run.runId, { cursorStepId: decision.stepId });
@@ -1315,7 +1351,7 @@ export class RunCoordinator {
         attemptId,
       );
     }
-    // A retry leaves the cursor on the same step, so the next advance starts a new attempt of it.
+    // A retry keeps the cursor; advance waits for its committed deadline before another attempt.
   }
 
   /**

@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6 and Phases 7.1–7.2 are complete. Separately authorized Phase 7.3 adds the management CLI and its local daemon/API. This is not a complete MVP: 7.4–7.5, the UI and remaining reliability work stay on the [`todo.md`](todo.md) roadmap and require new authorization.
+**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6 and Phases 7.1–7.3 are complete. Separately authorized Phase 7.4 completes run limits and bounded stage retries offline. This is not a complete MVP: 7.5, the UI and remaining reliability work stay on the [`todo.md`](todo.md) roadmap and require new authorization.
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -192,6 +192,28 @@ Override JSON is exactly one of `{"action":"jump","stepId":"review","reason":"In
 Recovery files use the exact inspected `expectedEventId`, `attemptId` (null between steps), and reason described above. Confirmation additionally requires `confirmedNoSurvivingOperation:true` after independent cleanup. Decision adds `action` (`retry`, `continue`, `skip`, `jump`, `end`), plus the declared `outcome` or compatible `stepId` where required. Non-ending decisions leave the run paused for separate resume. A retained report never settles interrupted work.
 
 Management `--json` writes one result to stdout or one `{error,...}` object to stderr. Success exits 0; validation/control/transport rejection exits 1; malformed CLI fields/options or unreadable input files exit 2. Human validation retains `file:line:column` diagnostics. `wf --help` lists commands. Use `wf report ...` with its existing report options, without management flags; its acknowledgment/exit behavior is unchanged. Management never accepts the attempt token.
+
+### Limits and stage retries (Phase 7.4)
+
+Limits and retries remain optional workflow settings. For example:
+
+```yaml
+limits:
+  max_step_executions: 120
+  max_wall_time_seconds: 28800
+  agent_idle_timeout_seconds: 300
+# Inside an executable step's on mapping:
+on:
+  system.timeout: {retry: {max_attempts: 2, backoff_seconds: 5}}
+```
+
+`max_step_executions` counts committed transitions, including task primitives and skips. `max_wall_time_seconds` counts from the original run start, including pauses, downtime and retry waits. The remaining wall budget caps each command/agent/correction invocation; expiry requests process-group termination and pauses after confirmed settlement. Cleanup can take additional grace/reap time. Increase an exhausted limit through a paused revision before resuming; resume alone never resets it.
+
+`max_attempts: 2` permits a retry only while the total logical executions of that step within the same task (or across a taskless run) is below two, including the first. Counts survive pause, revision and restart. Explicit `goto` loops remain governed by the graph and run limits. A stage retry creates a new attempt and follows the step's normal fresh/resume session policy. A report correction stays inside its original attempt, has its own 0-or-1 budget, and shares the remaining run wall budget. Harness-native retries remain inside their invocation.
+
+Backoff starts at committed settlement. Status exposes `run.retryNotBefore`; the deadline and transition commit together. Pause/shutdown wake the wait promptly and preserve the deadline; explicit resume waits only its remainder. A crash during a wait still interrupts the run and requires a recovery decision plus resume. Cursor overrides, skips, stopping, or completing the active task cancel the pending wait. Revisions preserving the cursor retain it. No uncertain operation is automatically replayed.
+
+Agent idle timeout measures silence on **both stdout and stderr**, starting at invocation launch and resetting on any bytes before redaction/capture limits. It terminates the owned group and routes `system.timeout` without report correction. An idle correction failure remains `system.report_error`. Commands have no idle timeout. Output is activity, not proof of useful progress; silent provider work can time out, and OpenCode's private API transport emits less activity than streaming CLIs. Leave this setting unset when that behavior is unsuitable.
 
 ### Codex adapter (Phase 6.1)
 

@@ -12,7 +12,7 @@
 
   The earlier [remaining-harness pass](docs/harness-compatibility.md#remaining-milestone-05-results--stopped-at-omp-authentication) stopped at omp's missing OpenAI credential after Claude/OpenCode reporting passed. The later explicitly authorized [Meta Contributor pass](docs/harness-compatibility.md#authorized-meta-contributor-live-results) passed omp/OpenCode direct reporting and exact-session correction. The separately authorized [Claude Haiku/low correction](docs/harness-compatibility.md#authorized-claude-correction--milestone-05-complete) now passed with exact-session identity, real acknowledgment, sequential settlement, durable reopen and target removal. **All milestone 0.5 acceptance evidence is reviewed.** No successful scenario or failed OpenAI path was repeated.
 
-  Standing choice: Meta Muse Spark 1.3 Contributor/low for OpenCode/omp, using `MUSE_SPARK_API_KEY` in `~/.config/secrets.zsh` through `smoke:meta`. Local loading and live use are verified; do not request the key/source again. Completed live passes do not authorize additional paid execution. Milestone 0.5 and the Phase 6 gate are complete. Phase 7.1 was subsequently authorized separately; Phases 7.2 and 7.3 were later authorized separately; 7.4 onward remains unauthorized.
+  Standing choice: Meta Muse Spark 1.3 Contributor/low for OpenCode/omp, using `MUSE_SPARK_API_KEY` in `~/.config/secrets.zsh` through `smoke:meta`. Local loading and live use are verified; do not request the key/source again. Completed live passes do not authorize additional paid execution. Milestone 0.5 and the Phase 6 gate are complete. Phase 7.1 was subsequently authorized separately; Phases 7.2 and 7.3 were later authorized separately; 7.4 was subsequently authorized for offline implementation; 7.5 onward remains unauthorized.
 
 **Gate:** Fresh clone installs, typechecks, tests, and has a short local development README; version probe works or explains missing binaries.
 
@@ -92,7 +92,7 @@
 
 ## Phase 7 — Crash recovery, management CLI, and reliability
 
-Authorized scope: **7.1, the separately approved headless/offline 7.2 recovery API, and the owner's explicit 7.3 request including the minimum daemon/API needed by its CLI**. No 7.4–7.5 implementation, UI, provider execution or subagents is authorized. The focused crash coverage does not complete broader 7.5 acceptance. The owner approved the reviewed 7.3 commit/push; future milestone commits/pushes require separate owner approval.
+Authorized scope: **7.1, the separately approved headless/offline 7.2 recovery API, and the owner's explicit 7.3 request including the minimum daemon/API needed by its CLI**. The owner subsequently authorized offline Phase 7.4 implementation and tests. No 7.5 implementation, UI, provider execution or subagents is authorized. The focused crash coverage does not complete broader 7.5 acceptance. The owner approved the reviewed 7.3 commit/push; future milestone commits/pushes require separate owner approval.
 
 - [x] 7.1 Implement daemon instance lock, process identity tracking (PID+start identity), in-flight attempt reconciliation, and interrupted/uncertain pause semantics.
 
@@ -103,7 +103,9 @@ Authorized scope: **7.1, the separately approved headless/offline 7.2 recovery A
 - [x] 7.3 Implement management CLI: workflow validate/import, run/start/status/events, pause/stop/resume/override/revise, task preview, report submission.
 
   Explicit foreground owner with private state/discovery and shared typed loopback RPC; separate CLI processes control the actual drive owner. Final review verification on Node.js v26.8.2: **752 tests / 85 suites**, typecheck/lint passed; earlier recovery/reporting/boundary smokes passed; example valid with 8 steps and zero warnings. Real-process tests cover stale controls, competing owners, one active run/attempt, graceful drain, stop/reuse, paused edits, cross-token refusal and conservative crash/reopen. [Phase 7.3 acceptance evidence and limits](docs/implementation-log.md#phase-73--management-cli-and-its-local-daemonapi) and [review fixes](docs/implementation-log.md#phase-73-review-fixes). Owner approval to commit/push received after review.
-- [ ] 7.4 Implement run limits and bounded stage retries with durable counters; distinguish report correction from stage retry.
+- [x] 7.4 Implement run limits and bounded stage retries with durable counters; distinguish report correction from stage retry.
+
+  Separately authorized offline implementation verified on Node.js v26.8.2: **777 tests / 87 suites**, typecheck/lint passed; recovery/reporting/boundary smokes passed; example valid with 8 steps and zero warnings. Reuses durable attempt/transition counts and adds only migration 9's retry admission deadline. Covers backoff/reopen/revision/control boundaries, task-scoped budgets, active invocation wall caps, idle silence across all five adapters, no correction after timeout/exhaustion and transactional rollback. [Acceptance evidence and limits](docs/implementation-log.md#phase-74--run-limits-and-durable-bounded-stage-retries). Commit/push awaits separate owner approval; 7.5 remains unauthorized.
 - [ ] 7.5 Test daemon kill/restart during command and agent attempts, duplicate launch prevention, process tree termination, and resumed run revisions.
 
 **Gate:** Unattended runner continues without browser; interrupted operation is visible and never silently replayed.

@@ -391,6 +391,36 @@ describe("management CLI and local daemon", { timeout: 90000 }, () => {
     assert.equal(completed.length, tasks.length);
   });
 
+  it("drains daemon shutdown promptly during a persisted retry wait", async (t) => {
+    const f = await fixture(t);
+    const text = workflowText(`start: work
+steps:
+  work:
+    kind: command
+    argv: ["false"]
+    on:
+      complete: {goto: done}
+      failed: {retry: {max_attempts: 2, backoff_seconds: 60}}
+  done: {kind: end}
+`);
+    const id = await f.create(text);
+    await f.control("start", id);
+    await until(
+      () => f.status(id),
+      (s) => s.run.retryNotBefore !== null && s.activeAttempt === null,
+    );
+    const time = Date.now();
+    await f.ok(["daemon", "stop"]);
+    await f.owner.exited;
+    assert.ok(Date.now() - time < 3000, "shutdown must wake the retry wait");
+    await f.launch();
+    const state = await f.status(id);
+    assert.equal(state.run.status, "paused");
+    assert.ok(state.run.retryNotBefore);
+    const events = await f.ok<{ events: { type: string }[] }>(["run", "events", id]);
+    assert.equal(events.events.filter((e) => e.type === "attempt_started").length, 1);
+  });
+
   it("supports paused revision, cursor/skip/task overrides and reasoned task completion", async (t) => {
     const f = await fixture(t);
     f.file("tasks.md", "- [ ] first\n- [ ] second\n");

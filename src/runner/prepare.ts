@@ -176,6 +176,10 @@ function prepare(context: PrepareContext): PreparedAttempt {
         instructionFiles,
         allowedOutcomes: step.outcomes,
         timeoutMs: spec.timeout_seconds === undefined ? undefined : spec.timeout_seconds * 1000,
+        idleTimeoutMs:
+          workflow.limits.agentIdleTimeoutSeconds === undefined
+            ? undefined
+            : workflow.limits.agentIdleTimeoutSeconds * 1000,
         logPath,
       },
     };

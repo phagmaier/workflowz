@@ -54,7 +54,14 @@ export function settlementForAgent(
     return { kind: "system", code: "system.process_error", detail: "the agent provider failed" };
   }
   if (result.timedOut) {
-    return { kind: "system", code: "system.timeout", detail: "the agent exceeded its timeout" };
+    return {
+      kind: "system",
+      code: "system.timeout",
+      detail:
+        result.timeoutReason === "idle"
+          ? "the agent exceeded its idle timeout (no stdout/stderr activity)"
+          : "the agent exceeded its timeout",
+    };
   }
   if (result.terminated) {
     return {

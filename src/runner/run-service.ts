@@ -79,6 +79,7 @@ export class RunService {
   private inFlight: Promise<void> | undefined;
   private stopRequested = false;
   private drivingRunId: string | undefined;
+  private retryWait: AbortController | undefined;
 
   constructor(
     private readonly database: WorkflowDatabase,
@@ -152,6 +153,20 @@ export class RunService {
         return { kind: "stopped" };
       }
       const next: AdvanceResult = this.coordinator.advance(runId);
+      if (next.kind === "waiting") {
+        const controller = new AbortController();
+        this.retryWait = controller;
+        try {
+          await delay(Math.min(next.delayMs, 2_147_483_647), undefined, {
+            signal: controller.signal,
+          });
+        } catch (error) {
+          if (!controller.signal.aborted) throw error;
+        } finally {
+          this.retryWait = undefined;
+        }
+        continue;
+      }
       if (next.kind === "attempt") {
         await this.runAttempt(runId, next.attemptId);
         continue;
@@ -170,12 +185,13 @@ export class RunService {
   /** Pause after the current step. Never interrupts a running attempt. */
   requestPause(runId: string): void {
     this.coordinator.requestPause(runId);
+    if (this.drivingRunId === runId) this.retryWait?.abort();
   }
 
   /**
    * Stop now. Terminates the in-flight attempt's process tree, waits until it is reaped, and records
    * the stop. With no attempt in flight, it records the stop immediately. Once stopped, this service
-   * instance stops driving; start a new one to continue other runs.
+   * instance stops driving; another drive can be admitted after complete settlement.
    */
   async stop(runId: string, reason = "stopped by request"): Promise<void> {
     this.assertNotRecovering();
@@ -186,6 +202,10 @@ export class RunService {
         );
       }
       this.coordinator.recordStop(runId, reason);
+      if (this.drivingRunId === runId) {
+        this.stopRequested = true;
+        this.retryWait?.abort();
+      }
       return;
     }
     this.stopRequested = true;
@@ -326,9 +346,18 @@ export class RunService {
       return;
     }
     let running: RunningCommand;
+    const timeoutMs = this.invocationTimeout(runId, prepared.spec.timeoutMs);
+    if (timeoutMs === 0) {
+      this.coordinator.settle(attemptId, {
+        kind: "system",
+        code: "system.timeout",
+        detail: "the run reached its wall-time limit before command dispatch",
+      });
+      return;
+    }
     this.coordinator.prepareInvocation(attemptId, 0);
     try {
-      running = startCommand(prepared.spec);
+      running = startCommand({ ...prepared.spec, timeoutMs });
     } catch {
       this.coordinator.settle(attemptId, {
         kind: "system",
@@ -391,7 +420,7 @@ export class RunService {
       detail:
         "no accepted report after clean execution; correction was unavailable, disabled, or failed",
     });
-    const original = await this.invokeAgent(attemptId, prepared, 0);
+    const original = await this.invokeAgent(runId, attemptId, prepared, 0);
     if (!original || this.stopRequested) return reportError();
     const accepted = this.coordinator.reportFor(attemptId);
     const first = settlementForAgent(
@@ -408,6 +437,12 @@ export class RunService {
       !sessionId
     )
       return reportError();
+    if (this.coordinator.remainingWallTimeMs(runId) === 0)
+      return {
+        kind: "system",
+        code: "system.timeout",
+        detail: "the run reached its wall-time limit before report correction",
+      };
     this.coordinator.requestCorrection(attemptId);
     const input = {
       ...prepared.input,
@@ -422,7 +457,7 @@ export class RunService {
       logPath:
         prepared.input.logPath === undefined ? undefined : `${prepared.input.logPath}.correction`,
     };
-    const corrected = await this.invokeAgent(attemptId, { ...prepared, input }, 1);
+    const corrected = await this.invokeAgent(runId, attemptId, { ...prepared, input }, 1);
     if (!corrected || this.stopRequested) return reportError();
     const last = settlementForAgent(
       corrected,
@@ -434,13 +469,26 @@ export class RunService {
 
   /** Revocation precedes any correction/routing. Cleanup uncertainty propagates with attempt active. */
   private async invokeAgent(
+    runId: string,
     attemptId: string,
     prepared: Extract<PreparedAttempt, { kind: "agent" }>,
     invocation: 0 | 1,
   ): Promise<AgentRunResult | undefined> {
+    const timeoutMs = this.invocationTimeout(runId, prepared.input.timeoutMs);
+    if (timeoutMs === 0)
+      return {
+        exitCode: null,
+        signal: null,
+        timedOut: true,
+        terminated: false,
+        spawnError: null,
+        stdout: "",
+        timeoutReason: "execution",
+      };
     const access = this.reports.issue(attemptId);
     const input = {
       ...prepared.input,
+      timeoutMs,
       reportAccess: access,
       prompt: `${prepared.input.prompt}\nReport through wf report <outcome> --summary <text>. Allowed outcomes: ${prepared.input.allowedOutcomes.join(", ")}. A report does not end this process.`,
     };
@@ -544,6 +592,11 @@ export class RunService {
         logPath: input.logPath,
         exitCode: result.exitCode,
         timedOut: result.timedOut,
+        timeoutReason: result.timedOut
+          ? result.timeoutReason === "idle"
+            ? "idle"
+            : "execution"
+          : undefined,
         ...(result.diagnostics
           ? {
               diagnostics: {
@@ -591,6 +644,11 @@ export class RunService {
       report: (stepId) => this.coordinator.latestReport(runId, stepId, attempt.taskId),
       commandStdout: (stepId) => this.coordinator.latestStdout(runId, stepId),
     });
+  }
+
+  private invocationTimeout(runId: string, configured?: number): number | undefined {
+    const remaining = this.coordinator.remainingWallTimeMs(runId);
+    return remaining === undefined ? configured : Math.min(configured ?? Infinity, remaining);
   }
 
   private attemptRow(runId: string, attemptId: string): AttemptRow {
