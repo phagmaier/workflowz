@@ -42,7 +42,7 @@ Offline inventory does not check authentication. Earlier unverified status-comma
 
 The account owner explicitly authorized the revised Luna/low pass on 2026-10-19. Codex `0.163.0` with `gpt-6-luna` and Pi `1.3.0` with `openai/gpt-6-luna` each completed both report and exact-session correction scenarios. All four workflows returned `complete`, acknowledged actual `wf report`, reopened SQLite successfully and removed their settled targets. No alternate model, higher reasoning or runner retry was used.
 
-The Codex/Pi evidence verifies their exercised authentication, provider framing, helper tool/report environment and persisted-session correction paths—not arbitrary tools, managed settings or every provider. Together with the 697-test offline gate, including all registered adapters' conformance suites, it satisfies the Phase 6 gate. A separately authorized remaining-harness pass then completed Claude and OpenCode direct reporting but stopped at omp's missing OpenAI credential; no remaining-harness correction ran. Milestone 0.5 remains open. See [remaining-pass results](#remaining-milestone-05-results--stopped-at-omp-authentication) and [Codex/Pi verification](implementation-log.md#phase-6-live-acceptance--authorized-lunalow-pass).
+The Codex/Pi evidence verifies their exercised authentication, provider framing, helper tool/report environment and persisted-session correction paths—not arbitrary tools, managed settings or every provider. Their Phase 6 gate remains satisfied. After the stopped remaining-harness OpenAI pass, the owner explicitly selected Meta Contributor and authorized the bounded live pass below: omp/OpenCode direct reporting and exact-session correction all passed. The latest offline gate passes **704 tests**. Milestone 0.5 remains open only for Claude's authenticated correction check. See [Meta live results](#authorized-meta-contributor-live-results), [earlier stopped-pass results](#remaining-milestone-05-results--stopped-at-omp-authentication) and [Codex/Pi verification](implementation-log.md#phase-6-live-acceptance--authorized-lunalow-pass).
 
 The Phase 6.1–6.7 implementation sections below preserve their implementation-time evidence and limitations. Their live-pending statements are superseded only for the paths actually exercised above and in the results below; synthetic evidence alone still does not establish live compatibility.
 
@@ -423,7 +423,7 @@ npm run smoke:meta -- --harness omp --scenario report --timeout-seconds 60 \
   --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-meta
 ```
 
-It accepts `omp|opencode`, `report|correction`, explicit timeout/artifact parent and optional `--execute`; model and low reasoning are pinned by this convenience command. The generic `smoke:harnesses` and workflow APIs remain unrestricted. Without `--execute`, it reads no secret, creates no smoke artifacts and runs no harness/probe/authentication/provider command; npm still builds first. Local named-key loading is approved and need not be reauthorized. **Paid execution still requires approval of the exact scenarios and bounds; neither the stopped pass nor offline integration approval resumes provider execution.**
+It accepts `omp|opencode`, `report|correction`, explicit timeout/artifact parent and optional `--execute`; model and low reasoning are pinned by this convenience command. The generic `smoke:harnesses` and workflow APIs remain unrestricted. Without `--execute`, it reads no secret, creates no smoke artifacts and runs no harness/probe/authentication/provider command; npm still builds first. Local named-key loading is approved and need not be reauthorized. **The owner separately approved the exact bounded live pass below, which completed successfully. That completed pass does not authorize additional paid executions; the named source/selection need not be requested again.**
 
 Credential handling:
 
@@ -439,6 +439,33 @@ Sources: [Meta API authentication](https://dev.meta.ai/docs/authentication), [Co
 
 Offline verification: the actual `meta-smoke-cli` command completed report and exact-session correction through each real adapter against synthetic CLIs, including real helper acknowledgment, SQLite reopen, removed targets and scrubbed synthetic credentials. Installed OpenCode `models --standalone` accepted the generated v2 configuration under an isolated home with a loopback-only fixture endpoint and synthetic key; it listed `meta/muse-spark-1.3-contributor` and made zero fixture requests. The approved real local loader also succeeded with its value withheld; this is not provider authentication. Full Node.js v26.8.2 gate: **704 tests, 77 suites, zero failures/cancellations/skips**, typecheck/lint passed. Exact verification and limits are in the implementation log.
 
-#### Proposed Meta verification — no execution yet
+#### Authorized Meta Contributor live results
 
-Run omp report, OpenCode report, omp correction and OpenCode correction, each separately and reviewing evidence between commands. All use `meta/muse-spark-1.3-contributor`/low through `smoke:meta`. Four workflows, at most six sequential invocations, 60-second originals and 30-second corrections: at most 300 seconds configured agent execution plus builds/probes/cleanup. Stop at the first failure, uncertain cleanup or observed model substitution. No fallback, provider switch, increased reasoning, extra paid diagnosis or runner retry. No dollar cap; native retries/hooks/resources can add requests. New Meta direct reports are necessary because the earlier OpenCode success used another provider. Claude correction remains separate and unrun.
+The owner selected **Verify both harnesses fully** after reviewing the exact model/source, Contributor data use, four-workflow/six-invocation ceiling, 60-second originals/30-second corrections, stop-on-first-failure policy, native resource/request risks and absence of an enforceable dollar cap. This was new explicit authorization, not reuse of the stopped OpenAI pass.
+
+Executed separately in this order with Node.js v26.8.2, reviewing evidence between commands:
+
+```bash
+mkdir -p /home/phagmaier/.local/state/workflowz/live-smoke-meta/scratch
+env PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH TMPDIR=/home/phagmaier/.local/state/workflowz/live-smoke-meta/scratch npm run smoke:meta -- --execute --harness omp --scenario report --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-meta
+env PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH TMPDIR=/home/phagmaier/.local/state/workflowz/live-smoke-meta/scratch npm run smoke:meta -- --execute --harness opencode --scenario report --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-meta
+env PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH TMPDIR=/home/phagmaier/.local/state/workflowz/live-smoke-meta/scratch npm run smoke:meta -- --execute --harness omp --scenario correction --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-meta
+env PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH TMPDIR=/home/phagmaier/.local/state/workflowz/live-smoke-meta/scratch npm run smoke:meta -- --execute --harness opencode --scenario correction --timeout-seconds 60 --artifacts-dir /home/phagmaier/.local/state/workflowz/live-smoke-meta
+```
+
+All use `meta/muse-spark-1.3-contributor`/low and the existing named source. **All four passed; exactly six sequential harness invocations, no runner retry or extra diagnostic provider call.** The prior OpenAI failure was not retried and no Codex/Pi/Claude scenario was repeated.
+
+| Harness | Scenario | Invocations / corrections | Result | Artifact directory |
+| --- | --- | --- | --- | --- |
+| omp 18.12.2 | report | 1 / 0 | passed / `complete` | `wf-omp-report-vrtYMI` |
+| OpenCode 2.0.32 | report | 1 / 0 | passed / `complete` | `wf-opencode-report-Eg7Ccy` |
+| omp 18.12.2 | correction | 2 / 1 | passed / `complete` | `wf-omp-correction-aFFeJf` |
+| OpenCode 2.0.32 | correction | 2 / 1 | passed / `complete` | `wf-opencode-correction-U5nUcH` |
+
+Artifact parent: `/home/phagmaier/.local/state/workflowz/live-smoke-meta`. Every evidence file records actual helper acknowledgment, one exact accepted report, clean `complete`, durable SQLite reopen and removed generated target. Independent read-only SQLite review confirmed original/correction start/settlement ordering, acceptance before final exit-zero settlement, and exactly one correction in the same persisted session. Both correction histories have identical session fingerprints across original/correction settlement. omp's original correction-scenario assistant returned `READY` without tools/reporting before the follow-up.
+
+Authentication is classified `status_unsupported` for both harnesses; that classification is not an auth pass. Successful provider-backed execution now establishes usable authentication for these exercised paths. omp original and correction assistant model fields consistently identify provider `meta` and model `muse-spark-1.3-contributor`. OpenCode's private API transport does not expose provider-model usage: its selection is requested configuration, not independent actual-model attestation. Permissions remained `yolo` for omp and `session-allow-all` for OpenCode.
+
+The original credential file was neither changed nor copied. Its value never appeared in chat/tool output or repository configuration. A local process checked runner-owned logs, SQLite and evidence for the known key's literal/JSON/URL/Base64/Base64url forms; none were found. That is a bounded known-key check, **not an all-secrets or isolation guarantee**. Given the earlier unknown MCP diagnostic exposure, raw logs were not published; artifact roots are 0700, evidence is 0600, and runner-owned logs/databases were additionally restricted to 0600 without rewriting contents. Harness-owned journals/transcripts/config/auth were not inspected or rewritten. All four settled target directories were removed; private evidence and named scratch remain intentionally.
+
+Post-live `npm run check` on Node.js v26.8.2 passed typecheck/lint and **704 tests / 77 suites**, zero failures/cancellations/skips; Biome checked 116 files with 115 informational suggestions and no errors. No runtime code changed after the live pass. OpenCode/omp live reporting and exact-session compatibility are now verified for these paths; **milestone 0.5 remains unchecked only for Claude's unrun authenticated correction scenario**. Phase 6 stays satisfied; no Phase 7, management, daemon or UI work is authorized.

@@ -395,3 +395,23 @@ Verification on Node.js **v26.8.2**:
 - `npm run smoke:meta -- --help` plus both omp/OpenCode correction plan commands: successful builds, explicit Contributor/low selection, named-source metadata only, `execute: false`, maximum two invocations and 30-second correction bound. No credential/probe/auth/provider execution or smoke artifacts in plan mode.
 
 No live Meta provider calls, login, provider fallback, dependency changes, global edits, subagents, handoff document, Phase 7, daemon management or UI work. The previous failed OpenAI path was not retried. Milestone **0.5 remains unchecked** pending real compatibility evidence; loader readiness and synthetic successes do not establish entitlement or actual model use. The proposed bounded Meta pass is four report/correction workflows, at most six sequential invocations with 60-second originals/30-second corrections, stop at first failure and no enforceable dollar cap. Claude correction remains separate and unrun.
+
+## Remaining milestone 0.5 — authorized Meta Contributor live pass
+
+After integration commit `b2ec72e` was pushed, the owner explicitly selected **Verify both harnesses fully** with the documented Contributor/low selection, already approved local credential source, four standalone workflows/six sequential invocations, 60-second originals/30-second corrections, stop-on-first-failure policy and no enforceable dollar cap. No key-location/provisioning question was repeated. This separately approved paid verification; the earlier stopped authorization was not reused.
+
+Executed omp report, OpenCode report, omp correction, then OpenCode correction, separately with the explicit Node.js v26.8.2 PATH and named non-`/tmp` scratch. Exact commands and artifact IDs are recorded in [Meta live compatibility results](harness-compatibility.md#authorized-meta-contributor-live-results). **All four passed in exactly six sequential invocations.** No fallback/provider change, reasoning increase, runner retry, failed-OpenAI-path repeat or additional paid diagnostic occurred.
+
+Every scenario completed through the actual `wf report` helper acknowledgment, one accepted declared report, successful process/group/pipe settlement, durable SQLite reopen and removed disposable target. Both correction histories show original exit-zero settlement, correction request/start, accepted report, correction exit-zero settlement, with matching persisted session fingerprints and no overlap. omp's original correction turn returned `READY` without reporting; all observed omp assistant provider/model fields match `meta/muse-spark-1.3-contributor`. OpenCode retains the documented actual-model visibility limit; no inference of actual model usage is made from its requested selector. Both auth classifications remain `status_unsupported`; successful execution is the live authentication evidence.
+
+Used only the existing named key, without displaying it, changing its source file, persisting it in repository/config/evidence or sourcing the shell file. A credential-aware local process inspected only runner-owned artifact files for known literal/JSON/URL/Base64/Base64url forms and found none. The first attempt to import the compiled loader into Eval's Bun package environment could not resolve project `yaml`; the same local audit then ran under the project's explicit Node executable, without dependency changes, secret output or another provider request. Private artifact directories are 0700; evidence/logs/databases are 0600, with log/database modes tightened without content rewrites. No unknown-secret guarantee is claimed, raw diagnostic artifacts remain unpublished, and normal harness-owned transcripts/state were not inspected or rewritten. Named live scratch remains intentionally; all generated `project/` targets were confirmed removed.
+
+Post-live verification:
+
+```bash
+PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run check
+```
+
+Typecheck/lint passed; **704 tests passed, 77 suites, zero failures/cancellations/skips**. Biome checked **116 files**, with **115 informational suggestions** and no errors. No runtime code/tests changed during live acceptance; the subsequent changes synchronize current evidence/status in README, spec, architecture, checklist and these notes while preserving historical failures and earlier verification.
+
+The Meta key/source and Contributor selection are now both documented and exercised successfully. **Milestone 0.5 stays unchecked only for Claude's authenticated correction scenario**, which was not part of this authorization. Phase 6 remains complete. No further paid calls, global configuration changes, Phase 7, daemon/management CLI/UI work, subagents or handoff document were introduced or authorized.
