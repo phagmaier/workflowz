@@ -227,7 +227,7 @@ Version-specific behavior is a risk. Use executable compatibility tests against 
 
 The adapter forwards model/reasoning effort, injects the existing report channel and project-local `wf` PATH, and records CLI version/unrestricted mode in invocation-start events. Only base environment plus Codex home/key and report access are selected. Per-invocation config preserves report environment for tools, excludes the API key from their inheritance, and disables shell snapshots; it does not edit global files. No schema migration or workflow control change is needed. Raw scrubbed events use the existing bounded attempt log.
 
-Codex registry status is `conformance_passed` after the full shared offline suite passes against a fixture CLI. Real account/provider framing and resume remain unverified; Phase 0.5 and the live Phase 6 gate remain open. Pi now has the separate implementation below; Claude Code is next (Phase 6.3). See `docs/harness-compatibility.md` for official sources, installed-version evidence and limitations.
+Codex registry status is `conformance_passed` after the full shared offline suite passes against a fixture CLI. Real account/provider framing and resume remain unverified; Phase 0.5 and the live Phase 6 gate remain open. Pi and Claude Code now have the separate implementations below. See `docs/harness-compatibility.md` for official sources, installed-version evidence and limitations.
 
 ### 4.2 Pi integration
 
@@ -251,7 +251,13 @@ The factory isolates version/help probes with a temporary Pi config directory, o
 
 ### 4.3 Claude Code integration
 
-Claude Code is driven headlessly with `claude -p` and a machine-readable stream: `--output-format stream-json` (which also requires `--verbose`) emits one JSON object per line, starting with an init event that carries the session id; the terminal `result` message also carries `session_id` on every result regardless of success or error. Capture that id and resume the same session with `--resume <session-id>` for the single report-correction turn. Keep session persistence enabled (`--no-session-persistence` would break correction). Permission selection uses `--permission-mode`, or an explicitly configured bypass flag; the adapter must surface which mode was chosen rather than silently assuming one.
+`adapters/claude.ts` provides an offline-probed factory and a one-shot print adapter for the installed 2.1.303 interface. Launch uses stdin with `--print --input-format text --output-format stream-json --verbose --permission-mode bypassPermissions`; model/validated effort use `--model` and `--effort`. The factory isolates home/config for version/help probes and supplies no provider credentials. Runtime retains normal configured resources/authentication and session persistence; no global settings change.
+
+`claude-events.ts` continuously decodes bounded UTF-8/LF records independently of stdout capture. Startup events may precede `system/init`; init and terminal `result` identities must agree. Only a final `result` with subtype `success` and `is_error: false` confirms success. API retry notifications alone are not failures. Malformed/oversized/unterminated records, duplicate/nonfinal results, error results and missing terminal evidence are technical failures on an otherwise clean exit, bypassing report correction. The common supervisor must still confirm exit/group reaping/pipe closure; neither result nor report can settle a process.
+
+The result UUID is the engine's opaque session identity. Missing identity cannot authorize correction. Explicit resume accepts only full UUIDs, uses `--resume <UUID>`, and preserves the requested identity on mismatch. Installed offline missing-UUID evidence confirms a nonzero terminal error without fresh fallback; the adapter maps that known result to unavailable resume. No recent selector, transcript-path lookup, fork or ephemeral flag is used. Same-harness/run/task/revision lookup and one bounded sequential correction remain owned by the runner.
+
+Only the common environment, explicitly selected Claude/Anthropic settings and report access reach the child; known injected auth is scrubbed by the supervisor. Version and selected permission mode are audited. Claude is `conformance_passed` after the full shared offline suite through a synthetic CLI, with additional framing, failure, identity and settlement cases. No workflow fields, migrations or coordinator behavior changed. Authentication, actual provider streams, tool environment and live persistence/resume remain unverified; see `docs/harness-compatibility.md`. OpenCode (6.4) is next; 0.5 and 6.6–6.8 remain open.
 
 ### 4.4 OpenCode integration
 

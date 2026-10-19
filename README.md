@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: project tooling, strict YAML/schema validation, policy compilation, SQLite persistence, transactional run coordination, a sequential runner for command steps and fake agents, mandatory CLI/HTTP reporting with one same-session correction, immutable Markdown task import, selected input context, run-local task parameters, and paused workflow revisions, and offline-conformant Codex and Pi CLI adapters. This is not a complete MVP: live harness verification, the other harness adapters, management CLI, and UI remain on the [`todo.md`](todo.md) roadmap.
+**Status:** Implemented core: project tooling, strict YAML/schema validation, policy compilation, SQLite persistence, transactional run coordination, a sequential runner for command steps and fake agents, mandatory CLI/HTTP reporting with one same-session correction, immutable Markdown task import, selected input context, run-local task parameters, and paused workflow revisions, and offline-conformant Codex, Pi and Claude Code CLI adapters. This is not a complete MVP: live harness verification, the other harness adapters, management CLI, and UI remain on the [`todo.md`](todo.md) roadmap.
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -70,7 +70,7 @@ wf report complete --summary "Implemented validation" --handoff-file handoff.md
 wf report blocked --summary "Need input" --issue "Missing requirement" --data '{"area":"auth"}'
 ```
 
-The CLI waits for acknowledgment. Rejected reports exit 1 with a useful message; acceptance exits 0. Identity comes from the opaque token; reports cannot supply run/attempt IDs or transitions. Acceptance writes one immutable report and event, then waits for process settlement before routing. Clean missing reports allow one same-session correction, bounded to 30 seconds (or less); failed/unavailable correction routes `system.report_error`. Original process/provider failures bypass correction. The offline fake harness, Codex and Pi fixtures exercise this path. Both real adapters have offline launch/session conformance coverage; live provider verification and the remaining installed harness adapters remain Phase 6 work.
+The CLI waits for acknowledgment. Rejected reports exit 1 with a useful message; acceptance exits 0. Identity comes from the opaque token; reports cannot supply run/attempt IDs or transitions. Acceptance writes one immutable report and event, then waits for process settlement before routing. Clean missing reports allow one same-session correction, bounded to 30 seconds (or less); failed/unavailable correction routes `system.report_error`. Original process/provider failures bypass correction. The offline fake harness, Codex, Pi and Claude fixtures exercise this path. All three real adapters have offline launch/session conformance coverage; live provider verification and the remaining installed harness adapters remain Phase 6 work.
 
 `RunService.previewTasks({workflowText, workflowDir})` exposes checklist counts and source metadata without creating a run. `RunService.createRun` reads and freezes the configured checklist; prechecked tasks are excluded unless `includeCompleted: true` is explicit. The lower-level coordinator still accepts supplied task records for offline fixtures. Instructions and selected same-task reports are assembled at attempt preparation and persisted with the task context; future attempts read current configured instruction content. Run-local task parameters and paused revisions are available through the headless service API (below). Automatic re-import remains unimplemented.
 
@@ -112,6 +112,16 @@ Prompts use stdin with `--print --mode json`. The LF-only streaming parser waits
 Each fresh invocation gets a dedicated persistent directory below `pi-sessions` beside the attempt logs (or adapter option `sessionDir`). Only a matching streamed UUID and persisted v3 session header can supply a resume identity. Resume validates that exact file and working directory, then passes its full UUID with its dedicated `--session-dir`; missing sessions fail instead of starting fresh. The same runner-owned correction limit applies. Direct adapter callers must supply `sessionDir` or `logPath`.
 
 Model and thinking level use `--model` / `--thinking`. Normal Pi tools use no permission flag; invocation events record the CLI version and `default-unrestricted-tools`. Runtime environment selects the base allowlist, Pi config/offline/telemetry settings, explicit provider credentials and report access; injected secrets are scrubbed. No global config is edited. See [compatibility details](docs/harness-compatibility.md) for the exact environment list and remaining live checks. Pi passes the full shared offline conformance suite; milestone 0.5 and the Phase 6 live gate remain open.
+
+### Claude Code adapter (Phase 6.3)
+
+`await createClaudeAdapter()` from `src/adapters/claude.ts` probes version/help with temporary home/config and no provider credentials. Register it as `new Map([["claude", adapter]])` in `RunService` options. Driving a real run uses Claude's configured provider/account and can incur usage.
+
+The adapter sends prompts through stdin with `--print --input-format text --output-format stream-json --verbose --permission-mode bypassPermissions`. Optional model and validated effort use `--model` / `--effort`. A successful terminal `result` and supervised process/group/pipe settlement are both required. Protocol/provider errors bypass report correction; only `wf report` supplies outcomes.
+
+Default CLI session persistence stays enabled. The terminal UUID is the opaque session identity; resume passes only that exact UUID to `--resume`, with no recent-session selector, fork or fresh fallback. Unavailable sessions and mismatches fail explicitly. CLI version and `bypassPermissions` are audited. Runtime selects the base environment plus Claude config, explicit Anthropic auth/provider settings and report access, scrubbing injected tokens/keys. No global config is edited.
+
+The installed version is 2.1.303. Its offline missing-UUID check confirmed failure without a provider request. The real adapter passes all shared conformance tests against a synthetic CLI; authenticated persistence/resume, actual provider framing and tool environment remain live-smoke work. See [compatibility details](docs/harness-compatibility.md). Milestones 0.5 and 6.6–6.8 remain open.
 
 ### Layout
 
