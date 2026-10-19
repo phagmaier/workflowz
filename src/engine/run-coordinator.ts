@@ -20,6 +20,14 @@ import {
   type ProcessObservation,
   processIdentitySchema,
 } from "../contracts/process-identity.js";
+import {
+  type ExternalCleanupConfirmation,
+  externalCleanupSchema,
+  type RecoveryDecision,
+  type RecoveryRequest,
+  recoveryDecisionSchema,
+  recoveryRequestSchema,
+} from "../contracts/recovery.js";
 import { ReportRejected, validateReport } from "../contracts/report.js";
 import {
   type TaskOverrides,
@@ -37,6 +45,8 @@ import type { WorkflowDatabase } from "../store/database.js";
 import {
   type AttemptRow,
   type NewTask,
+  type RecoveryResolutionRow,
+  type ReportRow,
   type RunRow,
   RunStore,
   type TaskRow,
@@ -143,6 +153,18 @@ export interface CreateRunInput {
   readonly workflowDir: string;
   readonly tasks?: readonly NewTask[];
   readonly taskImport?: TaskImportSnapshot;
+}
+
+/** Operator inspection keeps reported results, process evidence and manual resolution distinct. */
+export interface RecoverySnapshot {
+  readonly run: RunRow;
+  readonly attempt: AttemptRow | null;
+  readonly report: ReportRow | null;
+  readonly logPaths: readonly string[];
+  readonly resolution: RecoveryResolutionRow | null;
+  readonly processResolved: boolean;
+  readonly expectedEventId: number;
+  readonly actions: readonly string[];
 }
 
 export class RunCoordinator {
@@ -718,6 +740,206 @@ export class RunCoordinator {
     });
   }
 
+  /** Consistent recovery view. The event cursor binds decisions to exactly the state inspected. */
+  recovery(runId: string): RecoverySnapshot {
+    return this.database.transaction(() => {
+      const run = this.store.getRun(runId);
+      const pending = this.store.pendingRecovery(runId);
+      const events = this.store.listEvents(runId);
+      const interruptedId = events.findLast((event) => event.type === "run_interrupted")?.attemptId;
+      const latest = pending ?? (interruptedId ? this.store.getAttempt(interruptedId) : undefined);
+      const attempt =
+        latest?.status === "interrupted" && latest.errorCode === "uncertain_after_restart"
+          ? latest
+          : null;
+      const resolution = attempt
+        ? (this.store.recoveryResolution(attempt.attemptId) ?? null)
+        : null;
+      const processResolved = pending === undefined;
+      return {
+        run,
+        attempt,
+        report: attempt ? (this.store.getReport(attempt.attemptId) ?? null) : null,
+        logPaths: attempt
+          ? events
+              .filter(
+                (event) =>
+                  event.attemptId === attempt.attemptId && event.type === "invocation_started",
+              )
+              .flatMap((event) =>
+                typeof event.data["logPath"] === "string" ? [event.data["logPath"]] : [],
+              )
+          : [],
+        resolution,
+        processResolved,
+        expectedEventId: this.store.latestEventId(runId),
+        actions:
+          run.status !== "interrupted"
+            ? []
+            : processResolved
+              ? [attempt ? "retry" : "continue", "skip", "jump", "end"]
+              : attempt?.processIdentity && attempt.recoveryState === "alive"
+                ? ["terminate", "confirm_external_cleanup"]
+                : ["confirm_external_cleanup"],
+      };
+    });
+  }
+
+  private requireRecovery(runId: string, request: RecoveryRequest) {
+    const state = this.recovery(runId);
+    if (state.run.status !== "interrupted" || this.store.activeAttempt(runId))
+      throw new RunStateError(
+        "recovery actions require an interrupted run without an active attempt",
+      );
+    if (
+      state.expectedEventId !== request.expectedEventId ||
+      (state.attempt?.attemptId ?? null) !== request.attemptId
+    )
+      throw new RunStateError("recovery state changed; inspect it again before deciding");
+    return state;
+  }
+
+  confirmExternalCleanup(
+    runId: string,
+    input: ExternalCleanupConfirmation,
+    observation: ProcessObservation,
+  ): void {
+    const request = externalCleanupSchema.parse(input);
+    this.database.transaction(() => {
+      const state = this.requireRecovery(runId, request);
+      if (!state.attempt || state.processResolved)
+        throw new RunStateError("this operation has no unresolved process barrier");
+      if (observation === "alive")
+        throw new RunStateError(
+          "a verified owned process is still alive; terminate it before confirming cleanup",
+        );
+      this.store.confirmRecovery(state.attempt.attemptId, observation, request.reason);
+      this.store.appendEvent({
+        runId,
+        attemptId: state.attempt.attemptId,
+        revisionId: state.attempt.revisionId,
+        type: "recovery_cleanup_confirmed",
+        data: {
+          reason: request.reason,
+          previousObservation: state.attempt.recoveryState,
+          observation,
+          confirmedNoSurvivingOperation: true,
+        },
+      });
+    });
+  }
+
+  requestRecoveryTermination(
+    runId: string,
+    input: RecoveryRequest,
+    observation: ProcessObservation,
+  ) {
+    const request = recoveryRequestSchema.parse(input);
+    return this.database.transaction(() => {
+      const state = this.requireRecovery(runId, request);
+      const attempt = state.attempt;
+      if (
+        !attempt?.processIdentity ||
+        state.processResolved ||
+        (observation !== "alive" && observation !== "gone")
+      )
+        throw new RunStateError("recovery termination requires verified process-group ownership");
+      this.store.appendEvent({
+        runId,
+        attemptId: attempt.attemptId,
+        revisionId: attempt.revisionId,
+        type: "recovery_termination_requested",
+        data: { reason: request.reason, observation, processIdentity: attempt.processIdentity },
+      });
+      return { ...request, expectedEventId: this.store.latestEventId(runId), attempt };
+    });
+  }
+
+  finishRecoveryTermination(
+    runId: string,
+    request: RecoveryRequest,
+    observation: ProcessObservation,
+  ): void {
+    this.database.transaction(() => {
+      const state = this.requireRecovery(runId, request);
+      if (!state.attempt) throw new RunStateError("recovered attempt is unavailable");
+      if (state.attempt.recoveryState !== observation) {
+        this.store.setRecoveryState(state.attempt.attemptId, observation);
+        this.store.appendEvent({
+          runId,
+          attemptId: state.attempt.attemptId,
+          revisionId: state.attempt.revisionId,
+          type: "process_reconciled",
+          data: { stepId: state.attempt.stepId, processState: observation },
+        });
+      }
+      this.store.appendEvent({
+        runId,
+        attemptId: state.attempt.attemptId,
+        revisionId: state.attempt.revisionId,
+        type: "recovery_termination_finished",
+        data: {
+          requestEventId: request.expectedEventId,
+          processState: observation,
+          confirmedAbsent: observation === "gone",
+        },
+      });
+    });
+  }
+
+  /** Decide what comes next, but never dispatch it or settle the interrupted attempt as success. */
+  decideRecovery(runId: string, input: RecoveryDecision): void {
+    const request = recoveryDecisionSchema.parse(input);
+    this.database.transaction(() => {
+      const state = this.requireRecovery(runId, request);
+      this.assertNoUnresolvedProcess();
+      const compiled = this.taskWorkflow(
+        state.run.revisionId,
+        this.store.taskOverrides(state.run.activeTaskId),
+      );
+      if (request.action === "retry" && !state.attempt)
+        throw new RunStateError(
+          "there is no interrupted stage to retry; continue the committed cursor",
+        );
+      if (request.action === "continue" && state.attempt)
+        throw new RunStateError(
+          "an interrupted stage requires an explicit retry, skip, jump or end decision",
+        );
+      // A prior audited manual jump may have changed the cursor; retry still names the interrupted stage.
+      const retryStepId = request.action === "retry" ? state.attempt?.stepId : undefined;
+      if (request.action !== "end" && request.action !== "skip")
+        revisionCursor(
+          compiled,
+          compiled,
+          state.run.cursorStepId,
+          state.run.activeTaskId,
+          request.action === "jump" ? request.stepId : retryStepId,
+        );
+      if (request.action === "end") {
+        this.recordStop(runId, request.reason);
+        this.store.resolveOpenAttention(runId, request.reason);
+      } else {
+        this.store.updateRun(runId, {
+          status: "paused",
+          ...(retryStepId === undefined ? {} : { cursorStepId: retryStepId }),
+        });
+        if (request.action === "jump") this.jumpTo(runId, request.stepId, request.reason);
+        if (request.action === "skip") this.skipCurrentStep(runId, request.outcome, request.reason);
+      }
+      this.store.appendEvent({
+        runId,
+        attemptId: state.attempt?.attemptId ?? null,
+        revisionId: state.run.revisionId,
+        type: "recovery_decided",
+        data: {
+          ...request,
+          from: state.run.cursorStepId,
+          to: this.store.getRun(runId).cursorStepId,
+        },
+      });
+    });
+  }
+
   recoveryRuns(): string[] {
     return this.store.recoveryRuns();
   }
@@ -874,6 +1096,7 @@ export class RunCoordinator {
     if (reason.trim().length === 0) {
       throw new RunStateError("a manual override needs a reason; none was given");
     }
+    this.assertNoUnresolvedProcess();
     const run = this.store.getRun(runId);
     if (run.status !== "paused" && run.status !== "interrupted") {
       throw new RunStateError(

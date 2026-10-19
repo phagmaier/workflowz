@@ -108,6 +108,12 @@ export interface EventRow {
   readonly timestamp: string;
 }
 
+export interface RecoveryResolutionRow {
+  readonly observation: Exclude<ProcessObservation, "alive">;
+  readonly reason: string;
+  readonly confirmedAt: string;
+}
+
 export interface AttentionRow {
   readonly itemId: number;
   readonly runId: string;
@@ -373,7 +379,7 @@ export class RunStore {
   pendingRecovery(runId?: string): AttemptRow | undefined {
     const row = this.database
       .prepare(
-        "SELECT * FROM attempts WHERE recovery_state IN ('alive', 'mismatch', 'unknown') AND (? IS NULL OR run_id = ?) ORDER BY started_at LIMIT 1",
+        "SELECT * FROM attempts WHERE recovery_state IN ('alive', 'mismatch', 'unknown') AND NOT EXISTS (SELECT 1 FROM recovery_resolutions WHERE recovery_resolutions.attempt_id = attempts.attempt_id) AND (? IS NULL OR run_id = ?) ORDER BY started_at LIMIT 1",
       )
       .get(runId ?? null, runId ?? null) as Raw | undefined;
     return row ? toAttempt(row) : undefined;
@@ -382,10 +388,37 @@ export class RunStore {
   recoveryRuns(): string[] {
     return this.database
       .prepare(
-        "SELECT run_id FROM runs WHERE status IN ('running', 'pausing') OR run_id IN (SELECT run_id FROM attempts WHERE recovery_state IN ('alive', 'mismatch', 'unknown'))",
+        "SELECT run_id FROM runs WHERE status IN ('running', 'pausing') OR run_id IN (SELECT run_id FROM attempts WHERE recovery_state IN ('alive', 'mismatch', 'unknown') AND NOT EXISTS (SELECT 1 FROM recovery_resolutions WHERE recovery_resolutions.attempt_id = attempts.attempt_id))",
       )
       .all()
       .map((row) => String(row["run_id"]));
+  }
+
+  recoveryResolution(attemptId: string): RecoveryResolutionRow | undefined {
+    return this.database
+      .prepare(
+        "SELECT observation, reason, confirmed_at AS confirmedAt FROM recovery_resolutions WHERE attempt_id = ?",
+      )
+      .get(attemptId) as RecoveryResolutionRow | undefined;
+  }
+
+  confirmRecovery(
+    attemptId: string,
+    observation: Exclude<ProcessObservation, "alive">,
+    reason: string,
+  ): void {
+    this.database
+      .prepare(
+        "INSERT INTO recovery_resolutions (attempt_id, observation, reason, confirmed_at) VALUES (?, ?, ?, ?)",
+      )
+      .run(attemptId, observation, reason, this.clock());
+  }
+
+  latestEventId(runId: string): number {
+    const row = this.database
+      .prepare("SELECT MAX(event_id) AS id FROM events WHERE run_id = ?")
+      .get(runId);
+    return Number(row?.["id"] ?? 0);
   }
 
   reserveCorrection(attemptId: string): void {

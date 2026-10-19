@@ -43,19 +43,56 @@ for (const scenario of ["command", "correction", "between", "correction-intent"]
       assert.throws(() =>
         service.coordinator.resume(fixture.runId, "unsettled process is not a safe resume"),
       );
-    await fixture.cleanup(); // Explicit smoke-owner decision; runtime recovery sends no signals.
-    service.reconcile(fixture.runId);
-    if (scenario === "command" || scenario === "between") {
-      assert.equal(readFileSync(path.join(root, "effects"), "utf8"), "effect\n");
+    const request = () => {
+      const recovery = service.recovery(fixture.runId);
+      return {
+        expectedEventId: recovery.expectedEventId,
+        attemptId: recovery.attempt?.attemptId ?? null,
+        reason: "Smoke operator reviewed uncertain effects and explicitly chose recovery",
+      };
+    };
+    if (scenario === "command" || scenario === "correction") {
+      await service.terminateRecovery(fixture.runId, request());
+      assert.equal(service.recovery(fixture.runId).attempt.recoveryState, "gone");
+    } else if (scenario === "correction-intent") {
+      // The fixture stopped before spawn. Only its operator knows this; durable intent cannot prove it.
+      await fixture.cleanup();
+      service.confirmExternalCleanup(fixture.runId, {
+        ...request(),
+        confirmedNoSurvivingOperation: true,
+      });
+      assert.equal(service.recovery(fixture.runId).attempt.recoveryState, "unknown");
+      assert.equal(service.recovery(fixture.runId).resolution.observation, "unknown");
+    }
+    const action =
+      scenario === "command"
+        ? "retry"
+        : scenario === "between"
+          ? "continue"
+          : scenario === "correction"
+            ? "skip"
+            : "end";
+    service.decideRecovery(fixture.runId, {
+      ...request(),
+      action,
+      ...(action === "skip" ? { outcome: "complete" } : {}),
+    });
+    if (action !== "end") {
+      assert.equal(service.recovery(fixture.runId).run.status, "paused");
       service.coordinator.resume(
         fixture.runId,
-        "smoke operator explicitly authorizes continuation",
+        "Smoke operator explicitly authorizes selected continuation",
       );
       assert.deepEqual(await service.drive(fixture.runId), { kind: "completed" });
+    } else assert.equal(service.recovery(fixture.runId).run.status, "stopped");
+    if (scenario === "command" || scenario === "between")
       assert.equal(
         readFileSync(path.join(root, "effects"), "utf8"),
         scenario === "command" ? "effect\neffect\n" : "effect\n",
       );
+    if (scenario === "correction") {
+      assert.equal(service.coordinator.inspect(fixture.runId).attempts[0].status, "interrupted");
+      assert.equal(service.coordinator.inspect(fixture.runId).transitions[0].attemptId, null);
     }
     const final = service.coordinator.inspect(fixture.runId);
     database.close();
@@ -63,7 +100,7 @@ for (const scenario of ["command", "correction", "between", "correction-intent"]
     database = new WorkflowDatabase(fixture.file);
     assert.deepEqual(new RunCoordinator(database).inspect(fixture.runId), final);
     console.log(
-      `${scenario}: competing writer refused; SIGKILL recovery interrupted without replay; process=${expectedState ?? "settled"}; durable reopen verified`,
+      `${scenario}: SIGKILL recovery without replay; explicit ${action}; durable process decision and reopen verified`,
     );
   } finally {
     database?.close();

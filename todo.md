@@ -92,12 +92,14 @@
 
 ## Phase 7 — Crash recovery, management CLI, and reliability
 
-Authorized scope: **7.1 only**, headless/offline. No recovery-decision management surface, daemon manager, management CLI/UI, provider execution or subagents. Existing no-replay behavior and the 7.1 crash tests do not complete 7.2 or the broader 7.5 acceptance criteria.
+Authorized scope: **7.1 and the separately approved headless/offline 7.2 recovery API**. No daemon manager, management CLI/UI, provider execution or subagents. The 7.1–7.2 crash coverage does not complete the broader 7.5 acceptance criteria. Phase 7.3 onward requires new authorization.
 
 - [x] 7.1 Implement daemon instance lock, process identity tracking (PID+start identity), in-flight attempt reconciliation, and interrupted/uncertain pause semantics.
 
   Verified on Node.js v26.8.2: full offline gate **717 tests / 79 suites**, typecheck/lint passed; independent `smoke:recovery`, `smoke:reporting` and `smoke:boundaries` passed with durable reopen and explicit owned cleanup. The example validates with 8 steps and zero warnings. Kernel-backed ownership, PID/start mismatch refusal, correction spawn uncertainty, no replay and transactional interruption are covered. [Implementation evidence and limits](docs/implementation-log.md#phase-71--state-ownership-linux-identity-and-conservative-restart-reconciliation).
-- [ ] 7.2 On daemon crash, never auto-replay possibly side-effectful stages; expose recovery actions with durable user decision events.
+- [x] 7.2 On daemon crash, never auto-replay possibly side-effectful stages; expose recovery actions with durable user decision events.
+
+  Separately authorized headless recovery API verified on Node.js v26.8.2: **736 tests / 81 suites**, typecheck/lint passed; real-process recovery/reporting/boundary smokes and durable reopen passed; example valid with 8 steps and zero warnings. Operator cleanup confirmation stays distinct from OS absence and interrupted-stage success. Termination intent/result crash boundaries, stale/duplicate decisions, audited dispositions, historical interruption context and transactional rollback are covered. [Acceptance evidence and limits](docs/implementation-log.md#phase-72--explicit-headless-recovery-decisions).
 - [ ] 7.3 Implement management CLI: workflow validate/import, run/start/status/events, pause/stop/resume/override/revise, task preview, report submission.
 - [ ] 7.4 Implement run limits and bounded stage retries with durable counters; distinguish report correction from stage retry.
 - [ ] 7.5 Test daemon kill/restart during command and agent attempts, duplicate launch prevention, process tree termination, and resumed run revisions.

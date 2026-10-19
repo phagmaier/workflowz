@@ -11,6 +11,7 @@
  *   the stop. The attempt is never settled as if it had finished.
  */
 import { mkdirSync } from "node:fs";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   AdapterPreflightError,
   type AgentAdapter,
@@ -24,8 +25,15 @@ import {
   startCommand,
 } from "../adapters/command-executor.js";
 import { boundedText } from "../adapters/output.js";
-import { processGroupState } from "../adapters/process-identity.js";
+import { processGroupState, signalOwnedGroup } from "../adapters/process-identity.js";
 import { scrubSecrets } from "../adapters/secrets.js";
+import {
+  type ExternalCleanupConfirmation,
+  externalCleanupSchema,
+  type RecoveryDecision,
+  type RecoveryRequest,
+  recoveryRequestSchema,
+} from "../contracts/recovery.js";
 import type { TaskOverrideEdit, WorkflowRevisionInput } from "../contracts/run-configuration.js";
 import type { RunStatus } from "../contracts/run-state.js";
 import {
@@ -62,6 +70,7 @@ interface Terminable {
 /** Multiple service facades may share one owner connection; only its first facade is startup. */
 const initializedDatabases = new WeakSet<WorkflowDatabase>();
 const drivingDatabases = new WeakSet<WorkflowDatabase>();
+const recoveringDatabases = new WeakSet<WorkflowDatabase>();
 
 export class RunService {
   readonly coordinator: RunCoordinator;
@@ -120,6 +129,7 @@ export class RunService {
 
   /** Drives one run until it completes, pauses, or its stopped process tree has been reaped. */
   async drive(runId: string): Promise<DriveResult> {
+    this.assertNotRecovering();
     if (drivingDatabases.has(this.database)) {
       throw new Error("this state database is already driving a run");
     }
@@ -167,6 +177,7 @@ export class RunService {
    * instance stops driving; start a new one to continue other runs.
    */
   async stop(runId: string, reason = "stopped by request"): Promise<void> {
+    this.assertNotRecovering();
     if (this.drivingRunId !== runId || this.inFlight === undefined) {
       if (this.coordinator.activeAttempt(runId) !== undefined) {
         throw new Error(
@@ -185,18 +196,84 @@ export class RunService {
 
   /** Reconcile persisted state without signalling or replaying any uncertain operation. */
   reconcile(runId: string): boolean {
+    this.assertNotRecovering();
     if (drivingDatabases.has(this.database)) {
       throw new Error(`cannot reconcile run ${runId} while this runner is driving it`);
     }
-    const attempt = this.coordinator.recoveryAttempt(runId);
-    const identity = attempt?.processIdentity ?? null;
-    const observation =
-      attempt?.pid == null
-        ? "unknown"
-        : identity && (identity.pid !== attempt.pid || identity.pgid !== attempt.pgid)
-          ? "unknown"
-          : processGroupState(attempt.pid, identity);
+    const observation = this.observeRecovery(this.coordinator.recoveryAttempt(runId));
     return this.coordinator.reconcileAfterRestart(runId, observation);
+  }
+
+  /** Read-only durable view; call reconcile explicitly to refresh OS observations. */
+  recovery(runId: string) {
+    return this.coordinator.recovery(runId);
+  }
+
+  confirmExternalCleanup(runId: string, input: ExternalCleanupConfirmation): void {
+    this.assertRecoveryAvailable();
+    const request = externalCleanupSchema.parse(input);
+    const state = this.coordinator.recovery(runId);
+    this.coordinator.confirmExternalCleanup(runId, request, this.observeRecovery(state.attempt));
+  }
+
+  decideRecovery(runId: string, input: RecoveryDecision): void {
+    this.assertRecoveryAvailable();
+    this.coordinator.decideRecovery(runId, input);
+  }
+
+  /** Explicit orphan termination; startup never calls this. Intent commits before the first signal. */
+  async terminateRecovery(runId: string, input: RecoveryRequest): Promise<void> {
+    this.assertRecoveryAvailable();
+    const request = recoveryRequestSchema.parse(input);
+    const state = this.coordinator.recovery(runId);
+    const intent = this.coordinator.requestRecoveryTermination(
+      runId,
+      request,
+      this.observeRecovery(state.attempt),
+    );
+    recoveringDatabases.add(this.database);
+    try {
+      const { attempt } = intent;
+      try {
+        for (const signal of ["SIGTERM", "SIGKILL"] as const) {
+          if (this.observeRecovery(attempt) === "gone") break;
+          signalOwnedGroup(attempt.pid ?? 0, attempt.processIdentity, signal);
+          const deadline = Date.now() + 1000;
+          while (this.observeRecovery(attempt) === "alive" && Date.now() < deadline)
+            await delay(20);
+        }
+      } catch {
+        // Persist only fresh process evidence, not an assumption that a sent signal settled work.
+      }
+      const observation = this.observeRecovery(attempt);
+      this.coordinator.finishRecoveryTermination(runId, intent, observation);
+      if (observation !== "gone")
+        throw new Error(
+          `recovery termination could not confirm process-group absence (${observation}); execution remains blocked`,
+        );
+    } finally {
+      recoveringDatabases.delete(this.database);
+    }
+  }
+
+  private observeRecovery(attempt: AttemptRow | null | undefined) {
+    const identity = attempt?.processIdentity ?? null;
+    return attempt?.pid == null
+      ? "unknown"
+      : identity && (identity.pid !== attempt.pid || identity.pgid !== attempt.pgid)
+        ? "unknown"
+        : processGroupState(attempt.pid, identity);
+  }
+
+  private assertNotRecovering(): void {
+    if (recoveringDatabases.has(this.database))
+      throw new Error("this state database is terminating a recovered operation");
+  }
+
+  private assertRecoveryAvailable(): void {
+    this.assertNotRecovering();
+    if (drivingDatabases.has(this.database))
+      throw new Error("cannot decide recovery while this state database is driving a run");
   }
 
   private async runAttempt(runId: string, attemptId: string): Promise<void> {

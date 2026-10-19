@@ -8,6 +8,29 @@ import { ScriptedAgentAdapter } from "../../dist/test-support/scripted-agent.js"
 const [root, scenario] = process.argv.slice(2);
 const marker = path.join(root, "effects");
 const database = new WorkflowDatabase(path.join(root, "state.sqlite"));
+if (scenario === "termination-request" || scenario === "termination-finish") {
+  const recovering = new RunService(database, {
+    agents: new Map(),
+    logDir: path.join(root, "logs"),
+  });
+  const runId = database.prepare("SELECT run_id FROM runs LIMIT 1").get().run_id;
+  const method =
+    scenario === "termination-request" ? "requestRecoveryTermination" : "finishRecoveryTermination";
+  const original = recovering.coordinator[method].bind(recovering.coordinator);
+  recovering.coordinator[method] = (...args) => {
+    const result = scenario === "termination-request" ? original(...args) : undefined;
+    process.send({ runId });
+    process.kill(process.pid, "SIGSTOP");
+    return result;
+  };
+  const state = recovering.recovery(runId);
+  await recovering.terminateRecovery(runId, {
+    expectedEventId: state.expectedEventId,
+    attemptId: state.attempt.attemptId,
+    reason: "Explicit fixture recovery termination",
+  });
+  throw new Error("fault injection unexpectedly continued");
+}
 const adapter = new ScriptedAgentAdapter(
   scenario === "correction"
     ? [{ mode: "silent" }, { mode: "report-then-hang" }]
@@ -20,8 +43,9 @@ const service = new RunService(database, {
   agents: new Map([["codex", adapter]]),
   logDir: path.join(root, "logs"),
 });
-const command = `const fs = require('node:fs'); fs.appendFileSync(${JSON.stringify(marker)}, 'effect\\n');
+const command = `${scenario === "stubborn" ? "process.on('SIGTERM', () => {});" : ""}const fs = require('node:fs'); fs.appendFileSync(${JSON.stringify(marker)}, 'effect\\n');
 if (fs.readFileSync(${JSON.stringify(marker)}, 'utf8') === 'effect\\n') setInterval(() => {}, 1000);`;
+const commandScenario = scenario === "command" || scenario === "stubborn" || scenario === "between";
 const commandStep = `kind: command\n    argv: ${JSON.stringify([process.execPath, "-e", scenario === "between" ? `require('node:fs').appendFileSync(${JSON.stringify(marker)}, 'effect\\n')` : command])}`;
 const agentStep =
   "kind: agent\n    harness: codex\n    session: fresh\n    prompt: Offline recovery fixture\n    outcomes: [complete]";
@@ -34,9 +58,9 @@ project:
 start: work
 steps:
   work:
-    ${scenario === "command" || scenario === "between" ? commandStep : agentStep}
+    ${commandScenario ? commandStep : agentStep}
     on:
-      complete: { goto: done }${scenario === "command" || scenario === "between" ? "\n      failed: { pause: true }" : ""}
+      complete: { goto: done }${commandScenario ? "\n      failed: { pause: true }" : ""}
   done:
     kind: end
 `,
@@ -62,15 +86,13 @@ if (scenario === "correction-intent") {
 }
 service.coordinator.start(runId);
 const ready = setInterval(() => {
+  if (scenario === "between") return; // Only the post-commit hook may announce this boundary.
   const state = service.coordinator.inspect(runId);
   const attempt = state.attempts[0];
   if (!attempt?.processIdentity) return;
-  if (
-    scenario === "command" &&
-    (!existsSync(marker) || readFileSync(marker, "utf8") !== "effect\n")
-  )
+  if (commandScenario && (!existsSync(marker) || readFileSync(marker, "utf8") !== "effect\n"))
     return;
-  if (scenario !== "command" && !service.coordinator.reportFor(attempt.attemptId)) return;
+  if (!commandScenario && !service.coordinator.reportFor(attempt.attemptId)) return;
   clearInterval(ready);
   process.send({ runId });
 }, 10);

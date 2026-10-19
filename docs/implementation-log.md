@@ -494,3 +494,43 @@ PATH=/home/phagmaier/.local/share/mise/installs/node/26.8.2/bin:$PATH npm run li
 - Canonical example: **valid, 8 steps, 0 warnings**. Workflow/report schemas and example configuration are intentionally unchanged.
 
 Only **7.1** is checked after these acceptance results. Milestone 0.5 and Phase 6 remain complete. Phase 7.2–7.5, daemon management, management CLI/UI and further paid execution remain outside this authorization.
+
+## Phase 7.2 — explicit headless recovery decisions
+
+Verified clean checkout at `23350a3`, following `ddb46bc` and `9df2563`, and read required guidance/evidence in order. Investigated existing 7.1 controls and ran its offline recovery smoke before proposing implementation. The owner explicitly selected **Authorize bounded 7.2**: headless recovery inspection, checked orphan termination, independent external-cleanup attestation and audited workflow dispositions, including offline verification, documentation and commit/push. Phase 7.1 approval was not reused as broader Phase 7 authorization. No subagents or handoff document were used.
+
+Graph-first discovery for `home-phagmaier-Code-workflowz` found documentation but no recovery source symbols; exact-path coverage again reported source `not_tracked`. Source reads and installed TypeScript LSP references supplied the implementation evidence. Stale imported declarations were reported and the LSP reloaded. Import code actions were unavailable; the changed files received import organization and formatting without unrelated lint fixes.
+
+Implementation:
+
+- Strict typed headless recovery requests bind each action to the inspected attempt and last run event ID, with a nonblank bounded reason. Durable inspection separates process evidence, retained report/log references and operator resolution; changed or duplicate requests fail rather than applying to a different operation.
+- Explicit termination commits `recovery_termination_requested` before signalling, checks ownership before TERM/KILL and bounds each disappearance wait to one second. Confirmed group absence and the terminal audit commit together; audit failure leaves the canonical barrier intact. Shared-owner facades cannot overlap termination with drive, reconciliation or another termination. Startup never replays recovery signals.
+- Append-only migration **8** adds `recovery_resolutions` for independently confirmed external cleanup. Migrations **1–7 are unchanged**. Confirmation requires literal acknowledgment and rejects a fresh verified live owned group. Unknown/mismatched evidence is not rewritten to `gone`; the operator assertion remains distinct from OS evidence and stage success.
+- Explicit retry/continue/skip/jump/end decisions share a transaction with their audit and cursor/state changes. Retry applies to an interrupted stage, continue to a committed between-step cursor, skip to a declared outcome, jump to a task-compatible step, and end records stopped. Non-ending decisions remain paused until separate resume/drive. Reports, frozen inputs, sessions, correction counts and old interrupted attempts survive; manual skip transitions have no attempt. Existing manual controls cannot bypass unresolved process barriers.
+- Legacy histories can contain several uncertain attempts backfilled by migration 7. Recovery presents each unresolved attempt in turn; confirming only the newest cannot strand or bypass an older process barrier. A permanent boundary case covers this history.
+
+Focused verification using Node.js **v26.8.2** and project-local scratch:
+
+- Build passed. `node --test dist/runner/recovery-decisions.test.js dist/runner/recovery.test.js`: **26 tests / 3 suites passed**, zero failures/cancellations/skips. Coverage includes real surviving-correction termination with retained accepted report/input, SIGKILL before signalling and after termination but before result persistence, identity mismatch refusal, TERM-resistant KILL escalation, cross-facade/no-overlap barriers, unknown correction resolution across reopen, explicit workflow dispositions, cursor/outcome validation, stale/duplicate rejection, legacy multiple interruptions and audit rollback.
+- `npm run smoke:recovery`: all four real owner-crash surfaces passed through the new service API: command/explicit retry, correction/explicit manual skip, between-step/explicit continue and unidentified correction intent/operator confirmation plus end. Startup performed no replay; durable history and SQLite reopen passed; smoke-owned processes and artifacts were removed.
+- The first focused run exposed a fixture readiness regression: the extended command scenario classifier announced the between-step case before settlement committed. Restored that boundary's post-commit-only readiness hook; the original 7.1 test and new continuation test then passed without changing runtime settlement or weakening assertions.
+- Final review reproduced two cursor/history boundaries before fixing them. An earlier audited manual jump made `retry` target the moved cursor instead of the interrupted stage; retry now explicitly reselects the interrupted step. A later between-step crash after recovery/revision incorrectly borrowed a resolved historical attempt; inspection now uses the current interruption event. Both regressions failed before their fixes and passed afterward through the actual headless service, preserving old attempt/revision history.
+
+Final acceptance, executed sequentially with the explicit Node.js v26.8.2 PATH and `TMPDIR=/home/phagmaier/Code/workflowz/.tmp-recovery-72-final-Rsz6Cr`:
+
+```bash
+npm run check
+npm run smoke:recovery
+npm run smoke:reporting
+npm run validate -- examples/overnight.yaml
+npm run smoke:boundaries
+```
+
+- **Full gate: 736 tests / 81 suites passed**, zero failures/cancellations/skips; typecheck/lint passed. All five adapters retain their complete offline conformance suites. The final gate includes legacy multiple interruptions, explicit retry after manual cursor selection and a new between-step interruption after recovery/revision. Earlier gates passed 734/735 tests before these final boundary checks.
+- Final recovery smoke again passed all four explicit recovery decisions with durable reopen and no automatic replay. Reporting smoke preserved acknowledgment before settlement, one same-session correction on success/failure and durable SQLite history. Boundary smoke preserved OpenCode/Claude synthetic correction/provider-failure paths, scrubbing, selected environments and sequential settlement.
+- Canonical example: **valid, 8 steps, zero warnings**. Workflow YAML/report schemas and the example remain intentionally unchanged; harness compatibility evidence is unchanged because no live scenario was repeated.
+- Smoke/test-owned processes were settled/cleaned through checked identity helpers. Inspected both project-local verification scratch directories (Node compile caches only), explicitly removed them and verified scratch/recovery-smoke directory absence. No deferred shell trap was used.
+
+The complete 16-file implementation/documentation change set was reviewed. **7.2 is checked only after these acceptance results**; 7.3–7.5 remain unchecked and require new authorization.
+
+No provider/authentication execution, real credential-file inspection, global harness configuration changes, dependencies, management daemon/CLI/UI or Phase 7.3–7.5 implementation was added. Adapter/report/session contracts and unrestricted permission selections remain unchanged; no post-change live compatibility claim is made. Operator confirmation is trust, not an automated absence/isolation guarantee: false assertions or escaped descendants can still permit overlapping external work. `/proc` checks and signalling remain non-atomic, and no rollback or successful-side-effect inference is claimed.

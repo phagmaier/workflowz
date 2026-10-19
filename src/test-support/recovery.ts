@@ -8,8 +8,23 @@ import { RunCoordinator } from "../engine/run-coordinator.js";
 import { WorkflowDatabase } from "../store/database.js";
 import { REPO_ROOT } from "./paths.js";
 
-export type RecoveryScenario = "command" | "agent" | "correction" | "between" | "correction-intent";
+export type RecoveryScenario =
+  | "command"
+  | "agent"
+  | "correction"
+  | "between"
+  | "correction-intent"
+  | "stubborn"
+  | "termination-request"
+  | "termination-finish";
 const readySchema = z.object({ runId: z.string().startsWith("run_") }).strict();
+
+export interface RecoveryFixture {
+  readonly file: string;
+  readonly runId: string;
+  crash(): Promise<void>;
+  cleanup(): Promise<void>;
+}
 
 export async function untilRecovery(check: () => boolean, timeoutMs = 5000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -20,7 +35,10 @@ export async function untilRecovery(check: () => boolean, timeoutMs = 5000): Pro
 }
 
 /** Real owner process; SIGKILL is deliberate crash injection, not the runner's stop path. */
-export async function startRecoveryFixture(root: string, scenario: RecoveryScenario) {
+export async function startRecoveryFixture(
+  root: string,
+  scenario: RecoveryScenario,
+): Promise<RecoveryFixture> {
   const file = path.join(root, "state.sqlite");
   const child = fork(path.join(REPO_ROOT, "test/fixtures/recovery-runner.mjs"), [root, scenario], {
     execPath: process.execPath,

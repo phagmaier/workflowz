@@ -177,6 +177,15 @@ ALTER TABLE attempts ADD COLUMN task_overrides_json TEXT NOT NULL DEFAULT '{"ste
 UPDATE attempts SET recovery_state = 'unknown'
 WHERE status = 'interrupted' AND error_code = 'uncertain_after_restart';`,
   },
+  {
+    version: 8,
+    sql: `CREATE TABLE recovery_resolutions (
+  attempt_id TEXT PRIMARY KEY REFERENCES attempts(attempt_id),
+  observation TEXT NOT NULL CHECK (observation IN ('gone', 'mismatch', 'unknown')),
+  reason TEXT NOT NULL,
+  confirmed_at TEXT NOT NULL
+);`,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;

@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: project tooling, strict YAML/schema validation, policy compilation, SQLite persistence, transactional run coordination, sequential command/agent execution, strict reporting with one same-session correction, immutable task import/context, run-local task parameters, paused revisions, and all five harness adapters. Milestone 0.5 and Phase 6 are complete. The separately authorized Phase 7.1 adds headless instance ownership, Linux process identity and conservative startup reconciliation. This is not a complete MVP: recovery-decision actions, daemon management, management CLI and UI remain on the [`todo.md`](todo.md) roadmap and require new authorization.
+**Status:** Implemented core: project tooling, strict YAML/schema validation, policy compilation, SQLite persistence, transactional run coordination, sequential command/agent execution, strict reporting with one same-session correction, immutable task import/context, run-local task parameters, paused revisions, and all five harness adapters. Milestone 0.5 and Phase 6 are complete. Separately authorized Phases 7.1–7.2 add headless ownership, Linux process identity, conservative startup reconciliation and explicit recovery decisions. This is not a complete MVP: daemon management, management CLI/UI and remaining reliability work stay on the [`todo.md`](todo.md) roadmap and require new authorization.
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -107,7 +107,42 @@ The first `RunService` on a writer connection automatically reconciles persisted
 
 `service.reconcile(runId)` refreshes an interrupted attempt's process observation. `alive`, `mismatch` or `unknown` blocks execution across the state database; `gone` removes only that process barrier, not the interruption. Explicit interrupted resume requires a reason acknowledging possible side effects. Accepted reports are retained but cannot route an interrupted attempt. Between-step restarts preserve the committed cursor without replay.
 
-Unidentified operations remain blocked; the explicit recovery-decision surface is Phase 7.2, not implemented here. `/proc` inspection and signalling are not atomic, escaped descendants remain outside group ownership, and no isolation or rollback is claimed. See [recovery contracts and limits](architecture.md#75-phase-71-ownership-identity-and-reconciliation).
+`/proc` inspection and signalling are not atomic, escaped descendants remain outside group ownership, and no isolation or rollback is claimed. See [recovery contracts and limits](architecture.md#75-phase-71-ownership-identity-and-reconciliation).
+
+### Explicit headless recovery decisions (Phase 7.2)
+
+`service.recovery(runId)` returns a consistent durable view: run/cursor/revision, interrupted attempt, retained report, invocation log paths, last process observation, separate operator resolution, process barrier status, action hints and `expectedEventId`. Inspection performs no signalling or fresh OS observation; use `reconcile` to refresh evidence.
+
+Every recovery mutation needs the inspected `expectedEventId`, exact `attemptId` (null between committed steps), and a nonblank reason. Changed state requires a fresh inspection, not a blind retry.
+
+```ts
+const state = service.recovery(runId);
+await service.terminateRecovery(runId, {
+  expectedEventId: state.expectedEventId,
+  attemptId: state.attempt?.attemptId ?? null,
+  reason: "Terminate the verified orphan before deciding whether to repeat its work",
+});
+const resolved = service.recovery(runId);
+service.decideRecovery(runId, {
+  expectedEventId: resolved.expectedEventId,
+  attemptId: resolved.attempt?.attemptId ?? null,
+  action: "retry",
+  reason: "Reviewed filesystem/external effects; explicitly repeat this interrupted stage",
+});
+// The decision leaves the run paused. Execution still needs explicit resume and drive.
+service.coordinator.resume(runId, "Execute the selected recovery plan");
+await service.drive(runId);
+```
+
+Termination commits user intent before signalling, rechecks group ownership before TERM/KILL, and waits at most one second after each signal for group absence. Uncertain/failed cleanup stays blocked. A crash during termination does not replay signals on startup.
+
+For unidentified/mismatched operations, **independently establish that no operation remains first**. Then call `service.confirmExternalCleanup(runId, {...request, confirmedNoSurvivingOperation: true})`. This is a consequential operator assertion, not a force-kill or automated proof: it cannot signal an unknown/reused PID, rejects fresh evidence of a surviving owned group, and persists separately from the last OS observation. Unknown launch intent remains unknown. A false assertion can permit overlapping external work; the runner cannot verify escaped or unidentified processes for you.
+
+Once every process barrier is resolved, `decideRecovery` supports `retry` for an interrupted stage, `continue` for a committed between-step cursor, `skip` with a declared `outcome`, `jump` with a compatible `stepId`, or `end` (records `stopped`, not successful completion). Non-ending choices stay paused. Retry creates a new logical attempt only on subsequent execution; the old report/session/correction/input history is preserved, never promoted to successful settlement. Skip records a manual null-attempt transition, not an agent report.
+
+Legacy histories may contain multiple unresolved attempts; inspect and resolve each one in turn before choosing a continuation.
+
+These are in-process APIs, not a management CLI, HTTP management server, UI or service manager. No provider calls are needed for `npm run smoke:recovery`.
 
 ### Codex adapter (Phase 6.1)
 
