@@ -1,0 +1,109 @@
+# Illustrative canonical YAML v1. No runner has been implemented yet.
+# Paths are relative to project.root unless noted otherwise.
+# `harness` may be any registered adapter: codex | pi | omp | opencode | claude (see spec.md §2.4).
+version: 1
+name: Overnight feature tasks
+project:
+  root: ".."
+  instructions:
+    - spec.md
+    - AGENTS.md
+tasks:
+  source:
+    kind: markdown_checklist
+    path: examples/tasks.md
+start: pick_task
+limits:
+  max_step_executions: 120
+  max_wall_time_seconds: 28800
+defaults:
+  report_correction_attempts: 1
+  on:
+    system.error: { pause: true }
+policies:
+  - match:
+      tags: [implementation]
+    on:
+      needs_debugging: { goto: debug }
+steps:
+  pick_task:
+    kind: task.next
+    on:
+      task_ready: { goto: implement }
+      exhausted: { goto: done }
+
+  implement:
+    kind: agent
+    harness: codex
+    session: fresh
+    tags: [implementation]
+    context:
+      include_reports: [review]
+    cwd: "{{project.root}}"
+    prompt: |
+      Read the project's configured instructions and implement this task:
+      {{task.text}}
+      You must send a report through wf report using ONLY a declared outcome.
+    outcomes: [complete, needs_debugging, blocked]
+    on:
+      complete: { goto: review }
+      blocked: { pause: true }
+      # needs_debugging inherits from the implementation policy.
+
+  debug:
+    kind: agent
+    harness: pi
+    session: fresh
+    cwd: "{{project.root}}"
+    prompt: |
+      Help fix the failed implementation for task {{task.id}}:
+      {{task.text}}
+      Previous implementation summary: {{reports.implement.summary}}
+      Report what you accomplished using wf report.
+    outcomes: [repaired, unable_to_fix, blocked]
+    on:
+      repaired: { goto: review }
+      unable_to_fix: { pause: true }
+      blocked: { pause: true }
+
+  review:
+    kind: agent
+    harness: pi
+    session: fresh
+    cwd: "{{project.root}}"
+    context:
+      include_reports: [implement, debug]
+    prompt: |
+      Independently review the implementation of task {{task.id}}.
+      Task: {{task.text}}
+      Report approved, revise, or blocked through wf report.
+    outcomes: [approved, revise, blocked]
+    on:
+      approved: { goto: git_add }
+      revise: { goto: implement }
+      blocked: { pause: true }
+
+  git_add:
+    kind: command
+    cwd: "{{project.root}}"
+    argv: ["git", "add", "-A"]
+    on:
+      complete: { goto: commit }
+      failed: { pause: true }
+
+  commit:
+    kind: command
+    cwd: "{{project.root}}"
+    argv: ["git", "commit", "-m", "Complete task {{task.id}}"]
+    on:
+      complete: { goto: mark_done }
+      failed: { pause: true }
+
+  mark_done:
+    kind: task.complete
+    on:
+      complete: { goto: pick_task }
+
+  done:
+    kind: end
+    label: Completed all imported tasks
