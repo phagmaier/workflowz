@@ -305,7 +305,7 @@ Consulted current official Claude model/effort documentation, OpenCode v2 model/
 
 Offline verification using Node.js **v26.8.2**:
 
-- `npm run probe:harnesses` with `TMPDIR` set to a newly created disposable `.tmp-compat-preparation-*` directory under this checkout: all five isolated factories passed. Codex `0.163.0`, Pi `1.3.0`, omp `18.12.2`, OpenCode `2.0.32`, Claude Code `2.1.303`; all advertise resume/model/reasoning, OpenCode event-stream false. The temporary scratch directory was removed by the shell exit trap. Version/help probes only, no authentication checks.
+- `npm run probe:harnesses` with `TMPDIR` set to a newly created disposable `.tmp-compat-preparation-*` directory under this checkout: all five isolated factories passed. Codex `0.163.0`, Pi `1.3.0`, omp `18.12.2`, OpenCode `2.0.32`, Claude Code `2.1.303`; all advertise resume/model/reasoning, OpenCode event-stream false. A final artifact check found that the persistent tool shell had deferred its EXIT trap, leaving only the owned scratch directory's Node compile cache. Cleared that trap and explicitly removed the directory; no product behavior changed. Version/help probes only, no authentication checks.
 - Exercised all six actual plan-only command paths with this exact sequence:
 
   ```bash
