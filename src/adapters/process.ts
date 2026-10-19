@@ -12,6 +12,7 @@
  */
 import { type ChildProcess, spawn } from "node:child_process";
 import { createWriteStream, statSync, type WriteStream } from "node:fs";
+import { StringDecoder } from "node:string_decoder";
 import { OutputCapture } from "./output.js";
 
 export interface ProcessSpec {
@@ -26,6 +27,8 @@ export interface ProcessSpec {
   readonly stdoutLimit?: number | undefined;
   readonly logLimit?: number | undefined;
   readonly stderrLimit?: number | undefined;
+  /** Secrets injected by the runner; scrub across arbitrary stream chunk boundaries. */
+  readonly secrets?: readonly string[] | undefined;
 }
 
 export interface ProcessResult {
@@ -106,14 +109,16 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
   );
   const streamsClosed = new Promise<void>((resolve) => child.once("close", () => resolve()));
 
-  child.stdout?.on("data", (chunk: Buffer) => {
+  const stdoutFilter = new SecretFilter(spec.secrets ?? [], (chunk) => {
     output.push(chunk);
     log?.write(chunk);
   });
-  child.stderr?.on("data", (chunk: Buffer) => {
+  const stderrFilter = new SecretFilter(spec.secrets ?? [], (chunk) => {
     stderr.push(chunk);
     log?.write(chunk);
   });
+  child.stdout?.on("data", (chunk: Buffer) => stdoutFilter.push(chunk));
+  child.stderr?.on("data", (chunk: Buffer) => stderrFilter.push(chunk));
 
   const beginTermination = (): void => {
     if (terminated || settled) {
@@ -149,6 +154,8 @@ export function startProcess(spec: ProcessSpec): RunningProcess {
       throw error;
     } finally {
       clearTimeout(escalation);
+      stdoutFilter.end();
+      stderrFilter.end();
       await log?.close();
       settled = true;
     }
@@ -309,4 +316,34 @@ function errorCode(error: unknown): string {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Retain enough suffix to recognize a secret split between adjacent chunks. */
+class SecretFilter {
+  private pending = "";
+  private readonly decoder = new StringDecoder("utf8");
+  constructor(
+    private readonly secrets: readonly string[],
+    private readonly write: (chunk: Buffer) => void,
+  ) {}
+  push(chunk: Buffer): void {
+    if (!this.secrets.length) {
+      this.write(chunk);
+      return;
+    }
+    this.pending += this.decoder.write(chunk);
+    this.flush(false);
+  }
+  end(): void {
+    this.pending += this.decoder.end();
+    this.flush(true);
+  }
+  private flush(final: boolean): void {
+    for (const secret of this.secrets)
+      if (secret) this.pending = this.pending.replaceAll(secret, "[redacted]");
+    const retain = final ? 0 : Math.max(0, ...this.secrets.map((s) => s.length - 1));
+    const count = Math.max(0, this.pending.length - retain);
+    if (count) this.write(Buffer.from(this.pending.slice(0, count)));
+    this.pending = this.pending.slice(count);
+  }
 }

@@ -1,4 +1,4 @@
-# Canonical YAML v1 validation example; real harness adapters and wf report are not implemented yet.
+# Canonical YAML v1 validation example; wf report and Markdown import are implemented; real harness adapters remain on the roadmap.
 # Paths are relative to project.root unless noted otherwise.
 # `harness` may be any registered adapter: codex | pi | omp | opencode | claude (see spec.md §2.4).
 version: 1

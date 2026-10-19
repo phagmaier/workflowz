@@ -5,6 +5,10 @@
  * one place that decides what a state change means. Each method runs in its caller's transaction,
  * or in its own when called alone.
  */
+
+import type { AgentInputSnapshot } from "../contracts/agent-context.js";
+import type { AgentReport } from "../contracts/report.js";
+import type { TaskOverrides } from "../contracts/run-configuration.js";
 import type {
   AttemptStatus,
   AttentionSeverity,
@@ -12,6 +16,7 @@ import type {
   RunStatus,
   TaskState,
 } from "../contracts/run-state.js";
+import type { TaskImportSnapshot } from "../contracts/task-import.js";
 import type { WorkflowDatabase } from "./database.js";
 
 export interface RevisionRow {
@@ -43,20 +48,33 @@ export interface TaskRow {
   readonly body: string;
   readonly headingPath: readonly string[];
   readonly state: TaskState;
+  readonly sourceLine: number | null;
+  readonly sourceColumn: number | null;
+  readonly sourceChecked: boolean | null;
+  readonly sourceIndent: number | null;
 }
 
 export interface AttemptRow {
+  readonly taskOverrides: TaskOverrides;
   readonly attemptId: string;
   readonly runId: string;
   readonly stepId: string;
   readonly taskId: string | null;
   readonly revisionId: number;
   readonly sequenceNo: number;
+  readonly sessionId: string | null;
+  readonly correctionCount: number;
   readonly status: AttemptStatus;
   readonly startedAt: string;
   readonly finishedAt: string | null;
   readonly exitCode: number | null;
   readonly errorCode: string | null;
+}
+
+export interface ReportRow extends AgentReport {
+  readonly reportId: number;
+  readonly attemptId: string;
+  readonly receivedAt: string;
 }
 
 export interface TransitionRow {
@@ -72,6 +90,7 @@ export interface TransitionRow {
 }
 
 export interface EventRow {
+  readonly revisionId: number | null;
   readonly eventId: number;
   readonly runId: string;
   readonly attemptId: string | null;
@@ -96,6 +115,10 @@ export interface NewTask {
   readonly title: string;
   readonly body?: string;
   readonly headingPath?: readonly string[];
+  readonly sourceLine?: number;
+  readonly sourceColumn?: number;
+  readonly sourceChecked?: boolean;
+  readonly sourceIndent?: number;
 }
 
 /** Raw rows as node:sqlite returns them. Converted to the camelCase shapes above. */
@@ -159,7 +182,7 @@ export class RunStore {
       input.tasks.forEach((task) => {
         this.database
           .prepare(
-            "INSERT INTO tasks (task_id, run_id, source_order, source_identity, title, body, heading_path, state) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')",
+            "INSERT INTO tasks (task_id, run_id, source_order, source_identity, title, body, heading_path, source_line, source_column, source_checked, source_indent, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
           )
           .run(
             taskIdFor(input.runId, task.sourceOrder),
@@ -169,6 +192,10 @@ export class RunStore {
             task.title,
             task.body ?? "",
             JSON.stringify(task.headingPath ?? []),
+            task.sourceLine ?? null,
+            task.sourceColumn ?? null,
+            task.sourceChecked === undefined ? null : Number(task.sourceChecked),
+            task.sourceIndent ?? null,
           );
       });
       this.appendEvent({
@@ -213,14 +240,17 @@ export class RunStore {
   updateRun(
     runId: string,
     patch: Partial<
-      Pick<RunRow, "status" | "cursorStepId" | "activeTaskId" | "startTime" | "endTime">
+      Pick<
+        RunRow,
+        "status" | "cursorStepId" | "activeTaskId" | "startTime" | "endTime" | "revisionId"
+      >
     >,
   ): void {
     const current = this.getRun(runId);
     const next = { ...current, ...patch };
     this.database
       .prepare(
-        "UPDATE runs SET status = ?, cursor_step_id = ?, active_task_id = ?, start_time = ?, end_time = ?, updated_at = ? WHERE run_id = ?",
+        "UPDATE runs SET status = ?, cursor_step_id = ?, active_task_id = ?, start_time = ?, end_time = ?, revision_id = ?, updated_at = ? WHERE run_id = ?",
       )
       .run(
         next.status,
@@ -228,6 +258,7 @@ export class RunStore {
         next.activeTaskId,
         next.startTime,
         next.endTime,
+        next.revisionId,
         this.clock(),
         runId,
       );
@@ -238,6 +269,77 @@ export class RunStore {
       .prepare("SELECT * FROM attempts WHERE run_id = ? ORDER BY sequence_no")
       .all(runId) as Raw[];
     return rows.map(toAttempt);
+  }
+
+  getReport(attemptId: string): ReportRow | undefined {
+    const row = this.database
+      .prepare("SELECT * FROM reports WHERE attempt_id = ?")
+      .get(attemptId) as Raw | undefined;
+    return row
+      ? {
+          reportId: row["report_id"] as number,
+          attemptId,
+          outcome: row["outcome"] as string,
+          summary: row["summary"] as string,
+          issue: row["issue"] as string | null,
+          ...(row["handoff"] === null ? {} : { handoff: row["handoff"] as string }),
+          data: JSON.parse(row["data_json"] as string) as Record<string, unknown>,
+          receivedAt: row["received_at"] as string,
+        }
+      : undefined;
+  }
+
+  latestReport(runId: string, stepId: string, taskId: string | null): ReportRow | undefined {
+    const row = this.database
+      .prepare(
+        "SELECT r.attempt_id FROM reports r JOIN attempts a ON a.attempt_id = r.attempt_id WHERE a.run_id = ? AND a.step_id = ? AND a.task_id IS ? ORDER BY a.sequence_no DESC LIMIT 1",
+      )
+      .get(runId, stepId, taskId) as { attempt_id: string } | undefined;
+    return row ? this.getReport(row.attempt_id) : undefined;
+  }
+
+  saveAttemptInput(attemptId: string, input: AgentInputSnapshot): void {
+    this.database
+      .prepare("INSERT INTO attempt_inputs (attempt_id, input_json) VALUES (?, ?)")
+      .run(attemptId, JSON.stringify(input));
+  }
+
+  attemptInput(attemptId: string): AgentInputSnapshot | undefined {
+    const row = this.database
+      .prepare("SELECT input_json FROM attempt_inputs WHERE attempt_id = ?")
+      .get(attemptId) as { input_json: string } | undefined;
+    return row ? (JSON.parse(row.input_json) as AgentInputSnapshot) : undefined;
+  }
+
+  insertReport(attemptId: string, report: AgentReport): ReportRow {
+    this.database
+      .prepare(
+        "INSERT INTO reports (attempt_id, outcome, summary, issue, handoff, data_json, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        attemptId,
+        report.outcome,
+        report.summary,
+        report.issue ?? null,
+        report.handoff ?? null,
+        JSON.stringify(report.data ?? {}),
+        this.clock(),
+      );
+    return this.getReport(attemptId) as ReportRow;
+  }
+
+  setProcess(attemptId: string, pid: number | null, sessionId: string | null): void {
+    this.database
+      .prepare(
+        "UPDATE attempts SET pid = ?, pgid = ?, session_id = COALESCE(?, session_id), status = 'running' WHERE attempt_id = ?",
+      )
+      .run(pid, pid, sessionId, attemptId);
+  }
+
+  reserveCorrection(attemptId: string): void {
+    this.database
+      .prepare("UPDATE attempts SET correction_count = 1 WHERE attempt_id = ?")
+      .run(attemptId);
   }
 
   listTasks(runId: string): TaskRow[] {
@@ -253,7 +355,40 @@ export class RunStore {
       body: row["body"] as string,
       headingPath: JSON.parse(row["heading_path"] as string) as string[],
       state: row["state"] as TaskState,
+      sourceLine: row["source_line"] as number | null,
+      sourceColumn: row["source_column"] as number | null,
+      sourceChecked: row["source_checked"] === null ? null : row["source_checked"] === 1,
+      sourceIndent: row["source_indent"] as number | null,
     }));
+  }
+
+  saveTaskImport(runId: string, snapshot: TaskImportSnapshot, sha256: string): void {
+    this.database
+      .prepare(
+        "INSERT INTO task_imports (run_id, source_path, source_markdown, include_completed, source_sha256, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        runId,
+        snapshot.sourcePath,
+        snapshot.markdown,
+        Number(snapshot.includeCompleted),
+        sha256,
+        this.clock(),
+      );
+  }
+
+  taskImport(runId: string): (TaskImportSnapshot & { readonly sourceSha256: string }) | undefined {
+    const row = this.database.prepare("SELECT * FROM task_imports WHERE run_id = ?").get(runId) as
+      | Raw
+      | undefined;
+    return row
+      ? {
+          sourcePath: row["source_path"] as string,
+          markdown: row["source_markdown"] as string,
+          includeCompleted: row["include_completed"] === 1,
+          sourceSha256: row["source_sha256"] as string,
+        }
+      : undefined;
   }
 
   setTaskState(taskId: string, state: TaskState): void {
@@ -313,6 +448,7 @@ export class RunStore {
   }
 
   insertAttempt(input: {
+    taskOverrides?: TaskOverrides;
     attemptId: string;
     runId: string;
     stepId: string;
@@ -326,7 +462,7 @@ export class RunStore {
       const startedAt = this.clock();
       this.database
         .prepare(
-          "INSERT INTO attempts (attempt_id, run_id, step_id, task_id, revision_id, sequence_no, status, started_at) VALUES (?, ?, ?, ?, ?, ?, 'starting', ?)",
+          "INSERT INTO attempts (attempt_id, run_id, step_id, task_id, revision_id, sequence_no, status, started_at, task_overrides_json) VALUES (?, ?, ?, ?, ?, ?, 'starting', ?, ?)",
         )
         .run(
           input.attemptId,
@@ -336,6 +472,7 @@ export class RunStore {
           input.revisionId,
           next.n,
           startedAt,
+          JSON.stringify(input.taskOverrides ?? { steps: {} }),
         );
       return this.getAttempt(input.attemptId) as AttemptRow;
     });
@@ -438,6 +575,7 @@ export class RunStore {
       .all(runId) as Raw[];
     return rows.map((row) => ({
       eventId: row["event_id"] as number,
+      revisionId: (row["revision_id"] as number | null) ?? null,
       runId: row["run_id"] as string,
       attemptId: (row["attempt_id"] as string | null) ?? null,
       type: row["type"] as EventType,
@@ -481,6 +619,21 @@ export class RunStore {
       createdAt: row["created_at"] as string,
     }));
   }
+
+  taskOverrides(taskId: string | null): TaskOverrides {
+    const row = this.database
+      .prepare("SELECT overrides_json FROM task_overrides WHERE task_id = ?")
+      .get(taskId) as { overrides_json: string } | undefined;
+    return row ? (JSON.parse(row.overrides_json) as TaskOverrides) : { steps: {} };
+  }
+
+  saveTaskOverrides(taskId: string, overrides: TaskOverrides): void {
+    this.database
+      .prepare(
+        "INSERT INTO task_overrides (task_id, overrides_json) VALUES (?, ?) ON CONFLICT(task_id) DO UPDATE SET overrides_json = excluded.overrides_json",
+      )
+      .run(taskId, JSON.stringify(overrides));
+  }
 }
 
 /** Task IDs are unique across runs because they include the run ID and the source position. */
@@ -490,12 +643,15 @@ export function taskIdFor(runId: string, sourceOrder: number): string {
 
 function toAttempt(row: Raw): AttemptRow {
   return {
+    taskOverrides: JSON.parse(row["task_overrides_json"] as string) as TaskOverrides,
     attemptId: row["attempt_id"] as string,
     runId: row["run_id"] as string,
     stepId: row["step_id"] as string,
     taskId: (row["task_id"] as string | null) ?? null,
     revisionId: row["revision_id"] as number,
     sequenceNo: row["sequence_no"] as number,
+    sessionId: row["session_id"] as string | null,
+    correctionCount: row["correction_count"] as number,
     status: row["status"] as AttemptStatus,
     startedAt: row["started_at"] as string,
     finishedAt: (row["finished_at"] as string | null) ?? null,

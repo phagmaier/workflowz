@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: project tooling, strict YAML/schema validation, policy compilation, SQLite persistence, transactional run coordination, and a sequential runner for command steps and fake agents. This is not a complete MVP: real harness adapters, `wf report` and report correction, Markdown import/context assembly, management CLI, and UI remain on the [`todo.md`](todo.md) roadmap.
+**Status:** Implemented core: project tooling, strict YAML/schema validation, policy compilation, SQLite persistence, transactional run coordination, a sequential runner for command steps and fake agents, mandatory CLI/HTTP reporting with one same-session correction, immutable Markdown task import, selected input context, run-local task parameters, and paused workflow revisions. This is not a complete MVP: real harness adapters, management CLI, and UI remain on the [`todo.md`](todo.md) roadmap.
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -52,12 +52,48 @@ npm run lint                 # Biome check (lint and formatting)
 npm run format               # Biome auto-fix
 npm test                     # build to dist/, then node:test over dist/**/*.test.js
 npm run validate -- examples/overnight.yaml   # strict parse, compile, and path checks
+npm run smoke:reporting      # real wf report + SQLite + fake-session correction, no model calls
+npm run smoke:tasks          # immutable Markdown import + fake task loop + persisted context
 npm run probe:harnesses      # offline version and help-text probe of codex, pi, omp, opencode, claude
 ```
 
 Process tests start real children: `sh`, `sleep`, and `node`. They need a POSIX system.
 
 `npm run validate` exits 0 for a runnable workflow (warnings allowed), 1 when it has errors, and 2 when the file cannot be read. Diagnostics are printed as `file:line:column: severity [code] path: message`.
+
+### Reporting (implemented headless path)
+
+Build first (`npm run build`); the project-local executable is `bin/wf` (also declared as the npm `wf` bin). Adapters put it on the child PATH and inject `WF_REPORT_ENDPOINT` and `WF_REPORT_TOKEN` in the environment. Agents submit, for example:
+
+```bash
+wf report complete --summary "Implemented validation" --handoff-file handoff.md
+wf report blocked --summary "Need input" --issue "Missing requirement" --data '{"area":"auth"}'
+```
+
+The CLI waits for acknowledgment. Rejected reports exit 1 with a useful message; acceptance exits 0. Identity comes from the opaque token; reports cannot supply run/attempt IDs or transitions. Acceptance writes one immutable report and event, then waits for process settlement before routing. Clean missing reports allow one same-session correction, bounded to 30 seconds (or less); failed/unavailable correction routes `system.report_error`. Original process/provider failures bypass correction. The offline fake harness exercises this path; installed real harness adapters remain Phase 6 work.
+
+`RunService.previewTasks({workflowText, workflowDir})` exposes checklist counts and source metadata without creating a run. `RunService.createRun` reads and freezes the configured checklist; prechecked tasks are excluded unless `includeCompleted: true` is explicit. The lower-level coordinator still accepts supplied task records for offline fixtures. Instructions and selected same-task reports are assembled at attempt preparation and persisted with the task context; future attempts read current configured instruction content. Run-local task parameters and paused revisions are available through the headless service API (below). Automatic re-import remains unimplemented.
+
+`RunService.setTaskOverrides(runId, taskId, {overrides, reason})` replaces one unfinished task's settings in a ready or paused run. For example:
+
+```ts
+service.setTaskOverrides(runId, taskId, {
+  reason: "Use a different model and omit this task's command check",
+  overrides: {
+    steps: {
+      implement: { model: "chosen-model", prompt: "Implement {{task.text}}" },
+      check: { skip: { outcome: "complete" } },
+    },
+  },
+});
+service.reviseWorkflow(runId, {
+  workflowText: revisedYaml,
+  reason: "Revise remaining stages",
+  // cursorStepId: "implement", // required if the old cursor is incompatible
+});
+```
+
+Settings may replace agent model/prompt, skip an existing executable step via a declared outcome, and override selected `on` entries. `{steps: {}}` clears task settings. Revisions retain imported task IDs/progress and all history, validate pending overrides, and require a compatible cursor. Each attempt freezes its settings. Session resume remains restricted to the same harness/run/task/revision; a new revision cannot reopen an older revision's session. See [schema decisions](docs/schema-v1.md) for the strict contracts and skip semantics.
 
 ### Layout
 

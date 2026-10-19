@@ -135,6 +135,42 @@ ALTER TABLE attempts ADD COLUMN stdout_text TEXT;
 ALTER TABLE attempts ADD COLUMN log_path TEXT;
 `,
   },
+  {
+    version: 3,
+    sql: `ALTER TABLE attempts ADD COLUMN correction_count INTEGER NOT NULL DEFAULT 0 CHECK (correction_count IN (0, 1));`,
+  },
+  {
+    version: 4,
+    sql: `
+ALTER TABLE tasks ADD COLUMN source_line INTEGER;
+ALTER TABLE tasks ADD COLUMN source_column INTEGER;
+ALTER TABLE tasks ADD COLUMN source_checked INTEGER CHECK (source_checked IN (0, 1));
+ALTER TABLE tasks ADD COLUMN source_indent INTEGER;
+CREATE TABLE task_imports (
+  run_id TEXT PRIMARY KEY REFERENCES runs(run_id),
+  source_path TEXT NOT NULL,
+  source_markdown TEXT NOT NULL,
+  include_completed INTEGER NOT NULL CHECK (include_completed IN (0, 1)),
+  source_sha256 TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+`,
+  },
+  {
+    version: 5,
+    sql: `CREATE TABLE attempt_inputs (
+  attempt_id TEXT PRIMARY KEY REFERENCES attempts(attempt_id),
+  input_json TEXT NOT NULL
+);`,
+  },
+  {
+    version: 6,
+    sql: `CREATE TABLE task_overrides (
+  task_id TEXT PRIMARY KEY REFERENCES tasks(task_id),
+  overrides_json TEXT NOT NULL
+);
+ALTER TABLE attempts ADD COLUMN task_overrides_json TEXT NOT NULL DEFAULT '{"steps":{}}';`,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;

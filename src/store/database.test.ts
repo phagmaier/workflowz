@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { after, describe, it } from "node:test";
 import { SchemaVersionError, WorkflowDatabase } from "./database.js";
-import { LATEST_SCHEMA_VERSION } from "./migrations.js";
+import { LATEST_SCHEMA_VERSION, MIGRATIONS } from "./migrations.js";
+import { RunStore } from "./run-store.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -43,6 +45,33 @@ function insertAttempt(
 }
 
 describe("WorkflowDatabase", () => {
+  it("upgrades schema 5 without changing historical attempts, reports or input snapshots", () => {
+    const file = tempFile("schema5.sqlite");
+    const old = new DatabaseSync(file);
+    for (const migration of MIGRATIONS.filter((migration) => migration.version <= 5))
+      old.exec(migration.sql);
+    old.exec(`PRAGMA user_version = 5;
+      INSERT INTO workflow_revisions VALUES (1, 'hash', 'definition', '/root', 'time');
+      INSERT INTO runs (run_id, revision_id, project_root, status, cursor_step_id, created_at, updated_at) VALUES ('run_old', 1, '/root', 'paused', 'work', 'time', 'time');
+      INSERT INTO attempts (attempt_id, run_id, step_id, revision_id, sequence_no, status, started_at, session_id) VALUES ('attempt_old', 'run_old', 'work', 1, 1, 'succeeded', 'time', 'old-session');
+      INSERT INTO reports (attempt_id, outcome, summary, received_at) VALUES ('attempt_old', 'complete', 'historical', 'time');
+      INSERT INTO attempt_inputs VALUES ('attempt_old', '{"prompt":"old input"}');`);
+    const before = old.prepare("SELECT * FROM reports").all();
+    old.close();
+    const db = new WorkflowDatabase(file);
+    try {
+      assert.equal(db.schemaVersion(), LATEST_SCHEMA_VERSION);
+      assert.deepEqual(db.prepare("SELECT * FROM reports").all(), before);
+      const store = new RunStore(db, () => "time");
+      assert.deepEqual(store.getAttempt("attempt_old")?.taskOverrides, { steps: {} });
+      assert.equal(store.getAttempt("attempt_old")?.sessionId, "old-session");
+      assert.deepEqual(store.attemptInput("attempt_old"), { prompt: "old input" });
+      assert.equal(store.getRun("run_old").revisionId, 1);
+    } finally {
+      db.close();
+    }
+  });
+
   it("migrates a new database to the latest schema version", () => {
     const db = new WorkflowDatabase(":memory:");
     assert.equal(db.schemaVersion(), LATEST_SCHEMA_VERSION);

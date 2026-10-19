@@ -662,3 +662,106 @@ steps:
     database.close();
   });
 });
+
+describe("RunService: persisted session and correction boundaries", () => {
+  const sessionWorkflow = workflowText(`start: first
+steps:
+  first:
+    kind: agent
+    harness: codex
+    session: fresh
+    prompt: start
+    outcomes: [complete]
+    on:
+      complete: { goto: second }
+  second:
+    kind: agent
+    harness: codex
+    session: resume
+    prompt: continue
+    outcomes: [complete]
+    on:
+      complete: { goto: done }
+  done:
+    kind: end
+`);
+  it("a resume step uses the prior persisted session of the same harness", async () => {
+    const { root, database, service } = fixture([]);
+    try {
+      const runId = service.coordinator.createRun({
+        workflowText: sessionWorkflow,
+        workflowDir: root,
+      });
+      service.coordinator.start(runId);
+      await service.drive(runId);
+      const state = service.coordinator.inspect(runId);
+      assert.equal(state.run.status, "completed");
+      assert.ok(state.attempts[0]?.sessionId);
+      assert.equal(state.attempts[0]?.sessionId, state.attempts[1]?.sessionId);
+    } finally {
+      database.close();
+    }
+  });
+
+  it("routes a lost persisted resume session explicitly instead of launching fresh", async () => {
+    const child = new ScriptedAgentAdapter([]);
+    const { root, database, service } = fixture([], {
+      adapter: {
+        id: "codex",
+        start(input) {
+          if (input.priorSessionId) rmSync(input.priorSessionId);
+          return child.start(input);
+        },
+      },
+    });
+    try {
+      const runId = service.coordinator.createRun({
+        workflowText: sessionWorkflow,
+        workflowDir: root,
+      });
+      service.coordinator.start(runId);
+      await service.drive(runId);
+      const state = service.coordinator.inspect(runId);
+      assert.equal(state.transitions.at(-1)?.outcome, "system.resume_unavailable");
+      assert.equal(state.events.filter((e) => e.type === "invocation_started").length, 1);
+      assert.equal(state.events.filter((e) => e.type === "correction_requested").length, 0);
+    } finally {
+      database.close();
+    }
+  });
+
+  it("cleanup uncertainty leaves the logical attempt active and does not dispatch correction", async () => {
+    const { root, database, service } = fixture([], {
+      adapter: {
+        id: "uncertain",
+        start() {
+          return {
+            pid: null,
+            sessionId: "uncertain-session",
+            completed: Promise.reject(new Error("unconfirmed exit")),
+            terminate: async () => {
+              throw new Error("cleanup is uncertain");
+            },
+          };
+        },
+        resumeForReportCorrection() {
+          throw new Error("must not run");
+        },
+      },
+    });
+    try {
+      const runId = service.coordinator.createRun({
+        workflowText: oneAgent(""),
+        workflowDir: root,
+      });
+      service.coordinator.start(runId);
+      await assert.rejects(service.drive(runId), /cleanup is uncertain/);
+      const state = service.coordinator.inspect(runId);
+      assert.ok(state.activeAttempt);
+      assert.equal(state.transitions.length, 0);
+      assert.equal(state.events.filter((e) => e.type === "correction_requested").length, 0);
+    } finally {
+      database.close();
+    }
+  });
+});

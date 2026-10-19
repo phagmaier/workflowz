@@ -29,13 +29,29 @@ export function settlementForCommand(outcome: CommandOutcome): Settlement {
 export function settlementForAgent(
   result: AgentRunResult,
   allowedOutcomes: readonly string[],
+  reportedOutcome: string | null = null,
 ): Settlement {
+  if (result.resumeUnavailable)
+    return {
+      kind: "system",
+      code: "system.resume_unavailable",
+      detail: "the persisted agent session is unavailable",
+    };
+  if (result.completionError)
+    return {
+      kind: "system",
+      code: "system.internal_error",
+      detail: "adapter completion failed after confirmed cleanup",
+    };
   if (result.spawnError !== null) {
     return {
       kind: "system",
       code: "system.spawn_error",
       detail: `could not start the harness: ${result.spawnError}`,
     };
+  }
+  if (result.providerError) {
+    return { kind: "system", code: "system.process_error", detail: "the agent provider failed" };
   }
   if (result.timedOut) {
     return { kind: "system", code: "system.timeout", detail: "the agent exceeded its timeout" };
@@ -61,19 +77,19 @@ export function settlementForAgent(
       detail: `the agent exited with status ${result.exitCode}`,
     };
   }
-  if (result.reportedOutcome === null) {
+  if (reportedOutcome === null) {
     return {
       kind: "system",
       code: "system.report_error",
       detail: "the agent exited without reporting an outcome",
     };
   }
-  if (!allowedOutcomes.includes(result.reportedOutcome)) {
+  if (!allowedOutcomes.includes(reportedOutcome)) {
     return {
       kind: "system",
       code: "system.report_error",
-      detail: `'${result.reportedOutcome}' is not a declared outcome; declared outcomes are ${allowedOutcomes.join(", ")}`,
+      detail: `'${reportedOutcome}' is not a declared outcome; declared outcomes are ${allowedOutcomes.join(", ")}`,
     };
   }
-  return { kind: "outcome", outcome: result.reportedOutcome };
+  return { kind: "outcome", outcome: reportedOutcome };
 }

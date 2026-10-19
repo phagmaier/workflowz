@@ -15,7 +15,9 @@
     "test": "npm run build && node --test \"dist/**/*.test.js\"",
     "check": "npm run typecheck && npm run lint && npm test",
     "validate": "npm run build --silent && node dist/app/validate-cli.js",
-    "probe:harnesses": "npm run build --silent && node dist/adapters/probe-cli.js"
+    "probe:harnesses": "npm run build --silent && node dist/adapters/probe-cli.js",
+    "smoke:reporting": "npm run build --silent && node scripts/smoke-reporting.mjs",
+    "smoke:tasks": "npm run build --silent && node scripts/smoke-tasks.mjs"
   },
   "dependencies": {
     "yaml": "2.9.1",
@@ -25,5 +27,8 @@
     "@biomejs/biome": "2.5.15",
     "@types/node": "26.6.5",
     "typescript": "7.0.2"
+  },
+  "bin": {
+    "wf": "bin/wf"
   }
 }

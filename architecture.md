@@ -58,6 +58,8 @@ SQLite is authoritative. Store DB and run artifacts under a user-level applicati
 | `reports` | report_id, attempt_id UNIQUE, outcome, summary, issue, handoff, data_json, received_at | At most one **accepted** report per attempt |
 | `events` | event_id AUTOINCREMENT, run_id, attempt_id nullable, type, data_json, timestamp, revision_id | Append-only event stream; correlate transition commits |
 | `attention_items` | item_id, run_id, attempt_id nullable, category, severity, message, resolution, resolved_at | Human tasks and failures |
+| `task_overrides` | task_id, overrides_json | Current run-local parameters for an imported task; previous values in audit events |
+| `attempt_inputs` | attempt_id, input_json | Immutable prepared agent input, without report authorization |
 | `run_variables` | run_id, key, value_json, updated_at | Bounded explicit variables only, if needed |
 
 Use foreign keys and DB constraints. Prefer WAL with bounded busy timeout. Transactions wrap transitions, completion of task state, and cursor updates. Event entries accompany state mutations within the **same transaction**, so a state advance and its log cannot disagree.
@@ -123,6 +125,24 @@ A step attempt has an **input snapshot**: task, project root, prompt, instructio
 - If a task is blocked and run is paused, it remains active. Resume may retry current stage, jump to another stage, or mark task complete through a manual action. No implicit skip.
 - Reentering `task.next` while an active task exists is an engine error, not a way to silently discard it.
 - Engine-owned task progress is independent of `todo.md` modification by agents.
+
+### 3.2 Phase 5 task import and context implementation
+
+`RunService.createRun` is the filesystem entry point for Markdown import; `previewTasks` is read-only. The coordinator retains its supplied-task seam for fixtures. Migration 4 stores immutable source text/hash/import settings and per-task source positions/check state, transactionally with task rows and the import event. The parser preserves separate nested checkbox tasks and heading ancestry without deriving dependencies. File edits never update the active queue.
+
+At attempt preparation the runner reads configured instruction content, resolves explicit placeholders and adds the current task plus only selected reports from the same run/task. Missing selected history is omitted until produced; missing explicit placeholder values or instruction files fail before launch. Migration 5 stores the exact assembled agent input once per attempt with an `attempt_prepared` event in the same transaction. Report tokens are generated afterward and never enter that snapshot. Per-task parameters and paused revisions are implemented as described below. Re-import remains unimplemented.
+
+### 3.3 Run-local parameters and paused revisions (Phase 5.5)
+
+Strict contracts live in `contracts/run-configuration.ts`; pure task specialization and revision-cursor checks live in `engine/run-configuration.ts`. The coordinator validates edits and writes their state and audit events in the same transaction. Its service API accepts edits only for `ready` or `paused` runs without an active attempt. Interrupted runs require an explicit recovery decision before configuration editing.
+
+Migration 6 appends `task_overrides` and an immutable `attempts.task_overrides_json` dispatch snapshot; migrations 1–5 are unchanged. Task edits replace one unfinished task's settings and record both previous/new values and reason. Specialization changes only existing executable steps' model/prompt, selected transitions and explicit skip outcome. The ordinary compiler validates the resulting document. Effective configuration for preparation and settlement comes from the attempt's revision plus its frozen parameters. Base YAML never contains imported task IDs. Agent input now carries model/reasoning effort to the adapter and records them plus harness in its prepared snapshot; old snapshots remain unchanged.
+
+Configured skips emit `step_skipped` and a null-attempt transition without a process/report. They use engine-only routing, so a retry on a skip pauses. They count toward the consecutive engine-step limit. Task activation/completion remains controlled by the reusable graph; skipping a stage does not imply completing its task. Manual step skip also uses effective task routing.
+
+Definition revision validates the whole replacement YAML plus every unfinished task's settings before changing the run's revision/cursor and writing `workflow_revised`. Project root and normalized task source cannot change in this slice. Completed task settings remain historical even if their step no longer exists. Imported task IDs, source snapshot, states, active task, execution counters, reports, old revisions, input snapshots and attempt/transition revision associations remain intact. A removed or kind-changed cursor requires an explicit compatible target; task-control and statically visible task-placeholder preconditions are checked by a pure function. File-dependent values are checked at preparation as before. Edits affect subsequent occurrences of loop stages, never historical executions.
+
+Session lookup still requires the same harness, run, task and revision. Parameter edits within a revision preserve this rule. New definition revisions cannot use another revision's persisted session; `session: resume` without a matching identity fails before launch. Exact YAML/source-directory matches reuse the existing content-addressed revision identity, preserving the original deduplication and session rules.
 
 ## 4. Agent adapter interface
 
@@ -253,6 +273,14 @@ Reporting is **mandatory**, not optional. On a cleanly settled attempt lacking a
 
 This design allows an agent to fix a rejected report *during its original turn* and also provides at most one additional turn if it never succeeded.
 
+### 5.2 Phase 4 implementation notes
+
+- `src/contracts/report.ts` defines report v1 and bounded JSON validation. The contract version is engine-owned; the body has no authoritative IDs or transition fields. Exact limits and HTTP response codes are recorded in `docs/schema-v1.md` decisions 27–29.
+- `RunService` owns a private loopback report server for its headless drive lifetime. `bin/wf` reads the endpoint and token from environment and waits for synchronous acknowledgment. Tokens are opaque, memory-only and limited to one attempt invocation, rotated for correction and revoked before routing or on stop. This channel is not a management daemon; daemon lifecycle remains Phase 7.
+- `RunCoordinator.acceptReport` validates and writes the immutable report and `report_accepted` event in one transaction. It never writes a cursor. The runner waits for confirmed process/group/pipe settlement and applies the report only after a clean result. Earlier reports survive process failures for diagnosis.
+- Migration 3 adds a durable correction count (0 or 1); existing session columns store adapter-issued persisted identity. Correction reserves its budget/event before launch and uses a separate log path. A failed follow-up, including timeout/provider/process failure, becomes `system.report_error` with invocation failure metadata. This makes the bounded correction's failure behavior explicit (spec §4.3.6); the original invocation's technical failures keep their technical system codes and never enter correction.
+- The shared process wrapper redacts injected secrets across arbitrary stdout/stderr boundaries. Adapters must supply their report token as a process secret. The fake fixture invokes the actual `wf` executable, persists a session file and verifies it on resume. Stdout outcome parsing has been removed.
+
 ## 6. Commands and filesystem state
 
 Each command is an ordinary subprocess launched with explicit argv and cwd. Capture bounded stdout/stderr (stream to disk with tail in UI); return normalized `complete` / `failed` on exit codes; return system errors on spawn failure/timeout/interruption. `stdout` is available as a bounded interpolation field for downstream steps. Script authors who need complex shell behavior may explicitly call `sh -lc` or a checked-in script; the engine does not parse shell source.
@@ -296,7 +324,7 @@ An optional later enhancement can provide automated recovery for proven side-eff
 - **Known limits.** Signals go to the group id, which is the leader's pid. If a leader exits and its pid is reused while members remain, the wrong group could be signalled. Process-start identity checks (todo 7.1) address this gap. Descendants that deliberately escape the group cannot be terminated through group ownership; retained pipes cause an uncertain-settlement error, not a success. There is no sandbox or subreaper.
 - **Bounded output.** The heads of stdout and stderr (64 KiB each by default) stay in memory; stdout supplies `{{steps.<id>.stdout}}`. Combined output goes to a per-attempt log file, capped at 16 MiB plus a cap marker. A chunk crossing the cap retains its fitting prefix instead of discarding the whole chunk.
 - **One process at a time.** `RunService.drive` awaits each attempt before asking for the next step and rejects concurrent drive calls. Stop only terminates the requested run's owned operation; stopping another saved run cannot affect it. Live operations cannot be reconciled as crashed. Adapter launch exceptions become spawn errors; completion rejections require termination before routing an internal error. If termination cannot be confirmed, the attempt remains active for reconciliation.
-- **Adapters are workflow-agnostic.** Adapters launch processes and report what happened. The runner maps results to settlements (`src/runner/settlement.ts`), so the same precedence rules apply to every harness. Terminated agents cannot succeed even if they reported an outcome and exited zero. Session resume currently routes `system.resume_unavailable` before launch rather than silently starting fresh.
+- **Adapters are workflow-agnostic.** Adapters launch processes and report what happened. The runner maps results to settlements (`src/runner/settlement.ts`), so the same precedence rules apply to every harness. Terminated agents cannot succeed even if they reported an outcome and exited zero. Session resume selects the latest persisted session for the same harness, task, run and revision; absence routes `system.resume_unavailable` before launch.
 - **Offline probes use the same supervisor.** Version/help checks terminate owned descendant groups on timeout, retain nonzero exits and stderr, and reject truncated output as compatibility evidence. Help markers alone cannot turn a failed command into a successful probe.
 
 ## 8. Local API and UI boundary

@@ -8,17 +8,26 @@
  * The coordinator never starts a process. An agent or command attempt is handed to the caller as
  * `attempt`, and the caller reports back with `settle`. The runner (src/runner) owns processes.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
+import type { AgentInputSnapshot } from "../contracts/agent-context.js";
 import type { Diagnostic } from "../contracts/diagnostics.js";
 import { hasErrors } from "../contracts/diagnostics.js";
 import { isReservedName, isSystemOutcome, type SystemOutcome } from "../contracts/identifiers.js";
+import { parseWorkflowText } from "../contracts/parse-workflow.js";
+import { ReportRejected, validateReport } from "../contracts/report.js";
+import {
+  type TaskOverrides,
+  taskOverrideEditSchema,
+  workflowRevisionSchema,
+} from "../contracts/run-configuration.js";
 import {
   ACTIVE_ATTEMPT_STATUSES,
   type AttemptStatus,
   type AttentionSeverity,
   type RunStatus,
 } from "../contracts/run-state.js";
+import { previewMarkdownTasks, type TaskImportSnapshot } from "../contracts/task-import.js";
 import type { WorkflowDatabase } from "../store/database.js";
 import {
   type AttemptRow,
@@ -28,6 +37,7 @@ import {
   type TaskRow,
 } from "../store/run-store.js";
 import { checkWorkflowText } from "./check.js";
+import { compileWorkflow } from "./compile.js";
 import type { CompiledWorkflow } from "./model.js";
 import {
   completeActiveTask,
@@ -36,6 +46,7 @@ import {
   routeEngineStep,
   selectNextTask,
 } from "./reducer.js";
+import { revisionCursor, specializeTask } from "./run-configuration.js";
 
 /** Upper bound on consecutive engine-only steps in one `advance` call. Beyond it the run pauses. */
 export const MAX_ENGINE_STEPS_PER_ADVANCE = 10_000;
@@ -126,6 +137,7 @@ export interface CreateRunInput {
   /** Directory the workflow file lives in; project paths resolve against it. */
   readonly workflowDir: string;
   readonly tasks?: readonly NewTask[];
+  readonly taskImport?: TaskImportSnapshot;
 }
 
 export class RunCoordinator {
@@ -152,7 +164,13 @@ export class RunCoordinator {
       throw new WorkflowInvalidError(checked.diagnostics);
     }
     const compiled = checked.compiled;
-    const tasks = input.tasks ?? [];
+    if (input.tasks !== undefined && input.taskImport !== undefined)
+      throw new RunStateError("supply a Markdown import or explicit task records, not both");
+    const preview =
+      input.taskImport === undefined ? undefined : previewMarkdownTasks(input.taskImport);
+    if (input.taskImport && input.taskImport.sourcePath !== compiled.tasksSourcePath)
+      throw new RunStateError("task snapshot source does not match the workflow tasks.source");
+    const tasks = preview?.runnable ?? input.tasks ?? [];
     if (tasks.length > 0 && compiled.tasksSourcePath === undefined) {
       throw new RunStateError("tasks were supplied, but the workflow declares no tasks.source");
     }
@@ -171,6 +189,21 @@ export class RunCoordinator {
         startStepId: compiled.start,
         tasks,
       });
+      if (input.taskImport && preview) {
+        const sourceSha256 = createHash("sha256").update(input.taskImport.markdown).digest("hex");
+        this.store.saveTaskImport(runId, input.taskImport, sourceSha256);
+        this.store.appendEvent({
+          runId,
+          revisionId,
+          type: "tasks_imported",
+          data: {
+            total: preview.total,
+            prechecked: preview.prechecked,
+            runnable: preview.runnableCount,
+            sourceSha256,
+          },
+        });
+      }
       this.compiledByRevision.set(JSON.stringify([checked.sourceSha256, sourceDir]), compiled);
       return runId;
     });
@@ -229,7 +262,7 @@ export class RunCoordinator {
           `run ${run.runId} is ${run.status}; attempts settle only while running`,
         );
       }
-      const compiled = this.compiledFor(run.revisionId);
+      const compiled = this.workflowForAttempt(attempt);
       const step = compiled.steps.get(attempt.stepId);
       if (!step) {
         throw new RunStateError(`attempt ${attemptId} refers to unknown step '${attempt.stepId}'`);
@@ -275,6 +308,234 @@ export class RunCoordinator {
         this.pauseRun(run, USER_PAUSE_MESSAGE, "user_pause", attemptId, "info");
       }
       return { outcome, decision };
+    });
+  }
+
+  latestReport(runId: string, stepId: string, taskId: string | null) {
+    return this.store.latestReport(runId, stepId, taskId);
+  }
+
+  attemptInput(attemptId: string) {
+    return this.store.attemptInput(attemptId);
+  }
+
+  recordInput(attemptId: string, input: AgentInputSnapshot): void {
+    this.database.transaction(() => {
+      const attempt = this.store.getAttempt(attemptId);
+      if (!attempt || !ACTIVE_ATTEMPT_STATUSES.includes(attempt.status))
+        throw new RunStateError("input attempt is not active");
+      this.store.saveAttemptInput(attemptId, input);
+      this.store.appendEvent({
+        runId: attempt.runId,
+        attemptId,
+        revisionId: attempt.revisionId,
+        type: "attempt_prepared",
+        data: {},
+      });
+    });
+  }
+
+  /** Accepting a report never settles an attempt or moves its cursor. */
+  acceptReport(attemptId: string, body: unknown) {
+    return this.database.transaction(() => {
+      const attempt = this.store.getAttempt(attemptId);
+      if (!attempt || !ACTIVE_ATTEMPT_STATUSES.includes(attempt.status)) {
+        throw new ReportRejected(410, "report attempt is expired or no longer active");
+      }
+      const run = this.store.getRun(attempt.runId);
+      if (run.status !== "running" && run.status !== "pausing") {
+        throw new ReportRejected(410, "report attempt is no longer running");
+      }
+      const step = this.compiledFor(attempt.revisionId).steps.get(attempt.stepId);
+      if (step?.kind !== "agent")
+        throw new ReportRejected(422, "only agent attempts accept reports");
+      const report = validateReport(body, step.outcomes);
+      if (this.store.getReport(attemptId))
+        throw new ReportRejected(409, "a report was already accepted for this attempt");
+      const accepted = this.store.insertReport(attemptId, report);
+      this.store.appendEvent({
+        runId: attempt.runId,
+        attemptId,
+        revisionId: attempt.revisionId,
+        type: "report_accepted",
+        data: { reportId: accepted.reportId, outcome: accepted.outcome },
+      });
+      return accepted;
+    });
+  }
+
+  reportFor(attemptId: string) {
+    return this.store.getReport(attemptId);
+  }
+
+  /** Replaces one unfinished task's run-local settings; an empty steps map clears them. */
+  setTaskOverrides(runId: string, taskId: string, body: unknown): void {
+    this.database.transaction(() => {
+      const edit = taskOverrideEditSchema.parse(body);
+      const run = this.requireConfigurationEdit(runId);
+      const task = this.store.listTasks(runId).find((task) => task.taskId === taskId);
+      if (!task || task.state === "completed")
+        throw new RunStateError(`task '${taskId}' must be an unfinished task of run ${runId}`);
+      this.taskWorkflow(run.revisionId, edit.overrides);
+      const previous = this.store.taskOverrides(taskId);
+      this.store.saveTaskOverrides(taskId, edit.overrides);
+      this.store.appendEvent({
+        runId,
+        revisionId: run.revisionId,
+        type: "task_overrides_changed",
+        data: { taskId, previous, overrides: edit.overrides, reason: edit.reason },
+      });
+    });
+  }
+
+  /** Immutable definition revision for future dispatches, never a rewrite of task/attempt history. */
+  reviseWorkflow(runId: string, body: unknown): number {
+    return this.database.transaction(() => {
+      const edit = workflowRevisionSchema.parse(body);
+      const run = this.requireConfigurationEdit(runId);
+      const previous = this.compiledFor(run.revisionId);
+      const sourceDir = this.store.getRevision(run.revisionId).sourceDir;
+      const checked = checkWorkflowText(edit.workflowText, { workflowDir: sourceDir });
+      if (!checked.compiled) throw new WorkflowInvalidError(checked.diagnostics);
+      const revised = checked.compiled;
+      if (
+        revised.projectRoot !== previous.projectRoot ||
+        revised.tasksSourcePath !== previous.tasksSourcePath
+      )
+        throw new RunStateError(
+          "a revision cannot change project.root or tasks.source; create a new run to import different tasks",
+        );
+      const cursorStepId = revisionCursor(
+        previous,
+        revised,
+        run.cursorStepId,
+        run.activeTaskId,
+        edit.cursorStepId,
+      );
+      // Remaining task settings must also remain valid. Completed task settings stay as history.
+      const document = parseWorkflowText(edit.workflowText).document;
+      if (!document) throw new WorkflowInvalidError(checked.diagnostics);
+      for (const task of this.store.listTasks(runId)) {
+        if (task.state === "completed") continue;
+        const specialized = compileWorkflow(
+          specializeTask(document, this.store.taskOverrides(task.taskId)),
+          { workflowDir: sourceDir },
+        );
+        if (!specialized.compiled) throw new WorkflowInvalidError(specialized.diagnostics);
+      }
+      const revisionId = this.store.saveRevision(
+        edit.workflowText,
+        checked.sourceSha256,
+        sourceDir,
+      );
+      this.store.updateRun(runId, { revisionId, cursorStepId });
+      this.store.appendEvent({
+        runId,
+        revisionId,
+        type: "workflow_revised",
+        data: {
+          previousRevisionId: run.revisionId,
+          revisionId,
+          from: run.cursorStepId,
+          to: cursorStepId,
+          explicitCursor: edit.cursorStepId !== undefined,
+          reason: edit.reason,
+          sessions: "same_revision_only",
+        },
+      });
+      return revisionId;
+    });
+  }
+
+  taskOverrides(runId: string, taskId: string): TaskOverrides {
+    if (!this.store.listTasks(runId).some((task) => task.taskId === taskId))
+      throw new RunStateError(`run ${runId} has no task '${taskId}'`);
+    return this.store.taskOverrides(taskId);
+  }
+
+  workflowForAttempt(attempt: AttemptRow): CompiledWorkflow {
+    return this.taskWorkflow(attempt.revisionId, attempt.taskOverrides);
+  }
+
+  /** Resume the most recent persisted agent session for this harness, task and revision. */
+  priorSession(attempt: AttemptRow): string | undefined {
+    const compiled = this.compiledFor(attempt.revisionId);
+    const current = compiled.steps.get(attempt.stepId)?.spec;
+    if (current?.kind !== "agent") return undefined;
+    return (
+      this.store
+        .listAttempts(attempt.runId)
+        .filter((row) => {
+          const prior = compiled.steps.get(row.stepId)?.spec;
+          return (
+            row.sequenceNo < attempt.sequenceNo &&
+            row.taskId === attempt.taskId &&
+            row.revisionId === attempt.revisionId &&
+            row.sessionId !== null &&
+            prior?.kind === "agent" &&
+            prior.harness === current.harness
+          );
+        })
+        .at(-1)?.sessionId ?? undefined
+    );
+  }
+
+  /** A durable budget, separate from workflow retry attempts. */
+  requestCorrection(attemptId: string): void {
+    this.database.transaction(() => {
+      const attempt = this.store.getAttempt(attemptId);
+      if (
+        !attempt ||
+        !ACTIVE_ATTEMPT_STATUSES.includes(attempt.status) ||
+        attempt.correctionCount !== 0 ||
+        !attempt.sessionId ||
+        this.store.getReport(attemptId)
+      ) {
+        throw new RunStateError("report correction is unavailable or was already requested");
+      }
+      const run = this.store.getRun(attempt.runId);
+      if (
+        (run.status !== "running" && run.status !== "pausing") ||
+        this.compiledFor(attempt.revisionId).reportCorrectionAttempts !== 1
+      ) {
+        throw new RunStateError("report correction is disabled or run is no longer active");
+      }
+      this.store.reserveCorrection(attemptId);
+      this.store.appendEvent({
+        runId: attempt.runId,
+        attemptId,
+        revisionId: attempt.revisionId,
+        type: "correction_requested",
+        data: { invocation: 1 },
+      });
+    });
+  }
+
+  recordInvocation(
+    attemptId: string,
+    invocation: 0 | 1,
+    phase: "started" | "settled",
+    details: {
+      pid: number | null;
+      sessionId?: string | undefined;
+      logPath?: string | undefined;
+      exitCode?: number | null;
+      timedOut?: boolean;
+      failure?: SystemOutcome | undefined;
+    },
+  ): void {
+    this.database.transaction(() => {
+      const attempt = this.store.getAttempt(attemptId);
+      if (!attempt || !ACTIVE_ATTEMPT_STATUSES.includes(attempt.status))
+        throw new RunStateError("invocation attempt is not active");
+      this.store.setProcess(attemptId, details.pid, details.sessionId ?? null);
+      this.store.appendEvent({
+        runId: attempt.runId,
+        attemptId,
+        revisionId: attempt.revisionId,
+        type: phase === "started" ? "invocation_started" : "invocation_settled",
+        data: { invocation, ...details },
+      });
     });
   }
 
@@ -403,7 +664,10 @@ export class RunCoordinator {
   jumpTo(runId: string, stepId: string, reason: string): void {
     this.database.transaction(() => {
       const run = this.requireManualEdit(runId, reason);
-      const compiled = this.compiledFor(run.revisionId);
+      const compiled = this.taskWorkflow(
+        run.revisionId,
+        this.store.taskOverrides(run.activeTaskId),
+      );
       if (!compiled.steps.has(stepId)) {
         throw new RunStateError(`cannot jump to '${stepId}': the workflow declares no such step`);
       }
@@ -424,7 +688,10 @@ export class RunCoordinator {
   skipCurrentStep(runId: string, outcome: string, reason: string): void {
     this.database.transaction(() => {
       const run = this.requireManualEdit(runId, reason);
-      const compiled = this.compiledFor(run.revisionId);
+      const compiled = this.taskWorkflow(
+        run.revisionId,
+        this.store.taskOverrides(run.activeTaskId),
+      );
       const step = compiled.steps.get(run.cursorStepId);
       if (!step) {
         throw new RunStateError(
@@ -510,6 +777,7 @@ export class RunCoordinator {
   inspect(runId: string): {
     run: RunRow;
     tasks: TaskRow[];
+    taskImport: ReturnType<RunStore["taskImport"]>;
     activeAttempt: AttemptRow | undefined;
     attempts: AttemptRow[];
     transitions: ReturnType<RunStore["listTransitions"]>;
@@ -519,6 +787,7 @@ export class RunCoordinator {
     return this.database.transaction(() => ({
       run: this.store.getRun(runId),
       tasks: this.store.listTasks(runId),
+      taskImport: this.store.taskImport(runId),
       activeAttempt: this.store.activeAttempt(runId),
       attempts: this.store.listAttempts(runId),
       transitions: this.store.listTransitions(runId),
@@ -540,6 +809,19 @@ export class RunCoordinator {
     return run;
   }
 
+  private requireConfigurationEdit(runId: string): RunRow {
+    const run = this.store.getRun(runId);
+    if (run.status !== "ready" && run.status !== "paused")
+      throw new RunStateError(
+        `run ${runId} is ${run.status}; configuration edits require a ready or paused run`,
+      );
+    if (this.store.activeAttempt(runId))
+      throw new RunStateError(
+        "configuration edits require no active attempt; settle or reconcile it first",
+      );
+    return run;
+  }
+
   private advanceOnce(runId: string, allowEngineStep: boolean): AdvanceResult | "continue" {
     const run = this.store.getRun(runId);
     if (run.status !== "running" && run.status !== "pausing") {
@@ -554,7 +836,8 @@ export class RunCoordinator {
       return { kind: "not_running", status: "paused" };
     }
 
-    const compiled = this.compiledFor(run.revisionId);
+    const taskOverrides = this.store.taskOverrides(run.activeTaskId);
+    const compiled = this.taskWorkflow(run.revisionId, taskOverrides);
     const limitReason = this.exceededLimit(run, compiled);
     if (limitReason !== undefined) {
       this.pauseRun(run, limitReason.message, limitReason.category);
@@ -589,7 +872,36 @@ export class RunCoordinator {
       }
       case "agent":
       case "command": {
+        const skip = Object.hasOwn(taskOverrides.steps, step.id)
+          ? taskOverrides.steps[step.id]?.skip
+          : undefined;
+        if (skip) {
+          if (!allowEngineStep) {
+            this.pauseRun(
+              run,
+              "configured skips exceeded the consecutive engine-step limit",
+              "engine_loop",
+            );
+            return { kind: "not_running", status: "paused" };
+          }
+          this.store.appendEvent({
+            runId,
+            revisionId: run.revisionId,
+            type: "step_skipped",
+            data: { stepId: step.id, taskId: run.activeTaskId, outcome: skip.outcome },
+          });
+          this.commitRouting(
+            run,
+            step.id,
+            skip.outcome,
+            null,
+            routeEngineStep(compiled, step.id, skip.outcome),
+            `configured skip of '${step.id}'`,
+          );
+          return "continue";
+        }
         const attempt = this.store.insertAttempt({
+          taskOverrides,
           attemptId: this.newId("attempt"),
           runId,
           stepId: step.id,
@@ -772,6 +1084,18 @@ export class RunCoordinator {
       throw new WorkflowInvalidError(checked.diagnostics);
     }
     this.compiledByRevision.set(key, checked.compiled);
+    return checked.compiled;
+  }
+
+  private taskWorkflow(revisionId: number, overrides: TaskOverrides): CompiledWorkflow {
+    if (Object.keys(overrides.steps).length === 0) return this.compiledFor(revisionId);
+    const revision = this.store.getRevision(revisionId);
+    const parsed = parseWorkflowText(revision.definitionYaml);
+    if (!parsed.document) throw new WorkflowInvalidError(parsed.diagnostics);
+    const checked = compileWorkflow(specializeTask(parsed.document, overrides), {
+      workflowDir: revision.sourceDir,
+    });
+    if (!checked.compiled) throw new WorkflowInvalidError(checked.diagnostics);
     return checked.compiled;
   }
 }

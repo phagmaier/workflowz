@@ -9,18 +9,20 @@ const clean: AgentRunResult = {
   timedOut: false,
   terminated: false,
   spawnError: null,
-  reportedOutcome: "complete",
   stdout: "",
 };
 const ALLOWED = ["complete", "blocked"];
 
 describe("settlementForAgent (spec §4.4 precedence)", () => {
   it("accepts a declared outcome from a cleanly exited agent", () => {
-    assert.deepEqual(settlementForAgent(clean, ALLOWED), { kind: "outcome", outcome: "complete" });
+    assert.deepEqual(settlementForAgent(clean, ALLOWED, "complete"), {
+      kind: "outcome",
+      outcome: "complete",
+    });
   });
 
   it("treats an undeclared outcome as a report error", () => {
-    const result = settlementForAgent({ ...clean, reportedOutcome: "bogus" }, ALLOWED);
+    const result = settlementForAgent(clean, ALLOWED, "bogus");
     assert.deepEqual(
       [result.kind, result.kind === "system" ? result.code : ""],
       ["system", "system.report_error"],
@@ -28,15 +30,12 @@ describe("settlementForAgent (spec §4.4 precedence)", () => {
   });
 
   it("treats a clean exit without a report as a report error", () => {
-    const result = settlementForAgent({ ...clean, reportedOutcome: null }, ALLOWED);
+    const result = settlementForAgent(clean, ALLOWED);
     assert.equal(result.kind === "system" && result.code, "system.report_error");
   });
 
   it("treats a crash as a process error even when an outcome was printed first", () => {
-    const result = settlementForAgent(
-      { ...clean, exitCode: 3, reportedOutcome: "complete" },
-      ALLOWED,
-    );
+    const result = settlementForAgent({ ...clean, exitCode: 3 }, ALLOWED, "complete");
     assert.equal(result.kind === "system" && result.code, "system.process_error");
   });
 

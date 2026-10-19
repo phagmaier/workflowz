@@ -8,7 +8,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { AgentAdapter, AgentInput } from "../adapters/agent-adapter.js";
 import type { CommandSpec } from "../adapters/command-executor.js";
+import type { AgentContext } from "../contracts/agent-context.js";
 import type { SystemOutcome } from "../contracts/identifiers.js";
+import type { AgentReport } from "../contracts/report.js";
 import { type InterpolationValues, interpolate } from "../engine/interpolate.js";
 import type { CompiledStep, CompiledWorkflow } from "../engine/model.js";
 import type { TaskRow } from "../store/run-store.js";
@@ -35,6 +37,8 @@ export interface PrepareContext {
   readonly task: TaskRow | undefined;
   readonly logDir: string;
   readonly adapters: ReadonlyMap<string, AgentAdapter>;
+  readonly report: (stepId: string) => AgentReport | undefined;
+  readonly priorSessionId?: string | undefined;
   readonly commandStdout: (stepId: string) => string | undefined;
 }
 
@@ -59,7 +63,7 @@ function prepare(context: PrepareContext): PreparedAttempt {
     runId: context.runId,
     runCwd: workflow.projectRoot,
     commandStdout: context.commandStdout,
-    report: () => undefined,
+    report: (stepId, field) => context.report(stepId)?.[field] ?? undefined,
   };
   const workingDirectory = (raw: string | undefined): string =>
     path.resolve(workflow.projectRoot, interpolate(raw ?? ".", values));
@@ -84,7 +88,7 @@ function prepare(context: PrepareContext): PreparedAttempt {
   }
 
   if (spec.kind === "agent") {
-    if (spec.session === "resume") {
+    if (spec.session === "resume" && !context.priorSessionId) {
       throw new PreparationError(
         `step '${step.id}' requires a persisted session, but session resume is not available`,
         "system.resume_unavailable",
@@ -104,16 +108,54 @@ function prepare(context: PrepareContext): PreparedAttempt {
             ),
             values,
           );
+    const instructionFiles = [...workflow.instructions, ...(spec.instructions ?? [])].map((file) =>
+      path.resolve(workflow.projectRoot, interpolate(file, values)),
+    );
+    const reports: Record<string, AgentReport> = Object.create(null) as Record<string, AgentReport>;
+    for (const stepId of spec.context?.include_reports ?? []) {
+      const report = context.report(stepId);
+      if (report)
+        reports[stepId] = {
+          outcome: report.outcome,
+          summary: report.summary,
+          ...(report.issue === undefined ? {} : { issue: report.issue }),
+          ...(report.handoff === undefined ? {} : { handoff: report.handoff }),
+          ...(report.data === undefined ? {} : { data: report.data }),
+        };
+    }
+    const assembled: AgentContext = {
+      task: context.task
+        ? {
+            id: context.task.taskId,
+            index: context.task.sourceOrder + 1,
+            title: context.task.title,
+            body: context.task.body,
+            headingPath: context.task.headingPath,
+          }
+        : undefined,
+      instructions: instructionFiles.map((file) => {
+        try {
+          return { path: file, content: readFileSync(file, "utf8") };
+        } catch (error) {
+          throw new PreparationError(
+            `cannot read configured instruction '${file}': ${(error as NodeJS.ErrnoException).code ?? "read failed"}`,
+          );
+        }
+      }),
+      reports,
+    };
     return {
       kind: "agent",
       adapter,
       input: {
         attemptId: context.attemptId,
+        model: spec.model,
+        reasoningEffort: spec.reasoning_effort,
+        priorSessionId: spec.session === "resume" ? context.priorSessionId : undefined,
         cwd: workingDirectory(spec.cwd),
-        prompt,
-        instructionFiles: (spec.instructions ?? []).map((file) =>
-          path.resolve(workflow.projectRoot, interpolate(file, values)),
-        ),
+        prompt: `${prompt}\n\nConfigured workflow context:\n${JSON.stringify(assembled)}`,
+        context: assembled,
+        instructionFiles,
         allowedOutcomes: step.outcomes,
         timeoutMs: spec.timeout_seconds === undefined ? undefined : spec.timeout_seconds * 1000,
         logPath,

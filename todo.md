@@ -39,7 +39,7 @@
 ## Phase 3 — Sequential runner + fake executor + command executor
 
 - [x] 3.1 Implement a single active-run scheduler and the common executor/adapter interfaces.
-- [ ] 3.2 Implement fake harness as a child process or equivalent process-boundary fixture that can report, crash, hang, and resume for a correction turn.
+- [x] 3.2 Implement fake harness as a child process or equivalent process-boundary fixture that can report, crash, hang, and resume for a correction turn.
 - [x] 3.3 Implement command executor using argv and cwd, bounded logging, exit-code normalization, stdout capture, and optional timeouts.
 - [x] 3.4 Implement process start/settle handling with no stage overlap, process-group ownership and termination/reaping on stop.
 - [x] 3.5 Add pause-after-current, stop-now, resume and manual cursor/task override operations with durable history.
@@ -50,24 +50,24 @@
 
 ## Phase 4 — Mandatory reporting and one correction chance
 
-- [ ] 4.1 Create `wf report` CLI, private loopback endpoint, attempt-scoped token lookup, and strict input schema.
-- [ ] 4.2 Reject undeclared outcomes/missing fields synchronously; return allowed values and useful error text. Rejected submissions never mutate state.
-- [ ] 4.3 Persist at most one accepted report per logical attempt; ignore no timing nuance: **wait until the executor settles before routing**.
-- [ ] 4.4 When an agent settles cleanly without valid report, issue **one** correction turn in the same session (if supported). Instruction must prohibit code modifications. Limit duration.
-- [ ] 4.5 On second failure/unavailable resume, emit `system.report_error` and pause unless the configured policy routes it elsewhere; no third turn.
-- [ ] 4.6 Process/provider crashes and timeouts must **not** trigger report correction; map to appropriate system failures.
-- [ ] 4.7 Test accepted, invalid, duplicate, missing, late, correction-success, correction-failure, provider-failure, and process-nonzero cases.
+- [x] 4.1 Create `wf report` CLI, private loopback endpoint, attempt-scoped token lookup, and strict input schema.
+- [x] 4.2 Reject undeclared outcomes/missing fields synchronously; return allowed values and useful error text. Rejected submissions never mutate state.
+- [x] 4.3 Persist at most one accepted report per logical attempt; ignore no timing nuance: **wait until the executor settles before routing**.
+- [x] 4.4 When an agent settles cleanly without valid report, issue **one** correction turn in the same session (if supported). Instruction must prohibit code modifications. Limit duration.
+- [x] 4.5 On second failure/unavailable resume, emit `system.report_error` and pause unless the configured policy routes it elsewhere; no third turn.
+- [x] 4.6 Process/provider crashes and timeouts must **not** trigger report correction; map to appropriate system failures.
+- [x] 4.7 Test accepted, invalid, duplicate, missing, late, correction-success, correction-failure, provider-failure, and process-nonzero cases.
 
 **Gate:** Every agent step ends with a valid accepted declared outcome or a routed system error. A test proves only one correction invocation occurs.
 
 ## Phase 5 — Task import, handoff, and loop behavior
 
-- [ ] 5.1 Import Markdown checkboxes in source order; preserve headings/nesting information and assign durable run-local IDs.
-- [ ] 5.2 Snapshot task list at run creation; exclude prechecked tasks by default. Expose preview/count of runnable tasks.
-- [ ] 5.3 Implement `task.next` and `task.complete` semantics with correct `task_ready`/`exhausted`/state errors.
-- [ ] 5.4 Assemble prompt input from explicitly selected instructions, task description, and last selected reports; handle missing references as errors.
-- [ ] 5.5 Support per-task parameter overrides in run configuration while paused, and revisions of remaining workflow stages; no arbitrary graph rewriting.
-- [ ] 5.6 Test imports, preservation of source snapshot, context selection, task progress, looping, and manual task completion.
+- [x] 5.1 Import Markdown checkboxes in source order; preserve headings/nesting information and assign durable run-local IDs.
+- [x] 5.2 Snapshot task list at run creation; exclude prechecked tasks by default. Expose preview/count of runnable tasks.
+- [x] 5.3 Implement `task.next` and `task.complete` semantics with correct `task_ready`/`exhausted`/state errors.
+- [x] 5.4 Assemble prompt input from explicitly selected instructions, task description, and last selected reports; handle missing references as errors.
+- [x] 5.5 Support per-task parameter overrides in run configuration while paused, and revisions of remaining workflow stages; no arbitrary graph rewriting.
+- [x] 5.6 Test imports, preservation of source snapshot, context selection, task progress, looping, and manual task completion.
 
 **Gate:** Fake agents can finish an ordered Markdown checklist via a reusable small stage graph, without rewriting `todo.md`.
 

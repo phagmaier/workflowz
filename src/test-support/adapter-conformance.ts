@@ -1,124 +1,307 @@
-/**
- * The offline conformance suite every agent adapter must pass before it is registered as supported
- * (todo 3.7, spec §9). It asserts behavior, not wiring: a launch, a declared report, an undeclared
- * report, a crash, a timeout, a missing binary, and a stop that reaps the whole tree. Each adapter
- * runs against the same fake harness fixture, so passing means the same thing for every harness.
- */
+/** Offline conformance runs each adapter through the real service, HTTP channel and wf CLI. */
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
-import type { AgentAdapter, AgentRunResult } from "../adapters/agent-adapter.js";
-import { settlementForAgent } from "../runner/settlement.js";
+import type { AgentAdapter, AgentInput } from "../adapters/agent-adapter.js";
+import { RunService } from "../runner/run-service.js";
+import { WorkflowDatabase } from "../store/database.js";
 import type { AgentScript, ScriptedOptions } from "./scripted-agent.js";
-
-/** The system code of a settlement, or "outcome" when it routed a normal outcome. */
-function systemCode(settlement: { kind: string; code?: string }): string {
-  return settlement.kind === "system" ? (settlement.code ?? "") : "outcome";
-}
+import { workflowText } from "./workflows.js";
 
 export type AdapterFactory = (
   plan: readonly AgentScript[],
   options?: ScriptedOptions,
 ) => AgentAdapter;
+const FLOW = workflowText(`start: build
+steps:
+  build:
+    kind: agent
+    harness: codex
+    session: fresh
+    prompt: go
+    outcomes: [complete, blocked]
+    on:
+      complete: { goto: done }
+      blocked: { pause: true }
+  done:
+    kind: end
+`);
 
-const ALLOWED = ["complete", "blocked"];
+export async function until(check: () => boolean, ms = 5000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!check()) {
+    assert.ok(Date.now() < deadline, "condition was not reached in time");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
 
 export function describeAdapterConformance(name: string, factory: AdapterFactory): void {
   describe(`adapter conformance: ${name}`, () => {
-    const directories: string[] = [];
+    const fixtures: { root: string; database: WorkflowDatabase }[] = [];
     after(() => {
-      for (const directory of directories) {
-        rmSync(directory, { recursive: true, force: true });
+      for (const { root, database } of fixtures) {
+        database.close();
+        rmSync(root, { recursive: true, force: true });
       }
     });
-    const scratch = (): string => {
-      const directory = mkdtempSync(path.join(os.tmpdir(), "wf-conf-"));
-      directories.push(directory);
-      return directory;
-    };
-
-    async function runOnce(
-      plan: readonly AgentScript[],
-      options: { timeoutMs?: number; binary?: string } = {},
-    ): Promise<AgentRunResult> {
-      const adapter = factory(plan, options.binary === undefined ? {} : { binary: options.binary });
-      const handle = adapter.start({
-        attemptId: "conformance",
-        cwd: os.tmpdir(),
-        prompt: "conformance prompt",
-        instructionFiles: [],
-        allowedOutcomes: ALLOWED,
-        timeoutMs: options.timeoutMs,
+    function fixture(plan: readonly AgentScript[], options: ScriptedOptions = {}, text = FLOW) {
+      const root = mkdtempSync(path.join(os.tmpdir(), "wf-conf-"));
+      const logFile = path.join(root, "agent.log");
+      const database = new WorkflowDatabase(path.join(root, "state.sqlite"));
+      fixtures.push({ root, database });
+      const adapter = factory(plan, { ...options, logFile });
+      const inputs: AgentInput[] = [];
+      const wrapped: AgentAdapter = {
+        id: adapter.id,
+        start(input) {
+          inputs.push(input);
+          return adapter.start(input);
+        },
+        resumeForReportCorrection: adapter.resumeForReportCorrection
+          ? (input) => {
+              inputs.push(input);
+              return adapter.resumeForReportCorrection?.(input) as ReturnType<
+                AgentAdapter["start"]
+              >;
+            }
+          : undefined,
+      };
+      const service = new RunService(database, {
+        agents: new Map([["codex", wrapped]]),
+        logDir: path.join(root, "logs"),
+        correctionTimeoutMs: 1000,
       });
-      return handle.completed;
+      const runId = service.coordinator.createRun({ workflowText: text, workflowDir: root });
+      service.coordinator.start(runId);
+      const inspect = () => service.coordinator.inspect(runId);
+      const corrections = () =>
+        inspect().events.filter((e) => e.type === "correction_requested").length;
+      const report = () => service.coordinator.reportFor(inspect().attempts[0]?.attemptId ?? "");
+      const notes = () => (existsSync(logFile) ? readFileSync(logFile, "utf8") : "");
+      return {
+        root,
+        database,
+        adapter,
+        service,
+        runId,
+        inspect,
+        corrections,
+        report,
+        notes,
+        inputs,
+      };
     }
 
-    it("launches the harness and settles a declared outcome", async () => {
-      const result = await runOnce([{ mode: "report", outcome: "blocked" }]);
-      assert.deepEqual(settlementForAgent(result, ALLOWED), {
-        kind: "outcome",
-        outcome: "blocked",
-      });
+    it("launches, invokes wf report, receives acknowledgment and persists one declared report", async () => {
+      const f = fixture([{ mode: "report", outcome: "blocked" }]);
+      await f.service.drive(f.runId);
+      assert.equal(f.report()?.outcome, "blocked");
+      assert.match(f.notes(), /ack 0/);
+      assert.equal(f.inspect().transitions[0]?.outcome, "blocked");
+      assert.equal(f.corrections(), 0);
     });
 
-    it("rejects an undeclared reported outcome as a report error", async () => {
-      const result = await runOnce([{ mode: "report", outcome: "bogus" }]);
-      assert.equal(systemCode(settlementForAgent(result, ALLOWED)), "system.report_error");
+    it("persists a report while active and routes only after the process settles", async () => {
+      const f = fixture([{ mode: "report-then-delay", extra: "400" }]);
+      const driving = f.service.drive(f.runId);
+      await until(() => f.report() !== undefined);
+      assert.equal(f.inspect().run.cursorStepId, "build");
+      assert.equal(f.inspect().transitions.length, 0);
+      assert.ok(f.inspect().activeAttempt);
+      await driving;
+      assert.equal(f.inspect().transitions.length, 1);
+      const events = f.inspect().events.map((e) => e.type);
+      assert.ok(events.indexOf("report_accepted") < events.indexOf("invocation_settled"));
+      assert.ok(events.indexOf("invocation_settled") < events.indexOf("transition_committed"));
     });
 
-    it("treats a clean exit without any report as a report error", async () => {
-      const settled = settlementForAgent(await runOnce([{ mode: "silent" }]), ALLOWED);
-      assert.equal(systemCode(settled), "system.report_error");
+    it("rejects undeclared reports synchronously and accepts an in-turn correction", async () => {
+      const f = fixture([{ mode: "invalid-then-valid" }]);
+      await f.service.drive(f.runId);
+      assert.match(f.notes(), /ack 1\nack 0/);
+      assert.equal(f.report()?.outcome, "complete");
+      assert.equal(f.corrections(), 0);
+      assert.equal(f.inspect().events.filter((e) => e.type === "report_accepted").length, 1);
     });
 
-    it("treats a crash as a process error, even after an outcome was printed", async () => {
-      const crash = settlementForAgent(await runOnce([{ mode: "crash" }]), ALLOWED);
-      assert.equal(systemCode(crash), "system.process_error");
-      const after = settlementForAgent(
-        await runOnce([{ mode: "report-then-crash", outcome: "complete" }]),
-        ALLOWED,
+    it("rejects duplicate submissions while retaining exactly one report", async () => {
+      const f = fixture([{ mode: "duplicate" }]);
+      await f.service.drive(f.runId);
+      assert.match(f.notes(), /ack 0\nack 1/);
+      assert.equal(f.inspect().events.filter((e) => e.type === "report_accepted").length, 1);
+      assert.equal(f.inspect().transitions.length, 1);
+    });
+
+    it("resumes the persisted session once after clean execution, without overlap", async () => {
+      const f = fixture([{ mode: "silent" }, { mode: "report" }]);
+      await f.service.drive(f.runId);
+      assert.equal(f.inspect().run.status, "completed");
+      assert.equal(f.inspect().attempts.length, 1);
+      assert.equal(f.inspect().attempts[0]?.correctionCount, 1);
+      assert.equal(f.corrections(), 1);
+      const events = f.inspect().events.filter((e) => e.type.startsWith("invocation_"));
+      assert.deepEqual(
+        events.map((e) => e.type),
+        ["invocation_started", "invocation_settled", "invocation_started", "invocation_settled"],
       );
-      assert.equal(systemCode(after), "system.process_error");
+      assert.equal(events[0]?.data["sessionId"], events[2]?.data["sessionId"]);
+      assert.notEqual(events[0]?.data["pid"], events[2]?.data["pid"]);
+      assert.notEqual(events[0]?.data["logPath"], events[2]?.data["logPath"]);
+      assert.match(f.notes(), /start .* silent\nend .*\nstart .* report\ncorrection/);
+      assert.equal(f.report()?.outcome, "complete");
     });
 
-    it("ends an attempt that outlives its timeout as a timeout", async () => {
-      const result = await runOnce([{ mode: "hang" }], { timeoutMs: 300 });
-      assert.equal(result.timedOut, true);
-      assert.equal(systemCode(settlementForAgent(result, ALLOWED)), "system.timeout");
-    });
-
-    it("reports a harness that cannot be launched as a spawn error", async () => {
-      const result = await runOnce([{ mode: "report" }], {
-        binary: "/nonexistent/workflowz-harness",
+    for (const mode of ["silent", "report", "crash", "hang"] as const) {
+      it(`pauses after one failed correction (${mode}), with no third invocation`, async () => {
+        const f = fixture([{ mode: "silent" }, { mode, outcome: "bogus" }, { mode: "report" }]);
+        await f.service.drive(f.runId);
+        assert.equal(f.inspect().run.status, "paused");
+        assert.equal(f.inspect().transitions[0]?.outcome, "system.report_error");
+        assert.equal(f.corrections(), 1);
+        assert.equal(f.inspect().events.filter((e) => e.type === "invocation_started").length, 2);
+        assert.equal(f.report(), undefined);
       });
-      const settled = settlementForAgent(result, ALLOWED);
-      assert.equal(systemCode(settled), "system.spawn_error");
+    }
+
+    for (const options of [{ supportsResume: false }, { missingSession: true }]) {
+      it(`does not launch fresh correction when resume is unavailable (${JSON.stringify(options)})`, async () => {
+        const f = fixture([{ mode: "silent" }], options);
+        await f.service.drive(f.runId);
+        assert.equal(f.inspect().transitions[0]?.outcome, "system.report_error");
+        assert.equal(f.corrections(), 0);
+      });
+    }
+
+    it("expires the original token before same-session correction accepts a report", async () => {
+      const f = fixture([{ mode: "silent" }, { mode: "report-then-delay", extra: "150" }]);
+      const driving = f.service.drive(f.runId);
+      await until(() => f.inputs.length === 2);
+      const old = f.inputs[0]?.reportAccess;
+      const current = f.inputs[1]?.reportAccess;
+      assert.ok(old && current);
+      assert.notEqual(old.token, current.token);
+      const response = await fetch(old.endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${old.token}` },
+        body: JSON.stringify({ outcome: "complete", summary: "late original" }),
+      });
+      assert.equal(response.status, 410);
+      await driving;
+      assert.equal(f.inspect().transitions[0]?.outcome, "complete");
+      assert.equal(f.corrections(), 1);
     });
 
-    it("ends the whole process tree on terminate, including children the harness started", async () => {
-      const pidFile = path.join(scratch(), "child.pid");
-      const adapter = factory([{ mode: "hang-with-child", extra: pidFile }]);
-      const handle = adapter.start({
-        attemptId: "conformance-tree",
-        cwd: os.tmpdir(),
-        prompt: "p",
-        instructionFiles: [],
-        allowedOutcomes: ALLOWED,
+    it("preserves a correction's report for diagnosis if its process fails", async () => {
+      const f = fixture([{ mode: "silent" }, { mode: "report-then-crash" }]);
+      await f.service.drive(f.runId);
+      assert.equal(f.report()?.outcome, "complete");
+      assert.equal(f.inspect().transitions[0]?.outcome, "system.report_error");
+      assert.equal(f.corrections(), 1);
+    });
+
+    it("routes provider failure without correction even with a clean process status", async () => {
+      const f = fixture([{ mode: "provider-error" }]);
+      await f.service.drive(f.runId);
+      assert.equal(f.inspect().transitions[0]?.outcome, "system.process_error");
+      assert.equal(f.corrections(), 0);
+    });
+
+    it("does not create a new session if the persisted session cannot be reopened", async () => {
+      const f = fixture([{ mode: "silent" }], { resumeError: true });
+      await f.service.drive(f.runId);
+      assert.equal(f.inspect().transitions[0]?.outcome, "system.report_error");
+      assert.equal(f.corrections(), 1);
+      assert.equal(
+        f
+          .notes()
+          .split("\n")
+          .filter((line) => line.startsWith("start")).length,
+        1,
+      );
+    });
+
+    it("scrubs tokens split across output chunks from stdout, stderr, events and disk logs", async () => {
+      const f = fixture([{ mode: "leak-token" }]);
+      await f.service.drive(f.runId);
+      const token = f.inputs[0]?.reportAccess?.token;
+      assert.ok(token);
+      const attempt = f.inspect().attempts[0];
+      assert.ok(attempt);
+      const log = readFileSync(path.join(f.root, "logs", `${attempt.attemptId}.log`), "utf8");
+      assert.equal(log.includes(token), false);
+      assert.match(log, /\[redacted\]/);
+      assert.equal(JSON.stringify(f.inspect()).includes(token), false);
+      const row = f.database
+        .prepare("SELECT stdout_text FROM attempts WHERE attempt_id = ?")
+        .get(attempt.attemptId);
+      assert.equal(JSON.stringify(row).includes(token), false);
+      assert.equal(f.report()?.outcome, "complete");
+    });
+
+    it("honors disabled correction and explicit system.report_error routing", async () => {
+      const f = fixture(
+        [{ mode: "silent" }],
+        {},
+        FLOW.replace(
+          "start: build",
+          "defaults:\n  report_correction_attempts: 0\nstart: build",
+        ).replace(
+          "      blocked: { pause: true }",
+          "      blocked: { pause: true }\n      system.report_error: { goto: done }",
+        ),
+      );
+      await f.service.drive(f.runId);
+      assert.equal(f.inspect().run.status, "completed");
+      assert.equal(f.inspect().transitions[0]?.outcome, "system.report_error");
+      assert.equal(f.corrections(), 0);
+    });
+
+    for (const mode of ["crash", "report-then-crash", "hang", "report-then-hang"] as const) {
+      it(`routes ${mode} without correction, preserving any earlier report`, async () => {
+        const timeout = mode.includes("hang");
+        const f = fixture(
+          [{ mode }],
+          {},
+          FLOW.replace("    prompt: go", `    prompt: go\n    timeout_seconds: ${timeout ? 1 : 5}`),
+        );
+        await f.service.drive(f.runId);
+        assert.equal(
+          f.inspect().transitions[0]?.outcome,
+          timeout ? "system.timeout" : "system.process_error",
+        );
+        assert.equal(f.corrections(), 0);
+        assert.equal(f.report() !== undefined, mode.startsWith("report-"));
       });
-      const deadline = Date.now() + 3000;
-      while (!existsSync(pidFile) || readFileSync(pidFile, "utf8").trim() === "") {
-        assert.ok(Date.now() < deadline, "the harness never started its child");
-        await new Promise((resolve) => setTimeout(resolve, 20));
-      }
-      const childPid = Number(readFileSync(pidFile, "utf8"));
-      await handle.terminate();
-      await handle.completed;
+    }
+
+    it("routes a missing executable as spawn failure without correction", async () => {
+      const f = fixture([{ mode: "report" }], { binary: "/nonexistent/workflowz-harness" });
+      await f.service.drive(f.runId);
+      assert.equal(f.inspect().transitions[0]?.outcome, "system.spawn_error");
+      assert.equal(f.corrections(), 0);
+    });
+
+    it("ends the whole owned process tree on stop", async () => {
+      const f = fixture([]);
+      const pidFile = path.join(f.root, "child.pid");
+      // Replace the initial fixture's adapter before dispatch, retaining the same conformance factory.
+      const service = new RunService(f.database, {
+        agents: new Map([["codex", factory([{ mode: "hang-with-child", extra: pidFile }])]]),
+        logDir: path.join(f.root, "logs"),
+      });
+      const driving = service.drive(f.runId);
+      await until(() => existsSync(pidFile) && readFileSync(pidFile, "utf8").trim() !== "");
+      const pid = Number(readFileSync(pidFile, "utf8"));
+      await service.stop(f.runId);
+      await driving;
       assert.throws(
-        () => process.kill(childPid, 0),
+        () => process.kill(pid, 0),
         (error: NodeJS.ErrnoException) => error.code === "ESRCH",
       );
+      assert.equal(f.inspect().run.status, "stopped");
+      assert.equal(f.inspect().transitions.length, 0);
     });
   });
 }

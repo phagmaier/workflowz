@@ -17,7 +17,7 @@ export interface InterpolationValues {
   readonly runCwd: string;
   /** stdout of the latest successful run of a command step, if there is one. */
   readonly commandStdout: (stepId: string) => string | undefined;
-  /** A field of an agent step's report. Phase 4 supplies this; until then it is undefined. */
+  /** A field of the latest explicitly referenced report for the current task. */
   readonly report: (stepId: string, field: "summary" | "issue" | "handoff") => string | undefined;
 }
 
