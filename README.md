@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: project tooling, strict YAML/schema validation, policy compilation, SQLite persistence, transactional run coordination, a sequential runner for command steps and fake agents, mandatory CLI/HTTP reporting with one same-session correction, immutable Markdown task import, selected input context, run-local task parameters, and paused workflow revisions, and offline-conformant Codex, Pi and Claude Code CLI adapters. This is not a complete MVP: live harness verification, the other harness adapters, management CLI, and UI remain on the [`todo.md`](todo.md) roadmap.
+**Status:** Implemented core: project tooling, strict YAML/schema validation, policy compilation, SQLite persistence, transactional run coordination, a sequential runner for command steps and fake agents, mandatory CLI/HTTP reporting with one same-session correction, immutable Markdown task import, selected input context, run-local task parameters, and paused workflow revisions, and offline-conformant Codex, Pi, Claude Code and OpenCode adapters. This is not a complete MVP: live harness verification, the omp adapter, management CLI, and UI remain on the [`todo.md`](todo.md) roadmap.
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -70,7 +70,7 @@ wf report complete --summary "Implemented validation" --handoff-file handoff.md
 wf report blocked --summary "Need input" --issue "Missing requirement" --data '{"area":"auth"}'
 ```
 
-The CLI waits for acknowledgment. Rejected reports exit 1 with a useful message; acceptance exits 0. Identity comes from the opaque token; reports cannot supply run/attempt IDs or transitions. Acceptance writes one immutable report and event, then waits for process settlement before routing. Clean missing reports allow one same-session correction, bounded to 30 seconds (or less); failed/unavailable correction routes `system.report_error`. Original process/provider failures bypass correction. The offline fake harness, Codex, Pi and Claude fixtures exercise this path. All three real adapters have offline launch/session conformance coverage; live provider verification and the remaining installed harness adapters remain Phase 6 work.
+The CLI waits for acknowledgment. Rejected reports exit 1 with a useful message; acceptance exits 0. Identity comes from the opaque token; reports cannot supply run/attempt IDs or transitions. Acceptance writes one immutable report and event, then waits for process settlement before routing. Clean missing reports allow one same-session correction, bounded to 30 seconds (or less); failed/unavailable correction routes `system.report_error`. Original process/provider failures bypass correction. The offline fake harness, Codex, Pi, Claude and OpenCode fixtures exercise this path. All four real adapters have offline launch/session conformance coverage; live provider verification and omp remain Phase 6 work.
 
 `RunService.previewTasks({workflowText, workflowDir})` exposes checklist counts and source metadata without creating a run. `RunService.createRun` reads and freezes the configured checklist; prechecked tasks are excluded unless `includeCompleted: true` is explicit. The lower-level coordinator still accepts supplied task records for offline fixtures. Instructions and selected same-task reports are assembled at attempt preparation and persisted with the task context; future attempts read current configured instruction content. Run-local task parameters and paused revisions are available through the headless service API (below). Automatic re-import remains unimplemented.
 
@@ -122,6 +122,19 @@ The adapter sends prompts through stdin with `--print --input-format text --outp
 Default CLI session persistence stays enabled. The terminal UUID is the opaque session identity; resume passes only that exact UUID to `--resume`, with no recent-session selector, fork or fresh fallback. Unavailable sessions and mismatches fail explicitly. CLI version and `bypassPermissions` are audited. Runtime selects the base environment plus Claude config, explicit Anthropic auth/provider settings and report access, scrubbing injected tokens/keys. No global config is edited.
 
 The installed version is 2.1.303. Its offline missing-UUID check confirmed failure without a provider request. The real adapter passes all shared conformance tests against a synthetic CLI; authenticated persistence/resume, actual provider framing and tool environment remain live-smoke work. See [compatibility details](docs/harness-compatibility.md). Milestones 0.5 and 6.6–6.8 remain open.
+
+### OpenCode adapter (Phase 6.4)
+
+`await createOpenCodeAdapter()` from `src/adapters/opencode.ts` probes the v2 CLI offline with isolated home/config. Register it as `new Map([["opencode", adapter]])` in `RunService` options. Driving a real workflow can use the configured provider/account and incur usage.
+
+OpenCode v2.0.32's `run --session` creates missing sessions, so this adapter deliberately uses the supported private API path: an invocation-local `serve --stdio --hostname 127.0.0.1 --port 0` child, owned by the common process supervisor. The bridge holds its stdin lease until execution ends. It neither starts nor changes the shared background service. Prompts travel through bridge stdin and exact-session API admission, never argv. Missing sessions, including deletion between lookup and admission, fail without creating a replacement.
+
+After prompt acknowledgment, the adapter waits for idle and verifies matching identity/cwd, a fresh persisted idle timestamp and `outcome: succeeded`. Terminal evidence and reports still cannot settle the process; lease shutdown, exit, group reaping and pipe closure are required. API/readiness/protocol failures bypass correction. This minimal API path captures bounded invocation evidence and server diagnostics, not provider text/tool event streams; `supportsEventStream` is false.
+
+Model selection accepts `provider/model#variant`; `reasoning_effort` selects a named variant when an explicit unqualified model is supplied. Supplying both a model variant and reasoning effort is rejected rather than silently choosing one. Session-level `{action: "*", resource: "*", effect: "allow"}` rules select unrestricted permissions and are audited as `session-allow-all`. Unlike CLI `--auto`, these rules override denials for this session; global settings are unchanged. The private lease password and known injected provider/report credentials are scrubbed.
+
+The synthetic CLI passes the full shared conformance suite. Installed offline checks verified create-if-missing CLI behavior, non-creating exact API resume failure and terminal provider failure against an invalid provider without credentials. Authentication, successful live persistence/resume, actual provider execution and tool environment propagation remain unverified. See [compatibility details](docs/harness-compatibility.md). Milestones 0.5 and 6.6–6.8 remain open.
+
 
 ### Layout
 

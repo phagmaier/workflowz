@@ -17,7 +17,7 @@ All five binaries advertised every marker in `HELP_PROBES` (`src/adapters/probe.
 - **codex.** `--ephemeral` exists. Correction turns depend on the session being persisted, so the adapter must not pass it. `--output-schema` is available for structured final output but is only a fallback; `wf report` stays the primary contract.
 - **pi.** The help text lists no permission-mode flag. The registry therefore sets `supportsPermissionMode: false`. The user's Pi configuration decides tool permissions.
 - **omp.** Shares Pi's `--mode` framing per the architecture note. The help text confirms the flags but not the event schema, so the Pi-family framing still needs live verification in the adapter's smoke test.
-- **opencode.** The help text lists no `serve` subcommand. The one-shot `run --format json` path is the one the probe covers. The `service` subcommand manages a background server; the long-lived path was not evaluated.
+- **opencode.** Reverified v2.0.32 help now lists both `service` and `serve`. `run --format json` remains available, but its `--session` creates missing IDs. Phase 6.4 uses the supported invocation-local `serve --stdio` API path instead; it never manages the shared service.
 - **claude.** An isolated offline invocation verified that `--output-format stream-json` requires `--verbose` on 2.1.303. `--no-session-persistence` breaks resume and is never passed. See the Phase 6.3 evidence below.
 
 ## Unrestricted mode used by the adapters
@@ -29,10 +29,10 @@ Chosen by the user: every adapter launches its harness in the unrestricted mode 
 | `codex` | `--dangerously-bypass-approvals-and-sandbox` | Help text calls this extremely dangerous and intended for externally sandboxed environments. The user has chosen it anyway. |
 | `pi` | none; the flag set has no permission gate | Pi's default tool set is already unrestricted, so the adapter passes no flag. |
 | `omp` | `--approval-mode yolo` | Alternatively `--auto-approve`. |
-| `opencode` | `--auto` | Auto-approves anything not explicitly denied. |
+| `opencode` | v2 session rules `[{action: "*", resource: "*", effect: "allow"}]` | Audited as `session-allow-all`; session rules run after agent rules. Stronger than `--auto`, which preserves explicit denials. No global settings change. |
 | `claude` | `--permission-mode bypassPermissions` | `--dangerously-skip-permissions` is the flag form; the mode form also shows which mode was chosen. |
 
-These are the flags seen in the installed help text. Confirm them in each adapter's conformance test.
+These selections come from installed help or the versioned API contract linked below. Adapter conformance checks the selected mode; live effectiveness remains a separate verification.
 
 ## Authentication
 
@@ -107,4 +107,47 @@ Official references consulted, alongside installed help and isolated failure che
 - [CLI reference](https://code.claude.com/docs/en/cli-reference) — print/input/output, model/effort, permission and persistence flags.
 - [Environment reference](https://code.claude.com/docs/en/env-vars) — Claude/Anthropic configuration and auth names.
 
-The synthetic `test/fixtures/fake-claude.mjs` CLI runs the real adapter through the entire shared conformance suite with real processes, loopback reporting and `wf`. Additional tests cover terminal/provider failures, LF/CRLF/UTF-8/Unicode separators, oversized/truncated/malformed streams, init/result/session mismatches, unavailable exact resume, capture limits, credential scrubbing and result-before-process-exit. Claude is now `conformance_passed`. Authentication, actual provider framing, successful live persistence/resume, managed/user-resource interactions and tool environment propagation remain opt-in live-smoke work. Milestone 0.5, 6.6–6.8 and the full Phase 6 live gate remain unchecked. OpenCode (6.4) is next.
+The synthetic `test/fixtures/fake-claude.mjs` CLI runs the real adapter through the entire shared conformance suite with real processes, loopback reporting and `wf`. Additional tests cover terminal/provider failures, LF/CRLF/UTF-8/Unicode separators, oversized/truncated/malformed streams, init/result/session mismatches, unavailable exact resume, capture limits, credential scrubbing and result-before-process-exit. Claude is now `conformance_passed`. Authentication, actual provider framing, successful live persistence/resume, managed/user-resource interactions and tool environment propagation remain opt-in live-smoke work. Milestone 0.5, 6.6–6.8 and the full Phase 6 live gate remain unchecked. OpenCode now has separate offline evidence below.
+
+## OpenCode adapter implementation (Phase 6.4)
+
+Reverified `/home/phagmaier/.local/bin/opencode` as **opencode v2.0.32**. Current root help lists both `service` and `serve`; `run --help` advertises optional one-shot message input, `--format json`, create-or-continue `--session`, `--auto`, and `--model provider/model#variant`. Official run source confirms stdin prompt delivery. `serve --help` advertises `--stdio`, `--hostname`, `--port`. `createOpenCodeAdapter()` independently returned `{version: "opencode v2.0.32", supportsResume: true}` from isolated offline version/run/serve/session help probes. The factory requires v2 private-server/model markers; persistence/export help gates correction support. Help is not proof of provider compatibility.
+
+### Integration choice and installed evidence
+
+The adapter deliberately does **not** use `run --session`. An isolated installed CLI experiment used a temporary home/config/data/state/cache, disabled model fetching/project/Claude discovery, no provider credentials, and the deliberately invalid `workflowz-invalid/model` provider/model. `run --format json --auto --session ses_workflowz_create_if_missing` exited 1 with `provider.no-route`, yet a subsequent exact lookup returned that newly created ID with persisted `outcome: failed`. A separate absent-ID `GET` and exact prompt `POST` both returned `404 SessionNotFoundError`; a subsequent lookup remained 404. No provider route was available and no paid model request was made.
+
+Official v2.0.32 CLI source confirms `step_finish` is a model-step boundary. Execution success itself is not emitted as a terminal JSON record; the CLI waits/reconciles internally. Its selection source explicitly creates an absent requested ID. Checking availability before calling `run` would leave a deletion race. The chosen API path has no create-on-resume route, including between lookup and admission.
+
+The real adapter repeated installed checks using isolated temporary config/home, no credentials and disabled external model discovery: missing explicit ID returned `resumeUnavailable: true` with the requested ID retained, while an invalid-provider fresh invocation returned `providerError` from persisted `outcome: failed`, even though the private server/bridge exited zero. These are offline negative checks, not authenticated successful session/resume verification.
+
+### Invocation and settlement
+
+One common-supervised Node bridge launches `opencode serve --stdio --hostname 127.0.0.1 --port 0` in its owned process group. A random invocation-local password protects the loopback endpoint. The bridge holds stdin as the official ownership lease; EOF ends the private server. No `service start`, service settings, daemon discovery, shared service connection or global configuration edits are performed.
+
+Fresh execution uses `POST /api/session` with cwd, model and explicit session permission rules. Resume uses only `GET /api/session/:id`, then exact-ID updates/admission; it never calls create, fork, recent or prefix selectors. IDs must match `ses_` plus a bounded safe opaque suffix; cwd must match. The generated prompt message ID and session must be acknowledged by `POST /api/session/:id/prompt`.
+
+`POST /api/experimental/session/:id/wait` must acknowledge idle with 204, then exact metadata must show the same ID/cwd, an idle timestamp covering admission and advancing beyond any previous execution, and `outcome: succeeded`. Failed/interrupted/stale/missing/mismatched evidence is technical failure. Readiness/API JSON are each bounded at 1 MiB with fatal UTF-8 decoding; malformed, oversized and truncated responses fail closed. Strict bounded LF bridge records carry only identity/terminal diagnostics, never report authority. This minimal API implementation does not consume provider text/tool/SSE events, so the registry explicitly sets `supportsEventStream: false`. Unknown API fields are tolerated through boundary schemas; incompatible used fields fail.
+
+The bridge closes the lease after terminal evidence/error and waits for server exit. The common supervisor still confirms process/group/pipe settlement. A hung server after success or missing-session evidence must time out/stop, not route early. The private password is supplied through bridge stdin/server environment and removed by installed stdio-server code before tool inheritance. Known injected lease/report/provider secrets are scrubbed from diagnostics. The session store is CLI-owned; the runner never reads auth files/transcripts or directly edits the OpenCode database.
+
+### Model, permissions and environment
+
+`model` accepts `provider/model` or `provider/model#variant`. Existing `reasoning_effort` selects the named model variant and requires an explicit provider/model with no embedded variant; conflicting selection is rejected. Provider-specific variant availability remains OpenCode's decision. No guessed `--effort` flag is used.
+
+Selected unrestricted mode is the official v2 session ruleset `[{action: "*", resource: "*", effect: "allow"}]`, applied at creation or exact resume update and audited as **`session-allow-all`** alongside the CLI version. Session rules are evaluated after agent rules, last match wins. This deliberately overrides denials for this session, rather than using `--auto`'s auto-approve-unless-denied semantics. No mandatory approvals, global permission changes, isolation or rollback claims are added. Interactive forms/questions are not automatically answered by this minimal API client; a blocking form can require stop or a configured timeout. Successful live tool/permission behavior remains unverified.
+
+Runtime environment is the common base allowlist plus: `XDG_CACHE_HOME`, `OPENCODE_CONFIG_DIR`, `OPENCODE_CONFIG`, `OPENCODE_DB`, `OPENCODE_DISABLE_MODELS_FETCH`, `OPENCODE_MODELS_PATH`, `OPENCODE_CONFIG_PROJECT_DISABLE`, `OPENCODE_DISABLE_CLAUDE_CODE`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `GEMINI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `OPENROUTER_API_KEY`. Report access/project-local `wf` PATH are injected separately. The parent's server password, server URL, simulation flag, arbitrary variables, nested harness config and other credentials are withheld. Other provider authentication can use OpenCode's normal store/config; this project does not inspect those files. This is deliberate environment selection, not isolation. Tool environment propagation remains live-smoke work.
+
+### Sources and limits
+
+Context7 lookup was attempted but unavailable because its configured API key was rejected; current official documentation and exact-version official source were read directly instead:
+
+- [Current v2 CLI documentation](https://opencode.ai/v2/docs/cli) — automation, private/shared server ownership.
+- [v2.0.32 one-shot run](https://github.com/anomalyco/opencode/blob/v2.0.32/packages/cli/src/run/run.ts) and [noninteractive loop](https://github.com/anomalyco/opencode/blob/v2.0.32/packages/cli/src/run/noninteractive.ts) — stdin, step JSON, explicit wait and error results.
+- [Session targeting](https://github.com/anomalyco/opencode/blob/v2.0.32/packages/cli/src/session-target.ts) — absent requested IDs create sessions.
+- [Private server lease](https://github.com/anomalyco/opencode/blob/v2.0.32/packages/cli/src/services/standalone.ts) and [server process](https://github.com/anomalyco/opencode/blob/v2.0.32/packages/cli/src/server-process.ts) — readiness JSON, stdio ownership, Basic auth and credential removal.
+- [API session contract](https://github.com/anomalyco/opencode/blob/v2.0.32/packages/protocol/src/groups/session.ts), [handlers](https://github.com/anomalyco/opencode/blob/v2.0.32/packages/server/src/handlers/session.ts) and [session operations](https://github.com/anomalyco/opencode/blob/v2.0.32/packages/core/src/session/session.ts) — exact non-creating prompt admission and wait.
+- [Session metadata](https://github.com/anomalyco/opencode/blob/v2.0.32/packages/schema/src/session.ts), [inbox acknowledgment](https://github.com/anomalyco/opencode/blob/v2.0.32/packages/schema/src/session-inbox.ts) and [permission rules](https://github.com/anomalyco/opencode/blob/v2.0.32/packages/schema/src/permission.ts) — terminal outcome/idle, identity and unrestricted session settings.
+
+`fake-opencode.mjs` is a synthetic CLI/private HTTP API server, not a captured provider stream. The real adapter passes the entire shared conformance suite as harness `opencode`, plus framing, terminal/provider failure, deleted/missing/mismatched sessions, stale evidence, invalid admission, environment scrubbing and process settlement cases. Registry status is `conformance_passed`. Authentication, successful live sessions/resume, actual provider behavior, resource/config interactions and tool environment remain unverified. Milestones 0.5, 6.6–6.8 and the full Phase 6 live gate stay unchecked; omp (6.5) is next. Phase 7 daemon locking/recovery limits remain unchanged.

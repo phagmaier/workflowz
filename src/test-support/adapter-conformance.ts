@@ -184,7 +184,13 @@ export function describeAdapterConformance(
       it(`does not launch fresh correction when resume is unavailable (${JSON.stringify(options)})`, async () => {
         const f = await fixture([{ mode: "silent" }], options);
         await f.service.drive(f.runId);
-        assert.equal(f.inspect().transitions[0]?.outcome, "system.report_error");
+        const outcome = f.inspect().transitions[0]?.outcome;
+        // A missing optional stream identity prevents correction; a missing required API identity
+        // is instead a protocol failure. Neither may authorize a fresh fallback.
+        assert.ok(
+          outcome === "system.report_error" ||
+            ("missingSession" in options && outcome === "system.process_error"),
+        );
         assert.equal(f.corrections(), 0);
       });
     }

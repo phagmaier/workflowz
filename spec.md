@@ -73,7 +73,7 @@ The engine is deliberately harness-agnostic: every harness is an adapter behind 
 | `codex` | OpenAI Codex CLI | `codex exec` with JSONL events | `codex exec resume` |
 | `pi` | Pi coding agent | `pi --print --mode json` or `--mode rpc` | resume by session id/path |
 | `omp` | oh-my-pi (Pi-family) | `omp --print --mode json` or `--mode rpc` | `--resume <id>` |
-| `opencode` | OpenCode | `opencode run` (or a `serve` session) | `--session <id>` |
+| `opencode` | OpenCode | invocation-local `serve --stdio` + v2 API | exact persisted session API admission; no create on resume |
 | `claude` | Claude Code | `claude -p` with `--output-format stream-json` | `--resume <session-id>` |
 
 - Exactly one harness executes per stage; harness selection is a per-stage field, so a single workflow may mix harnesses (for example, implement with `codex` and review with `pi`).
@@ -88,6 +88,9 @@ Phase 6.1 now provides an offline-conformant Codex CLI adapter through the headl
 Phase 6.2 adds the offline-conformant Pi adapter for the installed earendil package. One-shot JSON uses LF-only streaming UTF-8 decoding and requires `agent_settled` plus process/group/pipe settlement. Low-level `agent_end` and transient retry failures cannot settle the attempt. Unrecovered final provider failures, aborts or malformed streams are technical errors, including on exit zero. Resume validates the persisted session file/header/cwd and uses its exact UUID within its dedicated storage directory, without create-if-missing or latest-session flags. Model/thinking selection, report access and default unrestricted tools use the existing contract; no workflow fields or migrations change. Live provider/session verification and the remaining adapters remain unfinished.
 
 Phase 6.3 adds the offline-conformant Claude Code print adapter: stdin prompts, bounded stream-json parsing, terminal `result` success evidence and common process/group/pipe settlement. It keeps CLI persistence enabled and resumes only the exact persisted UUID with `--resume`; unavailable sessions and mismatches fail without fresh fallback. Existing model/reasoning settings map to `--model` / `--effort`, and the selected unrestricted `bypassPermissions` mode plus CLI version are audited. Reports, correction limits, revision scope and routing remain unchanged. Authentication and provider-backed stream/session behavior remain unverified.
+
+Phase 6.4 adds the offline-conformant OpenCode v2 private API adapter. A leased, supervised server per invocation avoids CLI `run --session` create-if-missing behavior without touching OpenCode's shared service. Exact prompt acknowledgment, wait-for-idle, matching session/cwd and a fresh persisted successful outcome are required, followed by process/group/pipe settlement. Missing sessions cannot be created by resume. Existing model/reasoning fields select provider/model and named variant; explicit session-level allow-all permission rules are audited as `session-allow-all`. This minimal API path does not expose provider event streams (`supportsEventStream: false`). No workflow fields, mandatory approvals, daemon management or migrations are added. Reports and one bounded correction retain the existing contracts; authenticated/live success remains unverified.
+
 
 ## 3. Canonical workflow schema (v1 proposal)
 
