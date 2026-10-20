@@ -1,4 +1,4 @@
-/** Browser edits are drafts only; validation, immutable writes and execution stay in management. */
+/** Drafts and a narrow execution allowlist delegate all run authority to management. */
 import { parseDocument, stringify } from "yaml";
 import type { BrowserRequest, BrowserSource } from "../contracts/browser.js";
 import type { Diagnostic } from "../contracts/diagnostics.js";
@@ -66,6 +66,16 @@ export class BrowserService {
     if (request.op === "session") return this.management.handle({ op: "ping" });
     if (request.op === "logout") throw new Error("logout is handled by browser transport");
     if (request.op === "runs") return this.management.handle(request);
+    if (
+      request.op === "status" ||
+      request.op === "reports" ||
+      request.op === "events" ||
+      request.op === "start" ||
+      request.op === "pause" ||
+      request.op === "stop" ||
+      request.op === "resume"
+    )
+      return this.management.handle(request);
     if (request.op === "workflows") {
       return this.management.store.listRevisions().map((revision) => {
         const parsed = parseWorkflowText(revision.definitionYaml);

@@ -867,3 +867,94 @@ and unpushed pending owner approval. Proposed commit:
 After acceptance, the owner approved committing and pushing Phase 8.2. This supersedes the
 pending-approval statements above. The next ordered milestone is Phase 8.3; no Phase 8.3–8.5
 or Phase 9 implementation is included in this commit.
+
+## Phase 8.3 — run dashboard and explicit execution controls
+
+Authorized offline implementation/browser verification and commit/push, building on accepted
+Phases 8.1–8.2. No live providers, paused-run browser editing/manual intervention (8.4), or
+later browser suite (8.5) are included. The full Phase 8 gate and MVP remain incomplete.
+
+### Implementation and boundary
+
+- Added a selected-run dashboard over the existing management facade: current task/stage,
+  effective harness/model/reasoning, elapsed run wall time, accepted report details and
+  attention items with attempt identity. New ready runs open it without starting execution.
+- Known imported queues show accepted engine-owned completed tasks / total; empty queues
+  omit percentages and graph-only runs never manufacture them. Agent report acceptance
+  alone does not complete a task or settle a process.
+- The strict browser request allowlist adds only status, reports, exclusive-cursor events
+  and explicit start/pause/stop/resume. Named response DTOs live in the app layer and the
+  management responses satisfy them. Host/Origin/custom-header/JSON/cookie/CSP protections
+  are unchanged. No generic management passthrough, recovery/edit/raw-log/filesystem
+  endpoints, dependencies, migrations or harness runtime changes.
+- Inspection refreshes every two seconds, one 100-event page at a time, retaining up to
+  300 fetched rows and marking pending history. Selection generations discard delayed
+  responses. Report/attention/event regions scroll rather than stretching the entire page.
+- Controls submit the inspected event ID; stop/resume require a reason. Existing stale
+  rechecks, drive ownership, sequential settlement and recovery barriers stay authoritative.
+  Rejections and transport failures invalidate the client cursor, stop refresh and require
+  explicit inspection before another control. No automatic mutation retries. A lost stop
+  response does not cancel daemon termination; files are not rolled back.
+
+### Verification
+
+`npm run check` passed **795 tests / 88 suites**, zero failures/cancellations/skips, including
+typecheck and Biome lint. Two new browser-API integration cases exercise actual fake child
+processes, report-before-settlement/task counts, stale controls, cursor pages, pause/resume,
+stop settlement, blocked attention, exact-Origin refusal and interrupted-recovery refusal.
+An initial focused assertion expected a stopped attempt to be failed; corrected it to the
+existing interrupted-attempt stop semantics, without changing runtime behavior.
+
+Additional executed commands (using the built `dist/`):
+
+```bash
+node scripts/smoke-recovery.mjs
+node scripts/smoke-reporting.mjs
+node scripts/smoke-boundaries.mjs
+node dist/app/validate-cli.js examples/overnight.yaml
+```
+
+Recovery passed all four crash/disposition scenarios, durable reopen, no replay and cleanup.
+Reporting passed actual acknowledgments before settlement, direct reporting and bounded
+correction success/failure with reopen. Boundary smoke passed synthetic OpenCode/Claude
+correction/provider-failure, environment selection, scrubbing, settlement and reopen.
+Canonical example: **valid, 8 steps, zero warnings**, hash prefix `8a4912284968`.
+
+Actual Chromium against an owned disposable daemon under `/tmp/wf-dashboard-83-qhbiS3`,
+using only the existing `ScriptedAgentAdapter` and real `wf report`:
+
+- Paired normally, inspected a ready two-task loop and pressed Start. Saw the active task,
+  configured `codex` / `offline-browser-model` / low, and the accepted report while progress
+  stayed **0/2**. HTML-like task text rendered literally, with zero injected image nodes.
+- Pressed Pause after current during a report-then-delay child. Observed pausing at the
+  agent stage, then paused at the routed `task.complete` cursor after settlement, still
+  **0/2**. Resume without a reason was rejected locally.
+- Resumed explicitly: first task completion yielded **1/2**, second fake report routed
+  `blocked` to paused with a blocking attention item and originating attempt ID. Expanded
+  its full immutable report payload, including outcome, summary, issue and data.
+- Admitted a separate resume using the browser API, then pressed the stale Resume button.
+  Observed the real stale-event rejection and no automatic retry. Closed the actual tab
+  during the admitted delayed child. Independent CLI status still showed running; later
+  CLI status showed completed. Reopened Chromium: **2/2**, all three reports retained.
+- Refreshed completed history: **44 unique, strictly increasing run-filtered event IDs**,
+  unchanged after another refresh; exclusive cursor 45. Global ID 3 belonged to the other
+  run and was correctly absent.
+- Started a graph-only fake agent with a `sleep` descendant. No percentage appeared.
+  Stop now with a reason returned stopped, disabled resume and removed the descendant's
+  `/proc` entry. Durable reopen found neither run had an active attempt.
+- Inspected desktop and 390px mobile screenshots; mobile document width equaled viewport,
+  and event content stayed in a bounded scrolling region. Reload preserved both runs and
+  their durable states, without automatically selecting/starting one. No uncaught page
+  JavaScript errors were observed during the successful interactions.
+- Explicit daemon shutdown exited **0**. Subsequent refresh showed the useful transport
+  warning, disabled start/resume and left explicit refresh available. Connection to port
+  36097 was refused and discovery was absent. Closed managed tabs; none remained.
+- A throwaway Node SQLite reopen verified completed **2/2**, exact report outcomes
+  `[complete, blocked, complete]`, three `ack 0` entries, stopped second run, no active
+  attempts and preserved control history. Removed the throwaway scripts and all owned
+  fixture state; root absence verified. No unrelated/uncertain artifacts were touched.
+
+Limitations are deliberate: polling rather than SSE; at most 300 recently fetched event
+rows in the dashboard; CLI recovery only; no raw log viewer, paused-run workflow editor,
+manual intervention controls or permanent browser automation suite. Existing same-user
+authority and external-side-effect/process-escape limitations remain unchanged.

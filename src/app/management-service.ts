@@ -7,8 +7,38 @@ import { revisionCursor } from "../engine/run-configuration.js";
 import { RunStateError, WorkflowInvalidError } from "../engine/run-coordinator.js";
 import { RunService } from "../runner/run-service.js";
 import type { WorkflowDatabase } from "../store/database.js";
+import type {
+  AttemptRow,
+  AttentionRow,
+  EventRow,
+  ReportRow,
+  RunRow,
+  TaskRow,
+} from "../store/run-store.js";
 import { RunStore } from "../store/run-store.js";
 import { validateWorkflow } from "./workflow-validation.js";
+export interface BrowserRunStatus {
+  run: RunRow;
+  expectedEventId: number;
+  activeAttempt: AttemptRow | null;
+  current: {
+    kind: string;
+    harness?: string;
+    model?: string | null;
+    reasoningEffort?: string | null;
+  } | null;
+  elapsedMs: number;
+  progress: { completed: number; total: number } | null;
+  tasks: readonly TaskRow[];
+  latestReport: ReportRow | null;
+  attention: readonly AttentionRow[];
+  driveFailure: string | null;
+}
+export interface BrowserEvents {
+  events: readonly EventRow[];
+  nextAfter: number;
+  hasMore: boolean;
+}
 
 const READS = new Set([
   "ping",
@@ -240,7 +270,7 @@ export class ManagementService {
                 .at(-1) ?? null,
             attention: this.store.listAttention(request.runId),
             driveFailure: this.driveFailure ?? null,
-          };
+          } satisfies BrowserRunStatus;
         });
       case "tasks":
         c.run(request.runId);
@@ -261,7 +291,7 @@ export class ManagementService {
           events,
           nextAfter: events.at(-1)?.eventId ?? request.after,
           hasMore: rows.length > request.limit,
-        };
+        } satisfies BrowserEvents;
       }
       case "start":
         return this.begin(request.runId, request.expectedEventId);

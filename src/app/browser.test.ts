@@ -4,10 +4,14 @@ import { request as httpRequest } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { describe, it, type TestContext } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
+import type { AgentAdapter } from "../adapters/agent-adapter.js";
 import { parseWorkflowText } from "../contracts/parse-workflow.js";
+import { ScriptedAgentAdapter } from "../test-support/scripted-agent.js";
 import type { BrowserDraft } from "./browser-service.js";
 import { startDaemon } from "./daemon.js";
 import { managementRequest } from "./management-client.js";
+import type { BrowserEvents, BrowserRunStatus } from "./management-service.js";
 import { readDaemonAccess } from "./state-directory.js";
 
 const FLOW = `version: 1
@@ -30,12 +34,12 @@ steps:
       complete: {goto: pick}
   done: {kind: end}
 `;
-async function fixture(t: TestContext) {
+async function fixture(t: TestContext, agents?: Map<string, AgentAdapter>) {
   const root = mkdtempSync(path.join(os.tmpdir(), "wf-browser-"));
   writeFileSync(path.join(root, "instructions.md"), "Synthetic instructions");
   writeFileSync(path.join(root, "tasks.md"), "# Tasks\n- [x] old\n- [ ] parent\n    - [ ] child\n");
   const directory = path.join(root, "state");
-  const owner = await startDaemon(directory);
+  const owner = await startDaemon(directory, agents);
   t.after(async () => {
     await owner.close();
     rmSync(root, { recursive: true, force: true });
@@ -241,7 +245,7 @@ describe("localhost browser shell boundary", () => {
     assert.equal(state.run.revisionId, revisionId);
   });
 
-  it("validates selected inputs and refuses controls, raw file access and malformed/oversized bodies", async (t) => {
+  it("validates selected inputs and refuses non-allowlisted controls, raw file access and malformed/oversized bodies", async (t) => {
     const f = await fixture(t);
     await f.pair();
     for (const changes of [
@@ -255,7 +259,10 @@ describe("localhost browser shell boundary", () => {
       assert.equal(response.status, 422);
     }
     for (const input of [
-      { op: "start", runId: "anything", expectedEventId: 1 },
+      { op: "start", runId: "anything", expectedEventId: 1, extra: true },
+      { op: "revise", runId: "anything", expectedEventId: 1 },
+      { op: "recovery-decide", runId: "anything" },
+      { op: "override", runId: "anything", expectedEventId: 1 },
       { op: "read-file", path: "/etc/passwd" },
       { op: "runs", extra: true },
       { op: "load", source: { workflowText: "version: 1\nversion: 1", workflowDir: f.root } },
@@ -463,5 +470,183 @@ steps:
       source: { workflowText: edited.workflowText, workflowDir: f.root },
     });
     assert.equal(((await reused.json()) as { revisionId: number }).revisionId, next.revisionId);
+  });
+  it("controls the owner with stale checks, waits for settlement and counts only accepted task completion", async (t) => {
+    const adapter = new ScriptedAgentAdapter([
+      { mode: "report-then-delay", extra: "700", outcome: "complete" },
+      { mode: "report-then-hang", outcome: "blocked" },
+    ]);
+    const f = await fixture(t, new Map([["codex", adapter]]));
+    await f.pair();
+    const workflowText = FLOW.replace("{goto: finish}", "{goto: work}").replace(
+      "  finish:",
+      "  work:\n    kind: agent\n    harness: codex\n    model: offline-model\n    session: fresh\n    prompt: Work\n    outcomes: [complete, blocked]\n    on:\n      complete: {goto: finish}\n      blocked: {pause: true}\n  finish:",
+    );
+    const { runId } = (await (
+      await f.post("/ui/api", {
+        op: "create",
+        ...f.selection,
+        source: { workflowText, workflowDir: f.root },
+      })
+    ).json()) as { runId: string };
+    const inspect = async () =>
+      (await (await f.post("/ui/api", { op: "status", runId })).json()) as BrowserRunStatus;
+    const until = async (accept: (state: BrowserRunStatus) => boolean) => {
+      const deadline = Date.now() + 5000;
+      while (Date.now() < deadline) {
+        const state = await inspect();
+        if (accept(state)) return state;
+        await delay(10);
+      }
+      throw new Error("browser run state did not reach expected boundary");
+    };
+    const ready = await inspect();
+    assert.deepEqual(ready.progress, { completed: 0, total: 2 });
+    assert.equal(
+      (await f.post("/ui/api", { op: "start", runId, expectedEventId: ready.expectedEventId }))
+        .status,
+      200,
+    );
+    const reporting = await until((state) => state.latestReport !== null);
+    assert.equal(reporting.current?.harness, "codex");
+    assert.equal(reporting.current?.model, "offline-model");
+    assert.equal(
+      reporting.tasks.find((task) => task.taskId === reporting.run.activeTaskId)?.title,
+      "parent",
+    );
+    assert.deepEqual(reporting.progress, { completed: 0, total: 2 });
+    assert.equal(reporting.activeAttempt?.status, "running");
+    assert.equal(
+      (await f.post("/ui/api", { op: "pause", runId, expectedEventId: ready.expectedEventId }))
+        .status,
+      409,
+    );
+    assert.equal((await inspect()).run.status, "running");
+    assert.equal(
+      (await f.post("/ui/api", { op: "pause", runId, expectedEventId: reporting.expectedEventId }))
+        .status,
+      200,
+    );
+    const paused = await until((state) => state.run.status === "paused");
+    assert.equal(paused.activeAttempt, null);
+    assert.equal(paused.run.cursorStepId, "finish");
+    assert.deepEqual(paused.progress, { completed: 0, total: 2 });
+    assert.equal(f.owner.management.store.listAttempts(runId).length, 1);
+    const page1 = (await (
+      await f.post("/ui/api", { op: "events", runId, after: 0, limit: 2 })
+    ).json()) as BrowserEvents;
+    assert.equal(page1.hasMore, true);
+    const page2 = (await (
+      await f.post("/ui/api", { op: "events", runId, after: page1.nextAfter, limit: 100 })
+    ).json()) as BrowserEvents;
+    assert.ok(
+      page2.events.every((event) => event.eventId > page1.nextAfter && event.runId === runId),
+    );
+    assert.ok(page2.events.some((event) => event.type === "run_paused"));
+    assert.equal(
+      (
+        await f.post("/ui/api", {
+          op: "resume",
+          runId,
+          expectedEventId: paused.expectedEventId,
+          reason: "Continue the task loop",
+        })
+      ).status,
+      200,
+    );
+    const hanging = await until((state) => state.latestReport?.outcome === "blocked");
+    assert.deepEqual(hanging.progress, { completed: 1, total: 2 });
+    assert.equal(hanging.run.status, "running");
+    const attemptId = hanging.activeAttempt?.attemptId;
+    assert.ok(attemptId);
+    assert.equal(
+      (
+        await f.post("/ui/api", {
+          op: "stop",
+          runId,
+          expectedEventId: hanging.expectedEventId,
+          reason: "Stop the unsettled fixture",
+        })
+      ).status,
+      200,
+    );
+    const stopped = await inspect();
+    assert.equal(stopped.run.status, "stopped");
+    assert.equal(stopped.activeAttempt, null);
+    assert.deepEqual(stopped.progress, { completed: 1, total: 2 });
+    assert.equal(f.owner.management.store.getAttempt(attemptId)?.status, "interrupted");
+    assert.equal(
+      ((await (await f.post("/ui/api", { op: "reports", runId })).json()) as unknown[]).length,
+      2,
+    );
+    assert.equal(
+      (
+        await f.post("/ui/api", {
+          op: "resume",
+          runId,
+          expectedEventId: stopped.expectedEventId,
+          reason: "Cannot resume stopped",
+        })
+      ).status,
+      409,
+    );
+  });
+
+  it("exposes blocked attention and keeps recovery admission out of browser controls", async (t) => {
+    const f = await fixture(
+      t,
+      new Map([["codex", new ScriptedAgentAdapter([{ mode: "report", outcome: "blocked" }])]]),
+    );
+    await f.pair();
+    const workflowText =
+      "version: 1\nname: Blocked\nproject: {root: .}\nstart: work\nsteps:\n  work:\n    kind: agent\n    harness: codex\n    session: fresh\n    prompt: Work\n    outcomes: [blocked]\n    on:\n      blocked: {pause: true}\n";
+    const runId = f.owner.management.service.createRun({ workflowText, workflowDir: f.root });
+    const get = async () =>
+      (await (await f.post("/ui/api", { op: "status", runId })).json()) as BrowserRunStatus;
+    const ready = await get();
+    assert.equal(ready.progress, null);
+    assert.equal(
+      (
+        await f.post(
+          "/ui/api",
+          { op: "start", runId, expectedEventId: ready.expectedEventId },
+          { origin: "http://evil.invalid" },
+        )
+      ).status,
+      403,
+    );
+    assert.equal((await get()).run.status, "ready");
+    assert.equal(
+      (await f.post("/ui/api", { op: "start", runId, expectedEventId: ready.expectedEventId }))
+        .status,
+      200,
+    );
+    let state = await get();
+    const deadline = Date.now() + 5000;
+    while (state.run.status !== "paused" && Date.now() < deadline) {
+      await delay(10);
+      state = await get();
+    }
+    assert.equal(state.run.status, "paused");
+    assert.equal(state.latestReport?.outcome, "blocked");
+    assert.ok(state.attention.some((item) => item.attemptId === state.latestReport?.attemptId));
+    // Model a committed between-step crash using the existing coordinator/reconciliation seam.
+    await delay(20); // Let the completed drive release its admission guard.
+    f.owner.management.service.coordinator.resume(runId, "Simulate interrupted admission");
+    f.owner.management.service.reconcile(runId);
+    const interrupted = await get();
+    assert.equal(interrupted.run.status, "interrupted");
+    assert.equal(
+      (
+        await f.post("/ui/api", {
+          op: "resume",
+          runId,
+          expectedEventId: interrupted.expectedEventId,
+          reason: "No recovery decision",
+        })
+      ).status,
+      409,
+    );
+    assert.equal((await get()).run.status, "interrupted");
   });
 });

@@ -1,7 +1,11 @@
-/** Browser authority deliberately excludes all execution and existing-run mutations. */
+/** Browser authority permits preparation, inspection and explicit basic execution controls only. */
 import path from "node:path";
 import { z } from "zod";
 import { workflowInputSchema } from "./management.js";
+
+const run = { runId: z.string().min(1).max(512) };
+const control = { ...run, expectedEventId: z.number().int().positive() };
+const reason = z.string().trim().min(1).max(4096);
 
 export const browserSourceSchema = z.union([
   workflowInputSchema,
@@ -19,6 +23,18 @@ export const browserRequestSchema = z.discriminatedUnion("op", [
   z.strictObject({ op: z.literal("logout") }),
   z.strictObject({ op: z.literal("workflows") }),
   z.strictObject({ op: z.literal("runs") }),
+  z.strictObject({ op: z.literal("status"), ...run }),
+  z.strictObject({ op: z.literal("reports"), ...run }),
+  z.strictObject({
+    op: z.literal("events"),
+    ...run,
+    after: z.number().int().nonnegative(),
+    limit: z.number().int().min(1).max(1000),
+  }),
+  z.strictObject({ op: z.literal("start"), ...control }),
+  z.strictObject({ op: z.literal("pause"), ...control }),
+  z.strictObject({ op: z.literal("stop"), ...control, reason }),
+  z.strictObject({ op: z.literal("resume"), ...control, reason }),
   z.strictObject({ op: z.literal("load"), source: browserSourceSchema }),
   z.strictObject({
     op: z.literal("draft"),

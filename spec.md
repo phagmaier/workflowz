@@ -64,6 +64,17 @@ A user imports 10 unchecked Markdown tasks, chooses a Codex implement stage foll
 - Progress percentages are shown only when a known task count exists, expressed as accepted `task.complete` count / imported runnable count. For graph-only workflows show stage and history, not fabricated percent complete.
 - Workflow actions and run controls must also be available through a CLI or local API for testability; the UI is not the runtime.
 
+**Phase 8.3 browser path:** selected-run inspection and explicit start/pause-after-current/stop-now/
+resume delegate to the existing daemon management facade. Task progress counts only accepted
+engine-owned completion; an accepted agent report does not advance it before settlement and
+`task.complete`. Graph-only runs show no percentage. Event refresh uses exclusive cursors, not
+a new event stream transport. Basic controls retain inspected-event, settlement and recovery
+barriers, including nonblank stop/resume reasons and no automatic mutation retries. Browser
+close/reload/logout never stops execution. Interrupted recovery stays in the existing CLI;
+paused-run browser revision/manual intervention (8.4), the later browser suite (8.5), the full
+Phase 8 gate and MVP remain incomplete.
+
+
 ### 2.4 Supported agent harnesses
 
 The engine is deliberately harness-agnostic: every harness is an adapter behind one interface, and the reporting contract (`wf report`) is identical for all of them. The MVP ships adapters for:

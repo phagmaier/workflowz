@@ -11,6 +11,7 @@ const assets: Record<string, { type: string; file: string }> = {
   "/ui/": { type: "text/html; charset=utf-8", file: "shell.html" },
   "/ui/shell.js": { type: "text/javascript; charset=utf-8", file: "shell.js" },
   "/ui/editor.js": { type: "text/javascript; charset=utf-8", file: "editor.js" },
+  "/ui/dashboard.js": { type: "text/javascript; charset=utf-8", file: "dashboard.js" },
   "/ui/shell.css": { type: "text/css; charset=utf-8", file: "shell.css" },
 };
 const secret = () => randomBytes(32).toString("hex");

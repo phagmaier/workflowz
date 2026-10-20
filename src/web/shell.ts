@@ -4,6 +4,7 @@ import type { BrowserRequest, BrowserSource } from "../contracts/browser.js";
 import type { Diagnostic } from "../contracts/diagnostics.js";
 import type { TaskImportPreview } from "../contracts/task-import.js";
 import type { RunRow } from "../store/run-store.js";
+import { RunDashboard } from "./dashboard.js";
 import { WorkflowEditor } from "./editor.js";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -27,6 +28,7 @@ function diagnostics(items: Diagnostic[]) {
 let workflowDir = "";
 let busy = false;
 function connected(yes: boolean) {
+  if (!yes) dashboard.disconnect();
   element("auth").hidden = yes;
   element("workspace").hidden = !yes;
   element("connection").textContent = yes ? "Connected / localhost" : "Not connected";
@@ -42,7 +44,7 @@ async function send<T>(route: string, body: unknown): Promise<T> {
     });
   } catch {
     throw new Error(
-      "Daemon unavailable or request timed out. Check the foreground daemon, then refresh. A timed-out save/create may have committed: inspect lists before repeating it.",
+      "Daemon unavailable or request timed out. Check the foreground daemon, then refresh. A timed-out mutation may have committed: inspect lists and run status before repeating it.",
     );
   }
   const result = await response.json();
@@ -65,6 +67,7 @@ async function send<T>(route: string, body: unknown): Promise<T> {
   return result as T;
 }
 const api = <T>(request: BrowserRequest) => send<T>("/ui/api", request);
+const dashboard = new RunDashboard(api);
 async function action(work: () => Promise<void>) {
   if (busy) return;
   busy = true;
@@ -85,6 +88,7 @@ async function action(work: () => Promise<void>) {
     busy = false;
     for (const [index, control] of controls.entries()) control.disabled = disabled[index] ?? false;
     editor.sync();
+    dashboard.sync();
   }
 }
 interface Saved {
@@ -112,6 +116,7 @@ async function refresh() {
   for (const run of runs) {
     const row = document.createElement("tr");
     for (const text of [
+      "",
       run.runId,
       run.status,
       run.projectRoot,
@@ -123,6 +128,13 @@ async function refresh() {
       cell.textContent = text;
       row.append(cell);
     }
+    const inspect = document.createElement("button");
+    inspect.type = "button";
+    inspect.textContent = "Inspect";
+    inspect.addEventListener("click", () => {
+      void dashboard.select(run.runId);
+    });
+    row.firstElementChild?.append(inspect);
     body.append(row);
   }
   element("empty-runs").hidden = runs.length > 0;
@@ -277,6 +289,7 @@ element("create").addEventListener("click", () => {
     element("message").textContent =
       `Created ready run ${result.runId}. Tasks frozen from the current source. Execution has not started.`;
     await refresh();
+    await dashboard.select(result.runId);
   });
 });
 void action(async () => {

@@ -8,9 +8,9 @@
     <script type="module" src="/ui/shell.js"></script>
   </head>
   <body>
-    <header><div><p class="eyebrow">WORKFLOWZ / LOCAL</p><h1>Prepare a workflow run</h1></div><span id="connection" role="status">Connecting…</span></header>
+    <header><div><p class="eyebrow">WORKFLOWZ / LOCAL</p><h1>Workflow runs</h1></div><span id="connection" role="status">Connecting…</span></header>
     <main>
-      <p class="notice">Preparation only. Preview does not save; creating a run freezes its tasks but never starts execution. Run controls remain in the CLI.</p>
+      <p class="notice">Creating a ready run never starts execution. Start explicitly from its dashboard. Execution belongs to the daemon and continues when this browser closes.</p>
       <section id="auth">
         <h2>Connect this browser</h2>
         <p>Start the foreground daemon, then run <code>wf ui</code> in your terminal. Paste its one-use code here. Keep the code private.</p>
@@ -20,6 +20,27 @@
       <p id="message" role="status"></p>
       <div id="workspace" hidden>
         <div class="toolbar"><button id="refresh" type="button">Refresh lists</button><button id="logout" type="button">Disconnect browser</button></div>
+        <section id="dashboard" aria-labelledby="run-heading" hidden>
+          <h2 id="run-heading">Run inspection</h2>
+          <p id="run-state"></p>
+          <p id="run-updated" role="status"></p>
+          <pre id="run-error" role="alert"></pre>
+          <div class="columns">
+            <div><h3>Current stage</h3><p id="run-stage"></p><p id="run-executor"></p><p id="run-elapsed"></p><h3>Current task</h3><pre id="run-task"></pre><p id="run-progress"></p></div>
+            <div>
+              <h3>Execution controls</h3>
+              <p id="run-barrier" class="hint"></p>
+              <div class="actions"><button id="run-refresh" type="button">Refresh run</button><button id="run-start" type="button" disabled>Start</button><button id="run-pause" type="button" disabled>Pause after current</button></div>
+              <label for="run-reason">Reason (required for stop/resume)</label><input id="run-reason" maxlength="4096" />
+              <div class="actions"><button id="run-stop" type="button" disabled>Stop now</button><button id="run-resume" type="button" disabled>Resume</button></div>
+              <p class="hint">Stop now terminates the owned operation and waits for settlement. It does not roll back files. Resume requires paused state; interrupted runs require CLI recovery. Controls use the last inspected event, reject stale state and are never automatically retried.</p>
+            </div>
+          </div>
+          <h3>Latest accepted report</h3><p id="run-latest"></p>
+          <h3>Accepted report details</h3><div id="run-reports"></div>
+          <h3>Attention items</h3><pre id="run-attention"></pre>
+          <h3>Events</h3><p id="run-event-cursor" class="hint"></p><div id="run-events"></div>
+        </section>
         <div class="columns">
           <section>
             <h2>1. Choose a workflow</h2>
@@ -58,7 +79,7 @@
           <fieldset id="visual-fields" disabled></fieldset>
         </section>
         <section aria-labelledby="preview-heading"><h2 id="preview-heading">Task preview</h2><p id="preview-summary">No preview yet.</p><div id="preview"></div></section>
-        <section aria-labelledby="runs-heading"><h2 id="runs-heading">Runs</h2><p class="hint">Saved states, refreshed on request. No execution controls or live dashboard in this shell.</p><div class="table-scroll"><table><thead><tr><th>Run</th><th>State</th><th>Project</th><th>Revision</th><th>Cursor</th><th>Created</th></tr></thead><tbody id="runs"></tbody></table></div><p id="empty-runs">No runs yet.</p></section>
+        <section aria-labelledby="runs-heading"><h2 id="runs-heading">Runs</h2><p class="hint">Refresh lists to discover runs; inspect one for current state, controls and cursor-based event refresh.</p><div class="table-scroll"><table><thead><tr><th>Inspect</th><th>Run</th><th>State</th><th>Project</th><th>Revision</th><th>Cursor</th><th>Created</th></tr></thead><tbody id="runs"></tbody></table></div><p id="empty-runs">No runs yet.</p></section>
       </div>
     </main>
   </body>

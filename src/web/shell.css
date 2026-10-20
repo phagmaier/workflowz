@@ -218,6 +218,25 @@ summary {
 #draft-diagnostics {
   color: light-dark(#8d1b22, #ffb1b1);
 }
+#run-events,
+#run-reports,
+#run-attention {
+  max-height: 26rem;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+#run-events pre {
+  border-top: 1px solid var(--border);
+  padding: 12px 0;
+  font-size: 0.85rem;
+}
+#dashboard p,
+#run-heading {
+  overflow-wrap: anywhere;
+}
+#run-error {
+  color: light-dark(#8d1b22, #ffb1b1);
+}
 table.effective {
   min-width: 520px;
 }

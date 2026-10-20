@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6, Phases 7.1–7.5 and browser preparation/editor Phases 8.1–8.2 are complete. This is not a complete MVP: execution dashboard/controls, paused editing and remaining browser acceptance stay on the [`todo.md`](todo.md) roadmap. See the [implementation evidence](docs/implementation-log.md).
+**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6, Phases 7.1–7.5 and browser preparation/editor/dashboard Phases 8.1–8.3 are complete. This is not a complete MVP: paused editing and remaining browser acceptance stay on the [`todo.md`](todo.md) roadmap. See the [implementation evidence](docs/implementation-log.md).
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -193,7 +193,7 @@ Recovery files use the exact inspected `expectedEventId`, `attemptId` (null betw
 
 Management `--json` writes one result to stdout or one `{error,...}` object to stderr. Success exits 0; validation/control/transport rejection exits 1; malformed CLI fields/options or unreadable input files exit 2. Human validation retains `file:line:column` diagnostics. `wf --help` lists commands. Use `wf report ...` with its existing report options, without management flags; its acknowledgment/exit behavior is unchanged. Management never accepts the attempt token.
 
-### Browser workflow preparation and editor (Phases 8.1–8.2)
+### Browser preparation, editor and run dashboard (Phases 8.1–8.3)
 
 ```bash
 npm run build
@@ -210,9 +210,11 @@ The stage list supports all five canonical kinds. Add stable IDs, select stages,
 
 **Draft rules:** YAML text is authoritative. Apply a visual field group before leaving it; unapplied form fields are not part of the draft. Text input immediately freezes visual controls and save/create until **Validate YAML draft** completes for that exact text. Parse/schema errors retain the text and require YAML correction; shape-valid compile/path errors also permit visual correction. Diagnostics include code, model path and line/column where available. Invalid drafts cannot save/create. Delayed responses cannot overwrite newer text. Visual or project-selection edits serialize the canonical model and may normalize formatting, comments and schema defaults; validation/text-only saving preserves exact untouched text. Source files and historical revisions/runs are never rewritten.
 
-Lists refresh explicitly. If an operation times out, inspect lists before repeating save/create: a response loss does not prove that nothing committed. Missing paths and invalid workflows display diagnostics. If the daemon is unavailable, start it explicitly and request a fresh pairing code; nothing auto-starts. Tab close/reload/disconnect does not stop the daemon.
+Lists refresh explicitly. **Inspect** a run (newly created runs open automatically) for current task/stage, effective harness/model/reasoning, elapsed wall time including pauses, accepted report payloads and attention items with attempt IDs. Known imported queues show accepted completed tasks / total; empty queues show counts without a percentage. Graph-only runs never show a percentage. The selected run refreshes every two seconds using exclusive event cursors, 100 events per page, with at most the latest 300 fetched events displayed. Reload resets selection and unsaved drafts, not execution.
 
-This is preparation and authoring only: no execution dashboard, start/pause/stop/resume buttons, logs or paused-run edits. Use the existing CLI for execution. The full Phase 8 gate is not complete. Exact Host/Origin checks, a separate HttpOnly SameSite cookie, JSON/custom-header requirements and CSP protect the narrow local API; this is not isolation from same-user programs. No new frontend/runtime dependencies are introduced.
+**Start**, **Pause after current**, **Stop now** and **Resume** control the daemon-owned run. Creating or inspecting never starts it. Pause waits for settlement and preserves the routed cursor; Stop now terminates the owned operation and waits for settlement, without rolling back files. Stop/resume require a reason. Controls use the last inspected event ID and reject stale or settling state. Rejections/transport errors stop refresh and disable execution controls until explicit **Refresh run**; no mutation is automatically retried. A timed-out operation may have committed: inspect lists and status before repeating it. Interrupted runs require the existing CLI recovery inspection/disposition before separate resume; the dashboard cannot bypass process/recovery barriers.
+
+If the daemon is unavailable, start it explicitly and request a fresh pairing code; nothing auto-starts. Tab close/reload/disconnect never stops the daemon. Starting an actual agent workflow invokes its configured provider; Phase 8.3 verification uses disposable fake adapters only. Paused-run revision/manual intervention stays in 8.4, and the later browser suite in 8.5; the full Phase 8 gate and MVP remain incomplete. Exact Host/Origin checks, a separate HttpOnly SameSite cookie, JSON/custom-header requirements and CSP still protect the narrow local API. No recovery/edit/raw-log/filesystem-reading endpoints, dependencies or migrations were added; this is not isolation from same-user programs.
 
 ### Limits and stage retries (Phase 7.4)
 

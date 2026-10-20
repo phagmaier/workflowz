@@ -433,9 +433,9 @@ The same foreground daemon serves dependency-free HTML/CSS and compiled browser 
 
 Every browser route requires the exact `127.0.0.1:PORT` Host (DNS-rebinding protection). Browser POSTs additionally require the exact daemon Origin, JSON and a custom request header, with no CORS. API access requires the separate browser cookie, never management/report bearer authority. Pairing and API bodies use the existing 2 MiB/five-second bounds. Static responses prohibit framing, external resources, inline scripts, caching and referrer propagation via CSP and security headers. Workflow/task strings render as text, never HTML.
 
-The browser API is a separate strict allowlist: session inspection/logout, saved revisions, run list, source loading, configured task preview, save immutable revision and create ready run, extended by 8.2's read-only draft validation/serialization below. It delegates preview/import and creation to the existing management facade and shares its validator. There are no start/resume/control/recovery/log endpoints, arbitrary filesystem browsing/reading, commands or new migrations. Files are uploaded as text with their absolute original directory or selected from saved revisions; the editor can also create a new draft. Project/input selections and stage/policy controls update that draft before saving/creating. Preview writes nothing; create rereads and freezes the actual checklist, never starts execution. Original project files are not rewritten.
+The browser API started as a separate strict preparation allowlist: session inspection/logout, saved revisions, run list, source loading, configured task preview, save immutable revision and create ready run. Phase 8.2 adds read-only draft validation/serialization below; Phase 8.3 adds only the run inspection and basic execution operations described in §8.4. Preview/import and creation delegate to the existing management facade and share its validator. No recovery, paused-run edits, raw-log endpoints, arbitrary filesystem browsing/reading, commands or new migrations are exposed. Files are uploaded as text with their absolute original directory or selected from saved revisions; the editor can also create a new draft. Project/input selections and stage/policy controls update that draft before saving/creating. Preview writes nothing; create rereads and freezes the actual checklist, never starts execution. Original project files are not rewritten.
 
-Stage/transition/policy/YAML editing is implemented in Phase 8.2 below. Dashboard/control/streaming (8.3), paused-run editing (8.4), later browser automation (8.5) and the full Phase 8 gate remain open.
+Stage/transition/policy/YAML editing is implemented in Phase 8.2 below; the dashboard/basic controls in Phase 8.3 follow it. Paused-run editing (8.4), later browser automation (8.5) and the full Phase 8 gate remain open.
 
 ### 8.3 Draft editor integration (Phase 8.2; not execution dashboard)
 
@@ -453,6 +453,30 @@ when selecting another stage or validating text. Stable IDs and start/goto defin
 never display order. The shared check result retains a shape-valid document through semantic
 failure, and application inspection shares one parse/compile/path pass with summary validation.
 No browser-specific policy resolver, database, execution endpoint or migration is added.
+
+### 8.4 Run dashboard and basic execution controls (Phase 8.3)
+
+`web/dashboard.ts` inspects one selected daemon-owned run. The strict browser request allowlist
+adds only `status`, `reports`, exclusive-cursor `events`, `start`, `pause`, `stop` and `resume`.
+Requests delegate directly to the existing management facade; response DTOs stay in the app layer,
+not the pure contract layer. No browser state is execution authority and authorization is unchanged.
+Status retains the consistent management snapshot of effective settings, active task/attempt,
+elapsed time, accepted completion counts (null for graph-only), latest report and attention.
+
+The client refreshes status/reports and one 100-event page every two seconds, advancing only to
+the returned exclusive cursor and retaining at most 300 fetched event rows. More history is
+explicitly marked pending. Run-selection generations reject delayed responses from another run.
+Reports, attention and events render inert text in bounded scrolling regions.
+
+Each deliberate control uses the inspected `expectedEventId`, with nonblank stop/resume reasons.
+The management facade retains stale-event rechecks, single-drive admission, process settlement,
+global process barriers and explicit interrupted-recovery decisions. No automatic mutation retry,
+recovery decision, workflow edit or manual cursor override is added. A control rejection or
+transport/inspection error invalidates the UI cursor and stops refresh until explicit inspection;
+successful controls refresh the resulting state. Stop response loss does not cancel daemon work.
+Browser reload/logout/close/disconnect never signals or pauses the drive. Polling is intentionally
+used instead of adding SSE or a second event transport.
+
 
 ## 9. Testing strategy
 
