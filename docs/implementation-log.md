@@ -1510,3 +1510,128 @@ changed, so no affected browser suite was required. No dependencies/downloads,
 credentials, paid/live providers or global harness/configuration changes.
 Phases **9.4–9.5 and the final MVP gate remain open**.
 
+## Phase 9.4 — task-oriented user guide
+
+Documentation-only acceptance, starting from clean `cb604e4` (Phase 9.3). Read the
+required contribution/product/architecture/roadmap/schema/compatibility/sample
+references in order, then checked operator behavior against `bin/wf`,
+`package.json`, `src/app/`, `src/runner/`, adapters and existing tests. Two
+read-only audits independently checked recovery/control and harness contracts;
+the guide and integration remained single-owner documentation work.
+
+### Documented surface
+
+- Added `docs/user-guide.md` as the task-oriented entry point, with a contents
+  list and eleven sections: boundaries; installation; configuration/state;
+  provider-free quick start; workflow/task authoring/import; foreground daemon
+  and UI pairing; lifecycle/monitoring/reporting; intervention/recovery; harness
+  setup; troubleshooting; shutdown/cleanup/deferred scope.
+- Included a seven-topic operator path: install/configure, start daemon, launch
+  UI, run/monitor workflows, import tasks, troubleshoot adapters, recover
+  interruption. Exact schemas/API contracts stay in the existing references.
+- Added prominent README reading/layout links and current offline 9.1–9.4
+  status, retaining all existing headings and implementation/history sections.
+- Corrected the pre-existing `examples/README.md` paused-browser link fragment:
+  the heading's en dash is removed by Markdown heading slugging. The guide's
+  task-import reference was corrected by the same local anchor check.
+
+The guide explains separate create/start authority, fresh event cursors and no
+blind mutation retry, default unrestricted permissions, explicit process
+settlement, immutable task/revision history, CLI-only recovery and per-task
+settings, exact recovery event/attempt/reason requests, external-cleanup
+attestation consequences and a separate resume after non-ending disposition.
+It does not advertise offline probes as authentication or general live support.
+
+### Exercised verification
+
+Node.js **v26.8.2**, npm **11.19.1**. No installation/provisioning command was run;
+dependencies and compiled tooling were already present.
+
+| Exact command / check | Observed result |
+| --- | --- |
+| `npm run check` | Typecheck/lint/build pass; **819 tests / 90 suites**, zero failures/cancellations/skips/TODOs; existing informational lint suggestions only |
+| `for file in examples/*.yaml; do npm run validate -- "$file" || exit; done` | All six valid, zero warnings: command-only 3 steps, human-checkpoint 2, implement-review-commit 7, minimal-single-step 2, overnight 8, task-loop 4; overnight hash prefix still `8a4912284968` |
+| In-memory standard-library Python Markdown check through `functions.eval` | All **12** repository Markdown files checked outside fenced code; **127** relative links resolve, zero missing paths or heading/explicit-anchor targets after the two fragment corrections; no dependencies/downloads |
+| `git diff --check` | Exit 0, no whitespace errors |
+
+The Markdown check resolves paths relative to each referring document, skips
+external schemes, and compares fragments with explicit HTML IDs and
+lowercase/punctuation-stripped/deduplicated heading slugs. External URLs were
+not fetched; no remote-link availability claim is made.
+
+### Provider-free quick-start proof and cleanup
+
+An in-memory Python subprocess driver started the actual foreground CLI owner
+with only `PATH` and `WF_STATE_DIR` inherited. Dedicated state:
+`/tmp/opencode/wf-quickstart-65mh4904` (0700); discovery was 0600 and never printed.
+The driver owned and awaited every CLI process; no throwaway script file was
+created. Exact command sequence below; `RUN_ID`, `STOP_ID` and event values were
+returned by this smoke, not guessed:
+
+```bash
+export WF_STATE_DIR=/tmp/opencode/wf-quickstart-65mh4904
+bin/wf daemon start                 # separate owned foreground process
+bin/wf daemon status
+bin/wf workflow validate examples/command-only.yaml
+bin/wf --json run create examples/command-only.yaml
+bin/wf --json run status "$RUN_ID"
+bin/wf run start "$RUN_ID" --expected-event 1
+bin/wf --json run status "$RUN_ID"
+bin/wf --json run events "$RUN_ID" --after 0 --limit 100
+bin/wf --json run tasks "$RUN_ID"
+bin/wf --json run reports "$RUN_ID"
+bin/wf --json run create examples/command-only.yaml
+bin/wf --json run status "$STOP_ID"
+bin/wf run stop "$STOP_ID" --expected-event 16 --reason "Cancel the second ready smoke run without executing it"
+bin/wf --json run status "$STOP_ID"
+bin/wf daemon stop
+```
+
+The first run went ready → explicit running → completed, with **15 events** and
+exactly `node_version/succeeded` and `git_status/succeeded`, both exits 0.
+Tasks/reports were empty, and the first invocation log contained `v26.8.2`.
+Stopping the already-completed fast sample would be invalid; the second ready
+run proved reasoned cancellation without racing its execution or creating an
+attempt. It reached stopped with no execution.
+
+Owner exited **0** after shutdown admission. Each persisted invocation PID and
+process group was absent, the owner PID was gone, the former loopback listener
+refused connection, and `daemon.json` was absent. A `node --input-type=module -e`
+read-only `node:sqlite` inspection preserved completed/stopped runs, exactly the
+two successful command attempts and zero reports. Only after this proof was the
+owned root removed; its absence was asserted. The user's default state was never
+used. No agent sample, provider or mutating sample was executed.
+
+### Contradictions and remaining limits
+
+- `spec.md` §2.1 describes manual paused task re-import, but no such management
+  command exists; schema decision 30 and architecture §3.2 correctly state
+  re-import is unimplemented. The guide documents creating a new run for a new
+  snapshot, not silently refreshing an existing run.
+- `spec.md` §2.2's broad create/duplicate/delete/export workflow language exceeds
+  current immutable-revision import/list/save/create controls. The guide does
+  not invent mutable named-workflow CRUD.
+- The architecture §1 diagram mentions SSE and §6 proposes a UI log tail;
+  implemented browser/management contracts use polling/paginated events and
+  expose no raw-log endpoint. The guide documents the actual surface.
+- Historical implementation-time statements about pending live harness gates
+  are superseded only by the compatibility note's later scoped results. The guide
+  distinguishes those historical live results from fresh offline conformance.
+  No provider/model/authentication claim was refreshed here.
+- Illustrative design `timeout` and permissive session selectors are not accepted
+  operator contracts: the guide uses `timeout_seconds`, required agent `session`,
+  exact non-creating adapter resume and explicit recovery disposition before
+  management resume.
+
+These are documentation/design-scope mismatches, not a production defect found
+by this pass. `spec.md` and `architecture.md` were intentionally unchanged.
+Phase 9.5 may reconcile outstanding scope/deferred-feature descriptions during
+its separately authorized reliability/dead-weight review; this guide does not
+implement or close them.
+
+No Chromium suite was run: browser-facing behavior did not change, and accepted
+browser evidence remains historical. No harness probe or authentication command
+was needed. **No production code, tests, dependencies, migrations, providers,
+downloads, credentials or global harness/configuration changed.** No commit or
+push was made. **Only 9.4 is newly checked; 9.5 and the final MVP gate remain open.**
+

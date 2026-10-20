@@ -146,7 +146,7 @@ Phase 8 is accepted and committed/pushed, including its permanent offline Chromi
 - [x] 9.3 Verify readable failures, logs, report payload bounds, API validation, local state directory behavior, and startup/shutdown documentation.
 
   Evidence matrix covers every requested boundary; focused discovery/ownership/CLI/payload/acknowledgment and SIGINT/SIGTERM/drain/stale-discovery gaps closed without production changes. `npm run check`: **819 tests / 90 suites**; focused audit **182 tests / 16 suites**; all examples validate; actual read-only command-only daemon smoke and owned cleanup pass. [Matrix, exact commands, limits and cleanup](docs/implementation-log.md#phase-93--operational-and-failure-audit).
-- [ ] 9.4 Document how to install, configure, start the daemon, launch UI, run workflows, import tasks, troubleshoot adapters, and recover interrupted runs.
+- [x] 9.4 Document how to install, configure, start the daemon, launch UI, run workflows, import tasks, troubleshoot adapters, and recover interrupted runs.
 - [ ] 9.5 Remove unused abstractions and known TODOs that undermine reliability. Publish a clear list of deferred features.
 
 **Final MVP gate:** A developer with a spec, `AGENTS.md`, and Markdown tasks can configure a reusable workflow through YAML or UI, leave it running, and reliably inspect or recover state without a supervisor LLM.

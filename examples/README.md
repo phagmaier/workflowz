@@ -20,7 +20,7 @@ The parameterized CLI test discovers every `examples/*.yaml`, including overnigh
 The agent reports `checkpoint`; that outcome pauses at `inspect` and opens attention.
 An operator must inspect the report and repository, then deliberately choose what
 happens next using existing [run controls](../README.md#management-cli-and-local-daemon-phase-73)
-or [paused browser intervention](../README.md#browser-preparation-editor-dashboard-and-intervention-phases-81–84):
+or [paused browser intervention](../README.md#browser-preparation-editor-dashboard-and-intervention-phases-8184):
 
 - Accept the inspection externally: explicitly jump to `done` with a reason, then
   explicitly resume. A jump alone leaves the run paused.
