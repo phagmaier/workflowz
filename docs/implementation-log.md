@@ -958,3 +958,122 @@ Limitations are deliberate: polling rather than SSE; at most 300 recently fetche
 rows in the dashboard; CLI recovery only; no raw log viewer, paused-run workflow editor,
 manual intervention controls or permanent browser automation suite. Existing same-user
 authority and external-side-effect/process-escape limitations remain unchanged.
+
+## Phase 8.4 — paused-run revisions and explicit manual intervention
+
+Authorized offline implementation, actual Chromium with disposable fake adapters, and
+commit/push, based on accepted `22378e3`. Only Phase 8.4 is completed here. Phase 8.5,
+the full Phase 8 gate and Phase 9/MVP remain incomplete. No live/paid provider or global
+harness configuration was used or changed.
+
+### Implementation
+
+- The browser's strict allowlist adds read-only `run-edit`, run-bound canonical `draft`
+  validation, and reasoned `revise`/`override`. Existing edit schemas are reused; revision
+  text/reason remain bounded. Run inspection includes exact current YAML/source directory,
+  run/revision/event identity, task summaries, compatible stages and effective declared routes.
+- Browser admission requires paused state, exact inspected event, no active attempt and no
+  global unresolved-process barrier. Mutations then delegate to management/coordinator;
+  no new state owner, cursor write, recovery route, generic RPC or engine action is added.
+  Host/Origin/cookie/header/JSON/body/CSP/inert-text boundaries are unchanged.
+- `WorkflowEditor` is reused in run mode, including canonical model serialization, visual
+  fields, compiler/router diagnostics and exact-text response guards. Run validation omits
+  the consumed checklist, never reimports tasks, and uses the original source directory.
+  Management retains root/task-source restrictions, unfinished task specialization validation,
+  cursor compatibility, frozen inputs/history and revision-scoped session rules.
+- `RunIntervention` pins draft/decision identity separately from dashboard selection.
+  Polling/lifecycle/selection cannot retarget or replace text. Run mode disables reusable
+  save/create/preview; replacing the draft requires explicit discard. Failed mutation
+  submissions disable reuse until fresh explicit inspection. Refresh edit authorization
+  retains text only for the same run/revision; a changed revision requires discard/reopen.
+- Manual jump, declared-outcome skip and selected unfinished-task completion show target
+  and consequences before submission, require reason and confirmation, and retain durable
+  audit events. Skip does not complete tasks or fabricate reports; completion may leave an
+  incompatible cursor requiring a jump. Revision/override never resume automatically.
+  Warnings explicitly distinguish workflow-state changes from repository repair/reset/rollback
+  and call out repeated external side effects. Stop now remains the ending control.
+
+### Offline acceptance
+
+The focused browser integration run passed **17 tests / 1 suite**. Five added behavior cases
+cover consumed-checklist revision and separate new-revision execution, immutable history/
+task progress/frozen settings, atomic invalid YAML/cursor/pending-settings rejection,
+compatible cursor replacement, audited jump/skip/manual completion without fabricated
+execution, stale/ready/active/pausing/interrupted barriers, original-directory retention,
+strict fields/reasons and cross-authority/Origin/header rejection. The initial lint run
+caught one non-null assertion in new coverage; replaced it with an explicit existence guard.
+
+Executed:
+
+```bash
+npm run check
+npm run smoke:recovery
+npm run smoke:reporting
+npm run smoke:boundaries
+npm run validate -- examples/overnight.yaml
+```
+
+Full gate: **800 tests / 88 suites**, zero failures/cancellations/skips; typecheck and
+Biome lint passed. Recovery passed command/correction/between-step/spawn-intent crash
+dispositions without replay, durable reopen and owned cleanup. Reporting passed actual
+acknowledgment before settlement and bounded correction success/failure with reopen.
+Boundary smoke passed synthetic OpenCode/Claude correction/provider-failure, selected
+environment, scrubbed diagnostics/logs and sequential settlement/reopen.
+Canonical example: **valid, 8 steps, zero warnings**, hash prefix `8a4912284968`.
+
+### Actual Chromium and durable evidence
+
+One owned daemon under `/tmp/wf-revision-84-a4v1Wp`, using only `ScriptedAgentAdapter`
+and actual `wf report`; no permanent browser suite was added:
+
+- Started a two-task loop, observed first task complete and second report blocked at **1/2**.
+  Removed the consumed checklist. Edit opened exact revision 1/source directory/current
+  cursor/task; validation succeeded without that file and reusable Save stayed disabled.
+  HTML-like task text stayed inert, with zero injected image nodes.
+- Malformed YAML retained text and located diagnostics and disabled Apply. Blank reason/
+  missing confirmation was rejected locally. Renamed current stage without a replacement:
+  server rejected it without changing run or event 32. Explicit `pick` cursor also failed
+  the active-task compatibility check. Each failure retained the entire draft and disabled
+  resubmission until explicit inspection/authorization.
+- Explicit compatible `repair` cursor applied immutable revision **4**, leaving paused
+  at **1/2**, with both prior reports intact. Run selection to a different ready run left
+  the draft and target unchanged and Apply disabled. Attempting to load a reusable workflow
+  while the run draft was open gave an explicit-discard error without changing text.
+- Reopened revision 4 and delayed a real draft request by 800ms. Newer text entered during
+  that request remained exact and unvalidated after the delayed response; subsequent explicit
+  validation succeeded. Separate Resume used `offline-revised` and retained unsaved draft
+  text through lifecycle change. Stale event 32 and active-run overrides returned 409.
+- Reloaded during the delayed fake child: independent browser API still showed running and
+  selection reset. Closed the tab; the CLI still showed running. Reopening later showed
+  completed **2/2**. Browser lifetime did not own execution.
+- A second blocked run exercised deliberate compatible jump, declared `complete` skip and
+  selected active-task completion. Skip moved to `finish` while progress stayed **0/2**
+  and exactly one real report remained. Manual completion yielded **1/2**, cleared active
+  task and left cursor `finish`, still paused. Durable audit rows preserved exact reasons.
+  A subsequent compatible jump selected `pick` without execution.
+- A separate operator changed that cursor after inspection. The actual old Apply button
+  received stale-control rejection, showed no-auto-retry/fresh-inspection guidance and stayed
+  disabled with its selected target retained. Fresh inspection recovered the dashboard.
+- The same run editor's visual agent model field serialized an unsaved run draft while
+  reusable Save remained disabled. Stop now ended this run; unsaved model text remained
+  and revision Apply was disabled rather than overwritten or rebound.
+- A fixture representing reconciled between-step interruption rejected run-edit/revise/
+  override/resume with 409; edit/intervention buttons were disabled. Recovery remained CLI-only.
+  Offline integration additionally exercises the real report-then-delay pausing boundary.
+- Inspected desktop and 390px mobile screenshots for both revision and manual intervention.
+  Document width equaled the mobile viewport (390px); warnings, target, confirmation and
+  action buttons remained usable. No uncaught page JavaScript errors were observed.
+- Fixture daemon exited **0**. Read-only SQLite reopen verified primary attempt revisions
+  `[1,1,4]`, frozen models `[offline-original,offline-original,offline-revised]`, revised
+  prompt, report outcomes `[complete,blocked,complete]`, preserved stable task IDs complete
+  **2/2**, exactly one `workflow_revised`, and five reasoned manual audit rows. Second run
+  was stopped at **1/2**; interruption fixture stayed interrupted. Four real reports had
+  `ack 0`, no active attempts remained, and every owned child PID was gone.
+- Listener 42661 refused connections and discovery was absent. Closed managed tabs (none
+  remained), removed the throwaway startup script and owned fixture root, and verified
+  absence. The throwaway durable verifier ran in memory, leaving no script.
+
+Limitations: polling/recent-event display remain as before; unsaved drafts reset on reload;
+visual serialization can normalize YAML; per-task parameter editing and recovery remain
+headless/CLI-only; no raw logs, arbitrary filesystem browsing, rollback or isolation.
+Phase 8.5's permanent browser smoke suite, the full Phase 8 gate and MVP remain incomplete.

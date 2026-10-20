@@ -34,12 +34,28 @@
               <label for="run-reason">Reason (required for stop/resume)</label><input id="run-reason" maxlength="4096" />
               <div class="actions"><button id="run-stop" type="button" disabled>Stop now</button><button id="run-resume" type="button" disabled>Resume</button></div>
               <p class="hint">Stop now terminates the owned operation and waits for settlement. It does not roll back files. Resume requires paused state; interrupted runs require CLI recovery. Controls use the last inspected event, reject stale state and are never automatically retried.</p>
+              <div class="actions"><button id="run-edit" type="button" disabled>Edit paused revision</button><button id="run-intervene" type="button" disabled>Inspect manual intervention</button></div>
             </div>
           </div>
           <h3>Latest accepted report</h3><p id="run-latest"></p>
           <h3>Accepted report details</h3><div id="run-reports"></div>
           <h3>Attention items</h3><pre id="run-attention"></pre>
           <h3>Events</h3><p id="run-event-cursor" class="hint"></p><div id="run-events"></div>
+        </section>
+        <section id="intervention" hidden>
+          <h2>Explicit manual intervention</h2>
+          <p id="intervention-target"></p>
+          <p id="intervention-authorization" role="status"></p>
+          <p class="notice">These controls change workflow state. They do not implement, repair, reset or roll back repository files. Repeating a stage can repeat external side effects. Overrides leave the run paused; Resume is separate.</p>
+          <form id="override-form">
+            <label for="override-action">Action</label><select id="override-action"><option value="">Choose an action…</option><option value="jump">Jump to a compatible stage</option><option value="skip">Skip current stage via declared outcome</option><option value="mark-task-complete">Mark an unfinished task complete</option></select>
+            <label for="override-target">Explicit target / outcome</label><select id="override-target"><option value="">Choose a target…</option></select>
+            <pre id="override-consequence"></pre>
+            <label for="override-reason">Audit reason</label><input id="override-reason" maxlength="4096" required />
+            <label class="checkbox"><input id="override-confirm" type="checkbox" required />I reviewed this target and its consequences.</label>
+            <button id="apply-override" type="submit" disabled>Apply manual intervention — keep paused</button>
+          </form>
+          <button id="close-intervention" type="button">Close intervention</button>
         </section>
         <div class="columns">
           <section>
@@ -71,6 +87,16 @@
         </div>
         <section aria-labelledby="editor-heading">
           <h2 id="editor-heading">3. Edit workflow</h2>
+          <div id="revision-edit" hidden>
+            <h3>Editing a paused run revision — not a reusable workflow</h3>
+            <pre id="revision-target"></pre>
+            <p class="notice">Applies an immutable revision to future attempts only; tasks, progress and history are preserved. No task re-import. Repository files are unchanged. Repeating stages can repeat external side effects. The run remains paused; Resume is separate.</p>
+            <p id="revision-authorization" role="status"></p>
+            <label for="revision-cursor">Replacement cursor (explicitly required if current stage is removed or kind changes)</label><input id="revision-cursor" placeholder="Keep current compatible cursor" />
+            <label for="revision-reason">Revision audit reason</label><input id="revision-reason" maxlength="4096" />
+            <label class="checkbox"><input id="revision-confirm" type="checkbox" />I reviewed the revision and replacement cursor.</label>
+            <div class="actions"><button id="apply-revision" type="button" disabled>Apply revision — keep paused</button><button id="reinspect-revision" type="button">Refresh edit authorization — keep draft</button><button id="discard-revision" type="button">Discard run draft / return to workflow preparation</button></div>
+          </div>
           <p class="hint">Apply visual fields before leaving a stage. Text edits take precedence and freeze visual controls until validated. Parse/schema errors require YAML correction; compile/path errors can also be corrected visually. Visual edits normalize YAML formatting/comments; original files and saved history are never overwritten. Reload discards unsaved drafts.</p>
           <label for="yaml">Canonical YAML draft</label><textarea id="yaml" rows="16" spellcheck="false" aria-describedby="draft-status"></textarea>
           <button id="validate-draft" type="button">Validate YAML draft</button>

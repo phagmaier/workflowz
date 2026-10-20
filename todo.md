@@ -12,7 +12,7 @@
 
   The earlier [remaining-harness pass](docs/harness-compatibility.md#remaining-milestone-05-results--stopped-at-omp-authentication) stopped at omp's missing OpenAI credential after Claude/OpenCode reporting passed. The later explicitly authorized [Meta Contributor pass](docs/harness-compatibility.md#authorized-meta-contributor-live-results) passed omp/OpenCode direct reporting and exact-session correction. The separately authorized [Claude Haiku/low correction](docs/harness-compatibility.md#authorized-claude-correction--milestone-05-complete) now passed with exact-session identity, real acknowledgment, sequential settlement, durable reopen and target removal. **All milestone 0.5 acceptance evidence is reviewed.** No successful scenario or failed OpenAI path was repeated.
 
-  Standing choice: Meta Muse Spark 1.3 Contributor/low for OpenCode/omp, using `MUSE_SPARK_API_KEY` in `~/.config/secrets.zsh` through `smoke:meta`. Local loading and live use are verified; do not request the key/source again. Completed live passes do not authorize additional paid execution. Milestone 0.5 and the Phase 6 gate are complete. Subsequent milestones were authorized and committed separately. Current authorization covers offline Phase 8.3 implementation/browser verification and commit/push; 8.4–8.5 and Phase 9 remain outside scope.
+  Standing choice: Meta Muse Spark 1.3 Contributor/low for OpenCode/omp, using `MUSE_SPARK_API_KEY` in `~/.config/secrets.zsh` through `smoke:meta`. Local loading and live use are verified; do not request the key/source again. Completed live passes do not authorize additional paid execution. Milestone 0.5 and the Phase 6 gate are complete. Subsequent milestones were authorized and committed separately. Current authorization covers offline Phase 8.4 implementation/browser verification and commit/push; 8.5 and Phase 9 remain outside scope.
 
 **Gate:** Fresh clone installs, typechecks, tests, and has a short local development README; version probe works or explains missing binaries.
 
@@ -92,7 +92,7 @@
 
 ## Phase 7 — Crash recovery, management CLI, and reliability
 
-Authorized scope: Phase 7 milestones and Phases 8.1–8.2 were separately implemented, accepted and committed/pushed. The current authorization covers offline Phase 8.3, actual-browser verification with disposable fake adapters, and commit/push. No live provider execution is authorized.
+Authorized scope: Phase 7 milestones and Phases 8.1–8.3 were separately implemented, accepted and committed/pushed. The current authorization covers offline Phase 8.4, actual-browser verification with disposable fake adapters, and commit/push. No live provider execution is authorized.
 
 - [x] 7.1 Implement daemon instance lock, process identity tracking (PID+start identity), in-flight attempt reconciliation, and interrupted/uncertain pause semantics.
 
@@ -114,7 +114,7 @@ Authorized scope: Phase 7 milestones and Phases 8.1–8.2 were separately implem
 
 ## Phase 8 — Small browser UI
 
-Current bounded authorization: **8.3 implementation and offline/actual-browser verification**, building on accepted/committed/pushed 8.1–8.2, with commit/push authorization. No paid/live providers, 8.4–8.5 or Phase 9 implementation. Completing 8.3 does not satisfy the full Phase 8 gate or MVP.
+Current bounded authorization: **8.4 implementation and offline/actual-browser verification**, building on accepted/committed/pushed 8.1–8.3 (`22378e3`), with commit/push authorization. No paid/live providers, 8.5 or Phase 9 implementation. Completing 8.4 does not satisfy the full Phase 8 gate or MVP.
 
 - [x] 8.1 Create localhost UI shell with project root, instruction selection, Markdown task preview/import, saved workflows, and run list.
 
@@ -125,10 +125,12 @@ Current bounded authorization: **8.3 implementation and offline/actual-browser v
 - [x] 8.3 Add run dashboard: current task/stage, harness, event stream, progress (when total known), report details, attention queue, pause/stop/resume controls.
 
   Offline acceptance: **795 tests / 88 suites**, typecheck/lint passed; recovery/reporting/boundary smokes and canonical example passed. Actual Chromium controlled a disposable daemon with fake adapters: accepted report before settlement left progress at 0/2; pause retained the routed cursor; resume reached blocked attention at 1/2; stale controls were rejected without retry; tab closure left execution running and it completed at 2/2. Stop-now reaped the fake descendant; exclusive refresh retained ordered unique events. Desktop/mobile surfaces, reload, daemon-unavailable handling and durable SQLite reopen passed. Fixture owner exited 0; listener/discovery, managed tabs and owned root were removed. [Design, evidence and limits](docs/implementation-log.md#phase-83--run-dashboard-and-explicit-execution-controls). No provider/dependency/migration changes; **8.4–8.5, the full Phase 8 gate and MVP remain incomplete**.
-- [ ] 8.4 Add paused-run workflow revision editor and explicit manual override actions with warnings that repository files are unchanged.
+- [x] 8.4 Add paused-run workflow revision editor and explicit manual override actions with warnings that repository files are unchanged.
+
+  Offline acceptance: **800 tests / 88 suites**, typecheck/lint passed; recovery/reporting/boundary smokes and canonical example passed. Actual Chromium revised a blocked paused run with its consumed checklist removed, rejected invalid YAML/incompatible cursors without partial mutation, explicitly resumed into the new revision and retained history/task progress. Jump, declared skip and manual task completion produced durable reasoned audits without reports/automatic completion/resume. Delayed validation, selection/lifecycle changes and stale controls preserved drafts; interrupted recovery stayed blocked. Desktop/mobile, reload/closure independence, durable SQLite reopen and owned fixture cleanup passed. [Design, evidence and limits](docs/implementation-log.md#phase-84--paused-run-revisions-and-explicit-manual-intervention). Phase 8.5, the full Phase 8 gate and MVP remain incomplete.
 - [ ] 8.5 Add a few browser smoke tests using fake harness; verify closing/reloading browser never stops run.
 
-**Gate:** A user can configure and run a simple two-stage fake workflow without editing YAML directly, see an error/blocked queue, fix/revise, and resume.
+**Gate (incomplete):** A user can configure and run a simple two-stage fake workflow without editing YAML directly, see an error/blocked queue, fix/revise, and resume. Phase 8.5 and the full Phase 8 gate remain incomplete.
 
 ## Phase 9 — Finish MVP
 

@@ -71,8 +71,29 @@ engine-owned completion; an accepted agent report does not advance it before set
 a new event stream transport. Basic controls retain inspected-event, settlement and recovery
 barriers, including nonblank stop/resume reasons and no automatic mutation retries. Browser
 close/reload/logout never stops execution. Interrupted recovery stays in the existing CLI;
-paused-run browser revision/manual intervention (8.4), the later browser suite (8.5), the full
-Phase 8 gate and MVP remain incomplete.
+paused-run browser revision/manual intervention is implemented in 8.4 below. The later browser
+suite (8.5), full Phase 8 gate and MVP remain incomplete.
+
+**Phase 8.4 browser path:** a paused run's exact current revision/source directory opens in
+the existing canonical YAML/visual editor, distinct from reusable workflow preparation.
+Reasoned management `revise` creates/selects an immutable revision, preserving imported
+tasks/progress and all historical attempts/reports/frozen settings. The consumed checklist
+need not exist; unfinished task settings and existing session/revision restrictions still
+apply. Removed/kind-changed or task-incompatible cursors require an explicit compatible
+replacement. Apply leaves the run paused; resume is separate.
+
+Explicit manual intervention exposes compatible-stage jump, declared-outcome skip and
+selected unfinished-task completion, with target/consequences, nonblank reason and deliberate
+confirmation. It never fabricates a report, completes a task merely by skipping a stage,
+or resumes automatically. These controls do not implement, repair, reset or roll back files;
+repeating a stage can repeat external side effects. Stop now remains available.
+
+Run drafts/decisions pin their inspected run/revision/event. Polling, selection changes,
+delayed responses and lifecycle changes cannot overwrite/rebind drafts. Stale/failed/ambiguous
+mutations require fresh explicit inspection, not automatic retries. Revision authorization
+can refresh without replacing text only for the same run/revision; changed revisions require
+explicit discard/reopen. Ready/active/settling/interrupted runs cannot use these paused controls.
+Interrupted recovery stays in the CLI. No new engine action or state owner is added.
 
 
 ### 2.4 Supported agent harnesses
@@ -304,7 +325,7 @@ No global retry-budget field, provider call, automatic recovery replay or workfl
 
 The browser UI is a client; closing the tab does not terminate the runner. UI is served locally, with no required cloud account. Prefer localhost binding and no open remote administrative interface by default.
 
-**Implemented preparation/editor (Phases 8.1–8.2):** `wf ui` pairs a separate browser session with the explicit foreground daemon. Upload a workflow with its original absolute directory, select a saved revision, or create a new draft. Project/instruction/checklist selections, all five stage kinds, direct outcome actions, defaults and all/tag/explicit-step policies share the canonical YAML model. Stable IDs and start/goto define execution; reordering only changes display. Compiler/router output displays effective normal/system transitions, precedence and provenance, including catch-all/built-in fallback. YAML input invalidates prior visual state immediately; explicit validation retains invalid text and supplies parse/schema/compile/path diagnostics with available locations. Parse/schema failures disable visual mutations; shape-valid semantic/path failures remain visually correctable. Save/create require a currently valid draft and revalidate on the daemon. Visual/input edits may normalize comments/formatting/defaults, never rewrite original files. Saving creates/reuses an immutable revision; task preview creates nothing, and creation rereads/freezes actual tasks into a ready run without execution. Old revisions and runs remain unchanged. Browser reload discards unsaved inputs, not daemon state. No dashboard/execution controls or paused-run edits; the full Phase 8 gate stays open. See architecture §§8.2–8.3 for authorization and draft integration.
+**Implemented preparation/editor (Phases 8.1–8.2):** `wf ui` pairs a separate browser session with the explicit foreground daemon. Upload a workflow with its original absolute directory, select a saved revision, or create a new draft. Project/instruction/checklist selections, all five stage kinds, direct outcome actions, defaults and all/tag/explicit-step policies share the canonical YAML model. Stable IDs and start/goto define execution; reordering only changes display. Compiler/router output displays effective normal/system transitions, precedence and provenance, including catch-all/built-in fallback. YAML input invalidates prior visual state immediately; explicit validation retains invalid text and supplies parse/schema/compile/path diagnostics with available locations. Parse/schema failures disable visual mutations; shape-valid semantic/path failures remain visually correctable. Save/create require a currently valid draft and revalidate on the daemon. Visual/input edits may normalize comments/formatting/defaults, never rewrite original files. Saving creates/reuses an immutable revision; task preview creates nothing, and creation rereads/freezes actual tasks into a ready run without execution. Old revisions and runs remain unchanged. Browser reload discards unsaved inputs, not daemon state. Dashboard controls and paused-run editing are implemented separately in 8.3–8.4; the full Phase 8 gate stays open. See architecture §8 for authorization, drafts and run intervention.
 
 ## 8. MVP scope and non-goals
 

@@ -433,9 +433,9 @@ The same foreground daemon serves dependency-free HTML/CSS and compiled browser 
 
 Every browser route requires the exact `127.0.0.1:PORT` Host (DNS-rebinding protection). Browser POSTs additionally require the exact daemon Origin, JSON and a custom request header, with no CORS. API access requires the separate browser cookie, never management/report bearer authority. Pairing and API bodies use the existing 2 MiB/five-second bounds. Static responses prohibit framing, external resources, inline scripts, caching and referrer propagation via CSP and security headers. Workflow/task strings render as text, never HTML.
 
-The browser API started as a separate strict preparation allowlist: session inspection/logout, saved revisions, run list, source loading, configured task preview, save immutable revision and create ready run. Phase 8.2 adds read-only draft validation/serialization below; Phase 8.3 adds only the run inspection and basic execution operations described in §8.4. Preview/import and creation delegate to the existing management facade and share its validator. No recovery, paused-run edits, raw-log endpoints, arbitrary filesystem browsing/reading, commands or new migrations are exposed. Files are uploaded as text with their absolute original directory or selected from saved revisions; the editor can also create a new draft. Project/input selections and stage/policy controls update that draft before saving/creating. Preview writes nothing; create rereads and freezes the actual checklist, never starts execution. Original project files are not rewritten.
+The browser API started as a separate strict preparation allowlist: session inspection/logout, saved revisions, run list, source loading, configured task preview, save immutable revision and create ready run. Phase 8.2 adds read-only draft validation/serialization below; Phase 8.3 adds run inspection/basic execution, and Phase 8.4 adds narrow paused revision/intervention operations. Preview/import and creation delegate to the existing management facade and share its validator. No recovery, raw-log endpoints, arbitrary filesystem browsing/reading, generic management forwarding or new migrations are exposed. Files are uploaded as text with their absolute original directory or selected from saved revisions; the editor can also create a new draft. Project/input selections and stage/policy controls update that draft before saving/creating. Preview writes nothing; create rereads and freezes the actual checklist, never starts execution. Original project files are not rewritten.
 
-Stage/transition/policy/YAML editing is implemented in Phase 8.2 below; the dashboard/basic controls in Phase 8.3 follow it. Paused-run editing (8.4), later browser automation (8.5) and the full Phase 8 gate remain open.
+Stage/transition/policy/YAML editing is implemented in Phase 8.2 below; dashboard/basic controls in Phase 8.3 and paused-run editing in Phase 8.4 follow it. Later browser automation (8.5), the full Phase 8 gate and MVP remain incomplete.
 
 ### 8.3 Draft editor integration (Phase 8.2; not execution dashboard)
 
@@ -470,12 +470,45 @@ Reports, attention and events render inert text in bounded scrolling regions.
 
 Each deliberate control uses the inspected `expectedEventId`, with nonblank stop/resume reasons.
 The management facade retains stale-event rechecks, single-drive admission, process settlement,
-global process barriers and explicit interrupted-recovery decisions. No automatic mutation retry,
-recovery decision, workflow edit or manual cursor override is added. A control rejection or
+global process barriers and explicit interrupted-recovery decisions. No automatic mutation retry
+or recovery decision is added; Phase 8.4 extends the browser allowlist below. A control rejection or
 transport/inspection error invalidates the UI cursor and stops refresh until explicit inspection;
 successful controls refresh the resulting state. Stop response loss does not cancel daemon work.
 Browser reload/logout/close/disconnect never signals or pauses the drive. Polling is intentionally
 used instead of adding SSE or a second event transport.
+
+### 8.5 Paused-run revisions and manual intervention (Phase 8.4)
+
+`run-edit` requires a paused run and inspected `expectedEventId`, with no active attempt
+or global unresolved-process barrier. Its read-only DTO carries exact immutable YAML/source
+directory, run/revision/event/cursor/task identity, task summaries and effective declared
+outcomes/routes. Existing `revisionCursor` checks determine compatible jump choices.
+The existing `draft` operation optionally carries strict run/event context; run drafts
+retain the original source directory and use canonical validation with `taskSourceConsumed`.
+No checklist is read/reimported. No second validator or task-settings editor is introduced.
+
+Browser `revise` and `override` reuse the existing strict management edit schemas (with
+bounded revision text/reason) and delegate mutations to management after paused admission.
+Management/coordinator serialization, event checks, settlement/process barriers and
+transactional audit/state writes remain authoritative. Existing revision validation retains
+root/task-source identity, pending task settings, compatible cursor and revision/session
+scope. No engine, persistence or recovery semantics change.
+
+`web/intervention.ts` binds a run revision draft to its inspected identity, reusing
+`WorkflowEditor` in run mode; reusable save/create/preview are disabled. Polling/selection
+never replace its text or target. Generation/exact-source checks reject delayed validation.
+Mutation attempts invalidate that decision's submission authority; failures/ambiguity require
+explicit fresh run inspection. Refreshing edit authorization retains text only for the same
+run/revision, never silently rebases it. Changed revisions require explicit discard/reopen.
+Reload discards unsaved drafts as before, without affecting execution.
+
+Manual jump/skip/unfinished-task completion pins a separate decision and shows exact target
+and consequences. Both revision/override paths require nonblank audit reasons and deliberate
+confirmation. They leave the run paused, never fabricate reports or perform repository
+repairs/rollback. Skipping even a task primitive does not complete/activate tasks; a skip retry
+pauses through existing engine-only routing. Manual completion may clear the active task but
+does not repair cursor compatibility. Repeat-stage side effects are explicitly warned about.
+Stop now remains the ending control; interrupted-run recovery remains CLI-only.
 
 
 ## 9. Testing strategy

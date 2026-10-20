@@ -1,7 +1,8 @@
-/** Browser authority permits preparation, inspection and explicit basic execution controls only. */
+/** Browser authority permits preparation, inspection and explicit paused-run controls only. */
 import path from "node:path";
 import { z } from "zod";
-import { workflowInputSchema } from "./management.js";
+import { overrideSchema, workflowInputSchema } from "./management.js";
+import { workflowRevisionSchema } from "./run-configuration.js";
 
 const run = { runId: z.string().min(1).max(512) };
 const control = { ...run, expectedEventId: z.number().int().positive() };
@@ -35,6 +36,16 @@ export const browserRequestSchema = z.discriminatedUnion("op", [
   z.strictObject({ op: z.literal("pause"), ...control }),
   z.strictObject({ op: z.literal("stop"), ...control, reason }),
   z.strictObject({ op: z.literal("resume"), ...control, reason }),
+  z.strictObject({ op: z.literal("run-edit"), ...control }),
+  z.strictObject({
+    op: z.literal("revise"),
+    ...control,
+    edit: workflowRevisionSchema.extend({
+      workflowText: workflowInputSchema.shape.workflowText,
+      reason,
+    }),
+  }),
+  z.strictObject({ op: z.literal("override"), ...control, edit: overrideSchema }),
   z.strictObject({ op: z.literal("load"), source: browserSourceSchema }),
   z.strictObject({
     op: z.literal("draft"),
@@ -42,6 +53,7 @@ export const browserRequestSchema = z.discriminatedUnion("op", [
     workflowText: z.string().max(1024 * 1024),
     // Serialization is read-only; the ordinary YAML parser remains the sole model validator.
     model: z.record(z.string(), z.unknown()).optional(),
+    run: z.strictObject(control).optional(),
   }),
   z.strictObject({ op: z.literal("preview"), ...selection }),
   z.strictObject({ op: z.literal("save"), ...selection }),

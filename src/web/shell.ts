@@ -6,6 +6,7 @@ import type { TaskImportPreview } from "../contracts/task-import.js";
 import type { RunRow } from "../store/run-store.js";
 import { RunDashboard } from "./dashboard.js";
 import { WorkflowEditor } from "./editor.js";
+import { RunIntervention } from "./intervention.js";
 
 function element<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -67,7 +68,7 @@ async function send<T>(route: string, body: unknown): Promise<T> {
   return result as T;
 }
 const api = <T>(request: BrowserRequest) => send<T>("/ui/api", request);
-const dashboard = new RunDashboard(api);
+const dashboard = new RunDashboard(api, () => intervention.sync());
 async function action(work: () => Promise<void>) {
   if (busy) return;
   busy = true;
@@ -159,9 +160,15 @@ const editor = new WorkflowEditor(
     }
     clearPreview();
   },
-  clearPreview,
+  () => {
+    clearPreview();
+    element<HTMLInputElement>("revision-confirm").checked = false;
+  },
+  () => intervention.sync(),
 );
+const intervention = new RunIntervention(api, dashboard, editor, action);
 async function load(next: BrowserSource) {
+  intervention.guardPreparation();
   let text: string;
   if ("revisionId" in next) {
     const loaded = await api<{ workflowText: string; workflowDir: string }>({
@@ -178,6 +185,7 @@ async function load(next: BrowserSource) {
   await editor.open(text, workflowDir);
 }
 function selection(op: "preview" | "save" | "create"): BrowserRequest {
+  intervention.guardPreparation();
   return {
     op,
     source: editor.requireValid(),

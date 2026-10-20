@@ -20,7 +20,10 @@ export class RunDashboard {
   private timer: number | undefined;
   private reportSnapshot = "";
 
-  constructor(private readonly api: <T>(request: BrowserRequest) => Promise<T>) {
+  constructor(
+    private readonly api: <T>(request: BrowserRequest) => Promise<T>,
+    private readonly changed: () => void,
+  ) {
     node("run-refresh").addEventListener("click", () => {
       void this.refresh();
     });
@@ -56,6 +59,9 @@ export class RunDashboard {
     await this.refresh();
   }
 
+  get inspection(): BrowserRunStatus | null {
+    return this.controlling || this.refreshing ? null : this.status;
+  }
   sync(): void {
     const state = this.status?.run.status;
     for (const [op, allowed] of Object.entries({
@@ -67,6 +73,7 @@ export class RunDashboard {
       node<HTMLButtonElement>(`run-${op}`).disabled =
         !allowed || this.controlling || this.refreshing;
     node<HTMLButtonElement>("run-refresh").disabled = this.controlling || this.refreshing;
+    this.changed();
   }
 
   private render(status: BrowserRunStatus): void {
@@ -204,24 +211,29 @@ export class RunDashboard {
       text("run-error", "Enter a reason before Stop now or Resume.");
       return;
     }
+    await this.submit(
+      op === "stop" || op === "resume"
+        ? { op, runId, expectedEventId, reason }
+        : { op, runId, expectedEventId },
+    );
+  }
+
+  async submit(request: Extract<BrowserRequest, { expectedEventId: number }>): Promise<boolean> {
+    if (!this.status || this.controlling || this.refreshing)
+      throw new Error("Refresh run and inspect before submitting a mutation.");
+    if (request.runId !== this.runId || request.expectedEventId !== this.status.expectedEventId)
+      throw new Error("The selected run or inspected event changed. Inspect the target again.");
     clearTimeout(this.timer);
     this.controlling = true;
     this.sync();
     text("run-error", "");
-    text(
-      "run-updated",
-      op === "stop"
-        ? "Stop requested; awaiting process settlement…"
-        : "Submitting explicit control…",
-    );
+    text("run-updated", "Submitting explicit control; awaiting settlement…");
+    let accepted = false;
     try {
-      await this.api(
-        op === "stop" || op === "resume"
-          ? { op, runId, expectedEventId, reason }
-          : { op, runId, expectedEventId },
-      );
+      await this.api(request);
+      accepted = true;
       this.status = null;
-      text("run-updated", `${op} acknowledged. Refresh to inspect the resulting state.`);
+      text("run-updated", `${request.op} acknowledged. Refresh to inspect the resulting state.`);
     } catch (error) {
       this.status = null;
       text("run-error", error instanceof Error ? error.message : "Control failed");
@@ -235,5 +247,6 @@ export class RunDashboard {
     }
     // Rejections intentionally require explicit inspection, not a renewed control cursor.
     if (!node("run-error").textContent) await this.refresh();
+    return accepted;
   }
 }

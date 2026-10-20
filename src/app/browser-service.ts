@@ -4,11 +4,13 @@ import type { BrowserRequest, BrowserSource } from "../contracts/browser.js";
 import type { Diagnostic } from "../contracts/diagnostics.js";
 import { SYSTEM_OUTCOMES } from "../contracts/identifiers.js";
 import { parseWorkflowText } from "../contracts/parse-workflow.js";
+import type { TaskState } from "../contracts/run-state.js";
 import type { WorkflowDocument } from "../contracts/workflow-schema.js";
 import { checkWorkflowText } from "../engine/check.js";
 import type { ResolvedTransition } from "../engine/model.js";
 import { resolveOutcome } from "../engine/routing.js";
-import { WorkflowInvalidError } from "../engine/run-coordinator.js";
+import { revisionCursor } from "../engine/run-configuration.js";
+import { RunStateError, WorkflowInvalidError } from "../engine/run-coordinator.js";
 import type { ManagementService } from "./management-service.js";
 import { inspectWorkflow, validateWorkflow } from "./workflow-validation.js";
 
@@ -22,6 +24,23 @@ export interface BrowserDraft {
   transitions: Record<string, readonly ResolvedTransition[]>;
   systemOutcomes: readonly string[];
 }
+export interface BrowserRunEdit {
+  runId: string;
+  revisionId: number;
+  expectedEventId: number;
+  workflowText: string;
+  workflowDir: string;
+  cursorStepId: string;
+  activeTaskId: string | null;
+  steps: {
+    stepId: string;
+    kind: string;
+    outcomes: string[];
+    compatible: boolean;
+    transitions: Record<string, string>;
+  }[];
+  tasks: { taskId: string; title: string; state: TaskState }[];
+}
 export class BrowserService {
   constructor(private readonly management: ManagementService) {}
 
@@ -32,14 +51,83 @@ export class BrowserService {
     }
     return source;
   }
+  private paused(runId: string, expectedEventId: number) {
+    const run = this.management.service.coordinator.run(runId);
+    if (this.management.store.latestEventId(runId) !== expectedEventId)
+      throw new RunStateError("stale control request; inspect status and use its expectedEventId");
+    if (run.status !== "paused")
+      throw new RunStateError(`run ${runId} is ${run.status}; browser editing requires paused`);
+    if (this.management.store.activeAttempt(runId))
+      throw new RunStateError(
+        "browser editing requires no active attempt; settle or reconcile it first",
+      );
+    const pending = this.management.store.pendingRecovery();
+    if (pending)
+      throw new RunStateError(`run ${pending.runId} has an unresolved process; reconcile it first`);
+    return run;
+  }
 
   async handle(request: BrowserRequest): Promise<unknown> {
+    if (request.op === "run-edit") {
+      const run = this.paused(request.runId, request.expectedEventId);
+      const coordinator = this.management.service.coordinator;
+      const workflow = coordinator.workflowForCurrentTask(request.runId);
+      const revision = this.management.store.getRevision(run.revisionId);
+      return {
+        runId: run.runId,
+        revisionId: run.revisionId,
+        expectedEventId: request.expectedEventId,
+        workflowText: revision.definitionYaml,
+        workflowDir: revision.sourceDir,
+        cursorStepId: run.cursorStepId,
+        activeTaskId: run.activeTaskId,
+        steps: [...workflow.steps.values()].map((step) => {
+          let compatible = true;
+          try {
+            revisionCursor(workflow, workflow, run.cursorStepId, run.activeTaskId, step.id);
+          } catch {
+            compatible = false;
+          }
+          const declared = new Set(step.outcomes);
+          const transitions: Record<string, string> = Object.create(null);
+          for (const outcome of step.outcomes)
+            transitions[outcome] = JSON.stringify(
+              resolveOutcome(workflow, step.id, outcome, declared).action,
+            );
+          return {
+            stepId: step.id,
+            kind: step.kind,
+            outcomes: [...step.outcomes],
+            compatible,
+            transitions,
+          };
+        }),
+        tasks: coordinator.tasks(request.runId).map(({ taskId, title, state }) => ({
+          taskId,
+          title,
+          state,
+        })),
+      } satisfies BrowserRunEdit;
+    }
+    if (request.op === "revise" || request.op === "override") {
+      this.paused(request.runId, request.expectedEventId);
+      return this.management.handle(request);
+    }
     if (request.op === "draft") {
+      if (request.run) {
+        const run = this.paused(request.run.runId, request.run.expectedEventId);
+        const revision = this.management.store.getRevision(run.revisionId);
+        if (request.workflowDir !== revision.sourceDir)
+          throw new RunStateError("run drafts must retain the revision workflowDir");
+      }
       const workflowText =
         request.model === undefined ? request.workflowText : stringify(request.model);
       if (workflowText.length > 1024 * 1024) throw new Error("Workflow draft exceeds 1 MiB");
       const input = { workflowText, workflowDir: request.workflowDir };
-      const { checked, validation } = inspectWorkflow(input);
+      const { checked, validation } = inspectWorkflow(
+        input,
+        request.run ? { taskSourceConsumed: true } : undefined,
+      );
       const transitions: BrowserDraft["transitions"] = Object.create(null);
       const compiled = checked.compiled;
       if (compiled) {

@@ -52,6 +52,7 @@ export class WorkflowEditor {
   private generation = 0;
   private current = false;
   private selected = "";
+  private run: { runId: string; expectedEventId: number } | undefined;
   private readonly yaml = document.getElementById("yaml") as HTMLTextAreaElement;
   private readonly fields = document.getElementById("visual-fields") as HTMLFieldSetElement;
   constructor(
@@ -59,6 +60,7 @@ export class WorkflowEditor {
     private readonly action: (work: () => Promise<void>) => Promise<void>,
     private readonly changed: (draft: BrowserDraft) => void,
     private readonly dirty: () => void,
+    private readonly synchronized: () => void,
   ) {
     this.yaml.addEventListener("input", () => {
       this.generation++;
@@ -82,10 +84,14 @@ export class WorkflowEditor {
     this.fields.disabled = !this.current || !this.draft?.document;
     for (const id of ["save", "create", "preview-tasks"]) {
       const control = document.getElementById(id) as HTMLButtonElement;
-      control.disabled = !this.current || !this.draft?.valid;
+      control.disabled = !this.valid || !!this.run;
     }
     (document.getElementById("input-fields") as HTMLFieldSetElement).disabled =
       this.fields.disabled;
+    this.synchronized();
+  }
+  get valid() {
+    return this.current && !!this.draft?.valid;
   }
   get source() {
     if (!this.draft) throw new Error("Load or create a workflow first");
@@ -95,6 +101,12 @@ export class WorkflowEditor {
     if (!this.current || !this.draft?.valid)
       throw new Error("Validate and correct the current draft before saving or creating a run");
     return this.source;
+  }
+  bindRun(run?: { runId: string; expectedEventId: number }) {
+    this.run = run;
+    this.generation++;
+    this.current = false;
+    this.sync();
   }
   async open(workflowText: string, workflowDir: string) {
     this.generation++;
@@ -120,6 +132,7 @@ export class WorkflowEditor {
       op: "draft",
       ...source,
       ...(model ? { model } : {}),
+      ...(this.run ? { run: this.run } : {}),
     });
     if (version !== this.generation || this.yaml.value !== source.workflowText) return;
     this.draft = result;

@@ -8,7 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { AgentAdapter } from "../adapters/agent-adapter.js";
 import { parseWorkflowText } from "../contracts/parse-workflow.js";
 import { ScriptedAgentAdapter } from "../test-support/scripted-agent.js";
-import type { BrowserDraft } from "./browser-service.js";
+import type { BrowserDraft, BrowserRunEdit } from "./browser-service.js";
 import { startDaemon } from "./daemon.js";
 import { managementRequest } from "./management-client.js";
 import type { BrowserEvents, BrowserRunStatus } from "./management-service.js";
@@ -78,6 +78,52 @@ async function fixture(t: TestContext, agents?: Map<string, AgentAdapter>) {
     includeCompleted: false,
   };
   return { root, owner, access, url, post, code, pair, selection, directory };
+}
+
+const TASK_EDIT_FLOW = FLOW.replace("{goto: finish}", "{goto: work}").replace(
+  "  finish:",
+  "  work:\n    kind: agent\n    harness: codex\n    model: offline-model\n    session: fresh\n    prompt: Work {{task.text}}\n    outcomes: [complete, blocked]\n    on:\n      complete: {goto: finish}\n      blocked: {pause: true}\n  finish:",
+);
+
+async function editableTaskRun(
+  t: TestContext,
+  scripts: ConstructorParameters<typeof ScriptedAgentAdapter>[0] = [
+    { mode: "report", outcome: "blocked" },
+  ],
+) {
+  const adapter = new ScriptedAgentAdapter(scripts);
+  const f = await fixture(t, new Map([["codex", adapter]]));
+  await f.pair();
+  const created = await f.post("/ui/api", {
+    op: "create",
+    ...f.selection,
+    source: { workflowText: TASK_EDIT_FLOW, workflowDir: f.root },
+  });
+  assert.equal(created.status, 200);
+  const { runId } = (await created.json()) as { runId: string };
+  const status = async () => {
+    const response = await f.post("/ui/api", { op: "status", runId });
+    assert.equal(response.status, 200);
+    return (await response.json()) as BrowserRunStatus;
+  };
+  const until = async (accept: (state: BrowserRunStatus) => boolean) => {
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      const state = await status();
+      if (accept(state)) return state;
+      await delay(10);
+    }
+    throw new Error("browser editing fixture did not reach expected boundary");
+  };
+  const start = async () => {
+    const ready = await status();
+    assert.equal(
+      (await f.post("/ui/api", { op: "start", runId, expectedEventId: ready.expectedEventId }))
+        .status,
+      200,
+    );
+  };
+  return { ...f, runId, status, until, start };
 }
 
 describe("localhost browser shell boundary", () => {
@@ -648,5 +694,494 @@ steps:
       409,
     );
     assert.equal((await get()).run.status, "interrupted");
+  });
+  it("revises a blocked task loop without reimporting consumed tasks or rewriting history", async (t) => {
+    const f = await editableTaskRun(t, [
+      { mode: "report", outcome: "complete" },
+      { mode: "report", outcome: "blocked" },
+      { mode: "report", outcome: "complete" },
+    ]);
+    const c = f.owner.management.service.coordinator;
+    const originalTasks = c.tasks(f.runId);
+    const pendingTask = originalTasks[1];
+    assert.ok(pendingTask);
+    const settings = { steps: { work: { model: "task-local-model" } } };
+    c.setTaskOverrides(f.runId, pendingTask.taskId, {
+      overrides: settings,
+      reason: "Freeze pending task settings",
+    });
+    await f.start();
+    const paused = await f.until((state) => state.run.status === "paused");
+    assert.deepEqual(paused.progress, { completed: 1, total: 2 });
+    rmSync(path.join(f.root, "tasks.md"));
+    const before = c.inspect(f.runId);
+    const oldRevision = f.owner.management.store.getRevision(before.run.revisionId);
+    const inputs = before.attempts.map((attempt) => c.attemptInput(attempt.attemptId));
+    const reports = before.attempts.map((attempt) => c.reportFor(attempt.attemptId));
+    const inspection = await f.post("/ui/api", {
+      op: "run-edit",
+      runId: f.runId,
+      expectedEventId: paused.expectedEventId,
+    });
+    assert.equal(inspection.status, 200);
+    const edit = (await inspection.json()) as BrowserRunEdit;
+    assert.equal(edit.workflowText, TASK_EDIT_FLOW);
+    assert.equal(edit.workflowDir, f.root);
+    assert.equal(edit.expectedEventId, paused.expectedEventId);
+    assert.equal(edit.cursorStepId, "work");
+    assert.equal(edit.activeTaskId, pendingTask.taskId);
+    assert.equal(edit.steps.find((step) => step.stepId === "pick")?.compatible, false);
+    assert.equal(edit.steps.find((step) => step.stepId === "work")?.compatible, true);
+    assert.deepEqual(edit.steps.find((step) => step.stepId === "work")?.outcomes, [
+      "complete",
+      "blocked",
+    ]);
+    assert.deepEqual(
+      JSON.parse(edit.steps.find((step) => step.stepId === "work")?.transitions.complete ?? "null"),
+      { kind: "goto", target: "finish" },
+    );
+    const workflowText = edit.workflowText.replace("Work {{task.text}}", "Revised {{task.text}}");
+    const draft = await f.post("/ui/api", {
+      op: "draft",
+      workflowText,
+      workflowDir: edit.workflowDir,
+      run: { runId: f.runId, expectedEventId: edit.expectedEventId },
+    });
+    assert.equal(draft.status, 200);
+    assert.equal(((await draft.json()) as BrowserDraft).valid, true);
+    assert.deepEqual(c.inspect(f.runId), before, "inspection and validation are read-only");
+    const revised = await f.post("/ui/api", {
+      op: "revise",
+      runId: f.runId,
+      expectedEventId: edit.expectedEventId,
+      edit: { workflowText, reason: "Repair the blocked task prompt" },
+    });
+    assert.equal(revised.status, 200);
+    const after = c.inspect(f.runId);
+    assert.notEqual(after.run.revisionId, before.run.revisionId);
+    assert.equal(after.run.status, "paused");
+    assert.equal(after.run.cursorStepId, before.run.cursorStepId);
+    assert.equal(after.run.activeTaskId, before.run.activeTaskId);
+    assert.deepEqual(after.tasks, before.tasks);
+    assert.deepEqual(after.attempts, before.attempts);
+    assert.deepEqual(after.transitions, before.transitions);
+    assert.deepEqual(
+      after.attempts.map((attempt) => c.attemptInput(attempt.attemptId)),
+      inputs,
+    );
+    assert.deepEqual(
+      after.attempts.map((attempt) => c.reportFor(attempt.attemptId)),
+      reports,
+    );
+    assert.deepEqual(f.owner.management.store.getRevision(oldRevision.revisionId), oldRevision);
+    assert.deepEqual(c.taskOverrides(f.runId, pendingTask.taskId), settings);
+    assert.deepEqual((await f.status()).progress, paused.progress);
+    const revisionEventsResponse = await f.post("/ui/api", {
+      op: "events",
+      runId: f.runId,
+      after: paused.expectedEventId,
+      limit: 100,
+    });
+    const revisionEvents = ((await revisionEventsResponse.json()) as BrowserEvents).events;
+    assert.deepEqual(
+      revisionEvents
+        .filter((event) => event.type === "workflow_revised")
+        .map((event) => event.data),
+      [
+        {
+          previousRevisionId: before.run.revisionId,
+          revisionId: after.run.revisionId,
+          from: "work",
+          to: "work",
+          explicitCursor: false,
+          reason: "Repair the blocked task prompt",
+          sessions: "same_revision_only",
+        },
+      ],
+    );
+    assert.equal(
+      (
+        await f.post("/ui/api", {
+          op: "run-edit",
+          runId: f.runId,
+          expectedEventId: edit.expectedEventId,
+        })
+      ).status,
+      409,
+    );
+    const fresh = await f.status();
+    assert.equal(
+      (
+        await f.post("/ui/api", {
+          op: "resume",
+          runId: f.runId,
+          expectedEventId: fresh.expectedEventId,
+          reason: "Explicitly execute the repaired revision",
+        })
+      ).status,
+      200,
+    );
+    const completed = await f.until((state) => state.run.status === "completed");
+    assert.deepEqual(completed.progress, { completed: 2, total: 2 });
+    const newWork = c
+      .inspect(f.runId)
+      .attempts.filter(
+        (attempt) => attempt.stepId === "work" && attempt.revisionId === after.run.revisionId,
+      );
+    assert.equal(newWork.length, 1);
+    const newAttempt = newWork[0];
+    assert.ok(newAttempt);
+    assert.match(c.attemptInput(newAttempt.attemptId)?.prompt ?? "", /Revised/);
+    assert.deepEqual(c.taskOverrides(f.runId, pendingTask.taskId), settings);
+  });
+
+  it("rejects invalid revisions atomically and requires a compatible explicit replacement cursor", async (t) => {
+    const f = await editableTaskRun(t);
+    await f.start();
+    const paused = await f.until((state) => state.run.status === "paused");
+    const c = f.owner.management.service.coordinator;
+    const activeTaskId = paused.run.activeTaskId;
+    assert.ok(activeTaskId);
+    c.setTaskOverrides(f.runId, activeTaskId, {
+      overrides: { steps: { work: { model: "preserved-model" } } },
+      reason: "Preserve remaining task specialization",
+    });
+    const state = await f.status();
+    const before = c.inspect(f.runId);
+    const revisions = f.owner.management.store.listRevisions();
+    const renamed = TASK_EDIT_FLOW.replaceAll("work", "implement");
+    for (const edit of [
+      { workflowText: "version: [", reason: "Invalid YAML" },
+      { workflowText: renamed, reason: "Removed cursor" },
+      { workflowText: renamed, cursorStepId: "absent", reason: "Missing cursor" },
+      { workflowText: TASK_EDIT_FLOW, cursorStepId: "pick", reason: "Incompatible active task" },
+      { workflowText: renamed, cursorStepId: "implement", reason: "Invalid pending override" },
+    ]) {
+      const response = await f.post("/ui/api", {
+        op: "revise",
+        runId: f.runId,
+        expectedEventId: state.expectedEventId,
+        edit,
+      });
+      assert.ok(response.status >= 400, JSON.stringify(edit));
+      assert.deepEqual(c.inspect(f.runId), before);
+      assert.deepEqual(f.owner.management.store.listRevisions(), revisions);
+      assert.deepEqual(c.taskOverrides(f.runId, activeTaskId), {
+        steps: { work: { model: "preserved-model" } },
+      });
+    }
+    c.setTaskOverrides(f.runId, activeTaskId, {
+      overrides: { steps: {} },
+      reason: "Remove incompatible task-local setting",
+    });
+    const fresh = await f.status();
+    assert.equal(
+      (
+        await f.post("/ui/api", {
+          op: "revise",
+          runId: f.runId,
+          expectedEventId: fresh.expectedEventId,
+          edit: {
+            workflowText: renamed,
+            cursorStepId: "implement",
+            reason: "Choose replacement cursor",
+          },
+        })
+      ).status,
+      200,
+    );
+    const revised = await f.status();
+    assert.equal(revised.run.cursorStepId, "implement");
+    assert.equal(revised.run.status, "paused");
+    assert.deepEqual(revised.progress, paused.progress);
+  });
+
+  it("audits jump, declared skip and unfinished-task completion without fabricating execution", async (t) => {
+    const f = await editableTaskRun(t);
+    await f.start();
+    await f.until((state) => state.run.status === "paused");
+    const c = f.owner.management.service.coordinator;
+    const before = c.inspect(f.runId);
+    const reports = before.attempts.map((attempt) => c.reportFor(attempt.attemptId));
+    const activeTaskId = before.run.activeTaskId;
+    assert.ok(activeTaskId);
+    const override = async (edit: unknown) => {
+      const state = await f.status();
+      return f.post("/ui/api", {
+        op: "override",
+        runId: f.runId,
+        expectedEventId: state.expectedEventId,
+        edit,
+      });
+    };
+    for (const edit of [
+      { action: "jump", stepId: "pick", reason: "Cannot pick with an active task" },
+      { action: "jump", stepId: "absent", reason: "Unknown step" },
+      { action: "skip", outcome: "invented", reason: "Undeclared result" },
+    ]) {
+      assert.ok((await override(edit)).status >= 400);
+      assert.deepEqual(c.inspect(f.runId), before);
+    }
+    assert.equal(
+      (
+        await override({
+          action: "skip",
+          outcome: "complete",
+          reason: "Bypass blocked work explicitly",
+        })
+      ).status,
+      200,
+    );
+    let state = await f.status();
+    assert.equal(state.run.cursorStepId, "finish");
+    assert.equal(state.run.status, "paused");
+    assert.deepEqual(state.progress, { completed: 0, total: 2 });
+    assert.equal(
+      (
+        await override({
+          action: "skip",
+          outcome: "complete",
+          reason: "Skip task primitive without accepting task",
+        })
+      ).status,
+      200,
+    );
+    state = await f.status();
+    assert.equal(state.run.cursorStepId, "pick");
+    assert.deepEqual(state.progress, { completed: 0, total: 2 });
+    assert.equal(state.run.activeTaskId, activeTaskId);
+    assert.equal(
+      (
+        await override({
+          action: "jump",
+          stepId: "work",
+          reason: "Return to active task work",
+        })
+      ).status,
+      200,
+    );
+    assert.equal(
+      (
+        await override({
+          action: "mark-task-complete",
+          taskId: activeTaskId,
+          reason: "Operator accepts unfinished task",
+        })
+      ).status,
+      200,
+    );
+    const completedTask = await f.status();
+    assert.equal(completedTask.run.status, "paused");
+    assert.equal(completedTask.run.activeTaskId, null);
+    assert.deepEqual(completedTask.progress, { completed: 1, total: 2 });
+    const after = c.inspect(f.runId);
+    assert.deepEqual(after.attempts, before.attempts);
+    assert.deepEqual(
+      after.attempts.map((attempt) => c.reportFor(attempt.attemptId)),
+      reports,
+    );
+    const manualTransitions = after.transitions.slice(before.transitions.length);
+    assert.equal(manualTransitions.length, 2);
+    assert.ok(manualTransitions.every((transition) => transition.attemptId === null));
+    const unchanged = c.inspect(f.runId);
+    assert.ok(
+      (
+        await override({
+          action: "mark-task-complete",
+          taskId: activeTaskId,
+          reason: "Cannot accept twice",
+        })
+      ).status >= 400,
+    );
+    assert.deepEqual(c.inspect(f.runId), unchanged);
+    const eventsResponse = await f.post("/ui/api", {
+      op: "events",
+      runId: f.runId,
+      after: 0,
+      limit: 1000,
+    });
+    const events = ((await eventsResponse.json()) as BrowserEvents).events;
+    const manual = events.filter((event) => event.type === "manual_override");
+    assert.deepEqual(
+      manual.map((event) => event.data),
+      [
+        {
+          action: "skip",
+          stepId: "work",
+          outcome: "complete",
+          reason: "Bypass blocked work explicitly",
+        },
+        {
+          action: "skip",
+          stepId: "finish",
+          outcome: "complete",
+          reason: "Skip task primitive without accepting task",
+        },
+        { action: "jump", from: "pick", to: "work", reason: "Return to active task work" },
+        {
+          action: "mark_task_complete",
+          taskId: activeTaskId,
+          reason: "Operator accepts unfinished task",
+        },
+      ],
+    );
+    assert.deepEqual(
+      events.filter((event) => event.type === "task_completed").map((event) => event.data),
+      [{ taskId: activeTaskId, manual: true }],
+    );
+  });
+
+  it("keeps edit admission pinned through active, settling, stale and interrupted states", async (t) => {
+    const f = await editableTaskRun(t, [
+      { mode: "report-then-delay", extra: "700", outcome: "blocked" },
+    ]);
+    const requests = (expectedEventId: number) => [
+      { op: "run-edit", runId: f.runId, expectedEventId },
+      {
+        op: "draft",
+        workflowText: TASK_EDIT_FLOW,
+        workflowDir: f.root,
+        run: { runId: f.runId, expectedEventId },
+      },
+      {
+        op: "revise",
+        runId: f.runId,
+        expectedEventId,
+        edit: { workflowText: TASK_EDIT_FLOW, reason: "Repair paused work" },
+      },
+      {
+        op: "override",
+        runId: f.runId,
+        expectedEventId,
+        edit: { action: "skip", outcome: "complete", reason: "Explicit bypass" },
+      },
+    ];
+    const ready = await f.status();
+    for (const request of requests(ready.expectedEventId))
+      assert.equal((await f.post("/ui/api", request)).status, 409);
+    await f.start();
+    const reporting = await f.until((state) => state.latestReport !== null);
+    assert.equal(reporting.activeAttempt?.status, "running");
+    for (const request of requests(reporting.expectedEventId))
+      assert.equal((await f.post("/ui/api", request)).status, 409);
+    const pause = f.post("/ui/api", {
+      op: "pause",
+      runId: f.runId,
+      expectedEventId: reporting.expectedEventId,
+    });
+    await f.until((state) => state.run.status === "pausing");
+    const settling = await f.status();
+    for (const request of requests(settling.expectedEventId))
+      assert.equal((await f.post("/ui/api", request)).status, 409);
+    assert.equal((await pause).status, 200);
+    const paused = await f.until((state) => state.run.status === "paused");
+    const c = f.owner.management.service.coordinator;
+    const before = c.inspect(f.runId);
+    for (const request of requests(reporting.expectedEventId)) {
+      assert.equal((await f.post("/ui/api", request)).status, 409);
+      assert.deepEqual(c.inspect(f.runId), before);
+    }
+    assert.ok(
+      (
+        await f.post("/ui/api", {
+          op: "draft",
+          workflowText: TASK_EDIT_FLOW,
+          workflowDir: path.dirname(f.root),
+          run: { runId: f.runId, expectedEventId: paused.expectedEventId },
+        })
+      ).status >= 400,
+    );
+    assert.deepEqual(c.inspect(f.runId), before);
+    await delay(20);
+    c.resume(f.runId, "Model committed between-step interruption");
+    f.owner.management.service.reconcile(f.runId);
+    const interrupted = await f.status();
+    assert.equal(interrupted.run.status, "interrupted");
+    const recoveryBefore = c.inspect(f.runId);
+    for (const request of requests(interrupted.expectedEventId)) {
+      assert.equal((await f.post("/ui/api", request)).status, 409);
+      assert.deepEqual(c.inspect(f.runId), recoveryBefore);
+    }
+  });
+
+  it("strictly validates and authenticates every paused editing endpoint", async (t) => {
+    const f = await editableTaskRun(t);
+    await f.start();
+    const paused = await f.until((state) => state.run.status === "paused");
+    const control = { runId: f.runId, expectedEventId: paused.expectedEventId };
+    const valid = [
+      { op: "run-edit", ...control },
+      { op: "draft", workflowText: TASK_EDIT_FLOW, workflowDir: f.root, run: control },
+      { op: "revise", ...control, edit: { workflowText: TASK_EDIT_FLOW, reason: "Repair work" } },
+      {
+        op: "override",
+        ...control,
+        edit: { action: "jump", stepId: "work", reason: "Choose work" },
+      },
+    ];
+    const c = f.owner.management.service.coordinator;
+    const before = c.inspect(f.runId);
+    for (const request of valid) {
+      assert.equal(
+        (
+          await f.post("/ui/api", request, {
+            cookie: "",
+            authorization: `Bearer ${f.access.token}`,
+          })
+        ).status,
+        401,
+      );
+      assert.equal(
+        (await f.post("/ui/api", request, { origin: "http://evil.invalid" })).status,
+        403,
+      );
+      assert.equal((await f.post("/ui/api", request, { "x-workflowz-ui": "" })).status, 403);
+      assert.equal((await f.post("/ui/api", { ...request, extra: true })).status, 422);
+    }
+    for (const request of [
+      { op: "run-edit", ...control, expectedEventId: 0 },
+      { op: "run-edit", runId: f.runId },
+      {
+        op: "draft",
+        workflowText: TASK_EDIT_FLOW,
+        workflowDir: f.root,
+        run: { ...control, extra: true },
+      },
+      { op: "revise", ...control, edit: { workflowText: TASK_EDIT_FLOW, reason: "   " } },
+      {
+        op: "revise",
+        ...control,
+        edit: { workflowText: TASK_EDIT_FLOW, reason: "Repair", extra: true },
+      },
+      {
+        op: "revise",
+        ...control,
+        edit: { workflowText: TASK_EDIT_FLOW, reason: "x".repeat(4097) },
+      },
+      { op: "override", ...control, edit: { action: "jump", stepId: "work", reason: "" } },
+      { op: "override", ...control, edit: { action: "skip", outcome: "complete", reason: " \n " } },
+      {
+        op: "override",
+        ...control,
+        edit: { action: "mark-task-complete", taskId: paused.run.activeTaskId, reason: " " },
+      },
+      {
+        op: "override",
+        ...control,
+        edit: { action: "jump", stepId: "work", reason: "Move", extra: true },
+      },
+      { op: "override", ...control, edit: { action: "resume", reason: "Not an override" } },
+      {
+        op: "task-overrides",
+        ...control,
+        taskId: paused.run.activeTaskId,
+        edit: { overrides: { steps: {} }, reason: "Not browser authority" },
+      },
+      { op: "recovery-decide", ...control },
+    ]) {
+      assert.equal((await f.post("/ui/api", request)).status, 422, JSON.stringify(request));
+      assert.deepEqual(c.inspect(f.runId), before);
+    }
+    assert.equal(f.owner.management.store.listRevisions().length, 1);
   });
 });
