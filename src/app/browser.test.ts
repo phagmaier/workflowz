@@ -548,6 +548,10 @@ steps:
     };
     const ready = await inspect();
     assert.deepEqual(ready.progress, { completed: 0, total: 2 });
+    assert.equal(ready.current?.kind, "task.next");
+    assert.deepEqual(ready.configuredPermissions, [
+      { stepId: "work", harness: "codex", mode: "dangerously-bypass-approvals-and-sandbox" },
+    ]);
     assert.equal(
       (await f.post("/ui/api", { op: "start", runId, expectedEventId: ready.expectedEventId }))
         .status,

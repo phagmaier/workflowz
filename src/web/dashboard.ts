@@ -100,6 +100,18 @@ export class RunDashboard {
           : "Engine stage",
     );
     text(
+      "run-permissions",
+      [
+        "Configured agent permission modes (selected revision; stages depend on routing):",
+        ...status.configuredPermissions.map(
+          ({ stepId, harness, mode }) => `${stepId} · ${harness} · ${mode ?? "mode unavailable"}`,
+        ),
+        ...(status.configuredPermissions.length ? [] : ["No agent stages in this revision."]),
+        "Commands and unrestricted agents can execute tools and modify any files accessible to your user, including outside the project. No isolation or rollback is provided. Harness/provider restrictions may still apply.",
+        "This is configured selection. Invocation events record observed launch evidence; selection does not verify effective host access or provider compatibility.",
+      ].join("\n"),
+    );
+    text(
       "run-elapsed",
       `${Math.floor(status.elapsedMs / 1000)}s since run start (includes pauses)${activeAttempt ? ` · attempt ${activeAttempt.attemptId} · started ${activeAttempt.startedAt}` : ""}`,
     );

@@ -99,12 +99,18 @@ export async function startDaemon(directory: string, agents?: Map<string, AgentA
       }
       if (request.op === "shutdown") {
         management.requestShutdown();
-        res.once("finish", () => {
+        try {
+          reply(res, 202, {
+            accepted: true,
+            message: "pausing after current step before shutdown",
+          });
+        } finally {
+          // Give the acknowledgment a turn to flush, but never make admitted teardown depend
+          // on response delivery: a reset client can prevent the response's finish event.
           setImmediate(() => {
             void close().catch(() => {});
           });
-        });
-        reply(res, 202, { accepted: true, message: "pausing after current step before shutdown" });
+        }
         return;
       }
       reply(res, 200, await management.handle(request));

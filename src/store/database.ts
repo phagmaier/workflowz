@@ -6,7 +6,7 @@
  * `BEGIN IMMEDIATE` takes the write lock at the start, so a read-decide-write sequence cannot
  * interleave with another writer.
  */
-import { closeSync, openSync, realpathSync } from "node:fs";
+import { closeSync, lstatSync, openSync, readlinkSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { LATEST_SCHEMA_VERSION, MIGRATIONS } from "./migrations.js";
@@ -134,12 +134,25 @@ export class WorkflowDatabase {
 }
 
 /** Resolve symlink aliases before deriving the lease name, including a not-yet-created database. */
-function canonicalPath(location: string): string {
+function canonicalPath(location: string, links = 0): string {
   try {
-    return realpathSync(location);
+    return realpathSync.native(location);
   } catch (error) {
     if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
-    return path.join(realpathSync(path.dirname(path.resolve(location))), path.basename(location));
+    const file = path.join(realpathSync.native(path.dirname(location)), path.basename(location));
+    // realpath cannot resolve a dangling leaf. SQLite would follow it when creating the file,
+    // so the lease and main connection must both use that eventual target, never the alias.
+    if (lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink()) {
+      if (links >= 40)
+        throw new Error("too many database symlinks; use a direct state database path");
+      const target = readlinkSync(file);
+      // Keep '..' until the filesystem resolves it: a preceding directory may itself be a link.
+      return canonicalPath(
+        path.isAbsolute(target) ? target : `${path.dirname(file)}/${target}`,
+        links + 1,
+      );
+    }
+    return file;
   }
 }
 

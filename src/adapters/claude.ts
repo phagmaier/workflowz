@@ -14,7 +14,7 @@ import {
 } from "./agent-adapter.js";
 import { ClaudeEvents, isClaudeSessionId } from "./claude-events.js";
 import { childEnvironment } from "./environment.js";
-import type { HarnessCapabilities } from "./harness-registry.js";
+import { type HarnessCapabilities, PERMISSION_MODES } from "./harness-registry.js";
 import {
   CapabilityProbeError,
   type CommandRunner,
@@ -156,7 +156,7 @@ export class ClaudeAdapter implements AgentAdapter {
         "stream-json",
         "--verbose",
         "--permission-mode",
-        "bypassPermissions",
+        PERMISSION_MODES.claude,
         ...(prior === undefined ? [] : ["--resume", prior]),
         ...(input.model === undefined ? [] : ["--model", input.model]),
         ...(input.reasoningEffort === undefined ? [] : ["--effort", input.reasoningEffort]),
@@ -177,7 +177,7 @@ export class ClaudeAdapter implements AgentAdapter {
       sessionId: prior,
       launchInfo: {
         harnessVersion: this.compatibility.version,
-        permissionMode: "bypassPermissions",
+        permissionMode: PERMISSION_MODES.claude,
       },
       terminate: running.terminate,
       completed: running.completed.then((result) => {

@@ -101,6 +101,8 @@ A blank explicit path or blank `WF_STATE_DIR` is an error, not a fallback reques
 The state directory must belong to the current user and be private; use mode
 **0700**. A new directory is created that way. A directory symlink is accepted only
 through its canonical private target; it does not create another owner.
+Database file symlinks, including links to not-yet-created files, share the eventual
+target's writer lease. Create target parent directories before startup.
 
 | Entry | Purpose / handling |
 | --- | --- |
@@ -336,7 +338,12 @@ The port is ephemeral; there is no implemented fixed-port flag.
 4. Save an immutable workflow revision; import/create tasks into a ready run.
    Neither action executes. Unsaved drafts disappear on reload; saved runs do not.
 5. Inspect the run dashboard, review effective harness/model/reasoning and inputs,
-   then deliberately **Start**. Agent starts/resumes can incur charges.
+   and the configured permission modes shown for every agent stage in the selected
+   revision, even before a task/engine cursor reaches an agent. Commands and
+   unrestricted tools can modify any user-accessible files, including outside the
+   project; no isolation or rollback is provided. Selection is configuration;
+   invocation events separately record observed launch evidence.
+   Then deliberately **Start**. Agent starts/resumes can incur charges.
 6. Inspect current task/stage, elapsed time, accepted reports, events and attention.
    Use **Pause after current**, **Stop now**, or reasoned **Resume** as appropriate.
 
@@ -366,7 +373,8 @@ bin/wf --json run events RUN_ID --after 0 --limit 100
 
 Status contains `run` (including `status`, `revisionId`, `cursorStepId`,
 `activeTaskId`, `retryNotBefore`), `expectedEventId`, `activeAttempt`, effective
-`current` kind/harness/model/reasoning, `elapsedMs`, `progress`, `tasks`,
+`current` kind/harness/model/reasoning, `configuredPermissions` (agent step ID,
+harness and selected mode), `elapsedMs`, `progress`, `tasks`,
 `latestReport`, `attention` and `driveFailure`. Active settings are frozen attempt
 settings; paused settings reflect current task parameters. Elapsed wall time
 includes pauses and downtime, not just provider execution.
@@ -764,6 +772,8 @@ is needed, deliberately use reasoned `run stop` while controls are available,
 then shut down the daemon; do not confuse graceful daemon stop with process-tree
 termination. After shutdown admission new mutations are rejected while inspection
 remains available during drain.
+Once admitted, shutdown proceeds even if its client disconnects or resets before
+receiving the acknowledgment. This still waits for the current operation to settle.
 
 Wait for owner exit, verify owned operations/listeners and discovery are gone, and
 preserve state whenever settlement is uncertain. Private saved state is how you

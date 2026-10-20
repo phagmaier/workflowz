@@ -27,6 +27,8 @@ export interface BrowserRunStatus {
     model?: string | null;
     reasoningEffort?: string | null;
   } | null;
+  /** Selected revision's agent stages; configuration, not proof of provider/tool execution. */
+  configuredPermissions: readonly { stepId: string; harness: string; mode: string | null }[];
   elapsedMs: number;
   progress: { completed: number; total: number } | null;
   tasks: readonly TaskRow[];
@@ -236,6 +238,17 @@ export class ManagementService {
             run,
             expectedEventId: this.store.latestEventId(request.runId),
             activeAttempt: activeAttempt ?? null,
+            configuredPermissions: [...workflow.steps].flatMap(([stepId, { spec }]) =>
+              spec.kind === "agent"
+                ? [
+                    {
+                      stepId,
+                      harness: spec.harness,
+                      mode: BUILT_IN_HARNESSES.get(spec.harness)?.permissionMode ?? null,
+                    },
+                  ]
+                : [],
+            ),
             current: step
               ? {
                   kind: step.kind,

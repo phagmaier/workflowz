@@ -114,6 +114,20 @@ test("visual two-stage workflow: ready, blocked attention, revise, explicit resu
   expect(await app.request({ op: "reports", runId: created.runId })).toEqual([]);
   const taskIds = ready.tasks.map((t) => t.taskId);
 
+  await expect(page.locator("#run-permissions")).toBeVisible();
+  await expect(page.locator("#run-permissions")).toContainText("Configured agent permission modes");
+  await expect(page.locator("#run-permissions")).toContainText(
+    "implement · codex · dangerously-bypass-approvals-and-sandbox",
+  );
+  await expect(page.locator("#run-permissions")).toContainText(
+    "review · pi · default-unrestricted-tools",
+  );
+  await expect(page.locator("#run-permissions")).toContainText("any files accessible to your user");
+  await expect(page.locator("#run-permissions")).toContainText("No isolation or rollback");
+  await expect(page.locator("#run-permissions")).toContainText(
+    "Invocation events record observed launch evidence",
+  );
+
   await page.getByRole("button", { name: "Start", exact: true }).click();
   const blocked = await app.until(created.runId, (s) => s.run.status === "paused");
   await expect(page.locator("#run-state")).toContainText("paused");
@@ -150,6 +164,10 @@ test("visual two-stage workflow: ready, blocked attention, revise, explicit resu
   await page
     .getByLabel("Reason (required for stop/resume)")
     .fill("Execute the selected repaired revision");
+  await expect(page.locator("#run-permissions")).toBeVisible();
+  await expect(page.locator("#run-permissions")).toContainText(
+    "dangerously-bypass-approvals-and-sandbox",
+  );
   await page.getByRole("button", { name: "Resume", exact: true }).click();
   const completed = await app.until(created.runId, (s) => s.run.status === "completed");
   await expect(page.locator("#run-state")).toContainText("completed");

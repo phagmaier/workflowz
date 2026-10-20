@@ -14,7 +14,7 @@ import {
 } from "./agent-adapter.js";
 import { CodexEvents, isCodexSessionId } from "./codex-events.js";
 import { childEnvironment } from "./environment.js";
-import type { HarnessCapabilities } from "./harness-registry.js";
+import { type HarnessCapabilities, PERMISSION_MODES } from "./harness-registry.js";
 import {
   CapabilityProbeError,
   type CommandRunner,
@@ -43,7 +43,7 @@ const COMMON_MARKERS = [
   "--json",
   "--config",
   "--skip-git-repo-check",
-  "--dangerously-bypass-approvals-and-sandbox",
+  `--${PERMISSION_MODES.codex}`,
   "stdin",
 ];
 const WF_BIN = fileURLToPath(new URL("../../bin", import.meta.url));
@@ -158,7 +158,7 @@ export class CodexAdapter implements AgentAdapter {
       ...(input.priorSessionId ? ["resume"] : []),
       "--json",
       "--skip-git-repo-check",
-      "--dangerously-bypass-approvals-and-sandbox",
+      `--${PERMISSION_MODES.codex}`,
       "-c",
       "features.shell_snapshot=false",
       // Replace this invocation's tool env policy; no token/key is placed in argv or a config file.
@@ -195,7 +195,7 @@ export class CodexAdapter implements AgentAdapter {
       sessionId: input.priorSessionId,
       launchInfo: {
         harnessVersion: this.compatibility.version,
-        permissionMode: "dangerously-bypass-approvals-and-sandbox",
+        permissionMode: PERMISSION_MODES.codex,
       },
       completed: running.completed.then((result) => {
         events.end();

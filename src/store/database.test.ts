@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -273,6 +273,53 @@ describe("WorkflowDatabase", () => {
       assert.equal(next.prepare("SELECT COUNT(*) AS n FROM runs").get()?.["n"], 2);
     } finally {
       next.close();
+    }
+  });
+
+  for (const relative of [true, false]) {
+    it(`shares ownership through ${relative ? "a relative" : "an absolute"} dangling database symlink`, () => {
+      const file = tempFile("target.sqlite");
+      const alias = path.join(path.dirname(file), "alias.sqlite");
+      symlinkSync(relative ? "target.sqlite" : file, alias);
+      const owner = new WorkflowDatabase(alias);
+      try {
+        seedRun(owner, "live_owner");
+        for (const contender of [alias, file]) {
+          assert.throws(() => {
+            const second = new WorkflowDatabase(contender);
+            second.close();
+          }, InstanceLockError);
+        }
+        assert.equal(owner.prepare("SELECT status FROM runs").get()?.["status"], "running");
+      } finally {
+        owner.close();
+      }
+      const next = new WorkflowDatabase(file);
+      next.close();
+    });
+  }
+
+  it("resolves chained dangling links and directory aliases before creating the database", () => {
+    const lexical = tempFile("state.sqlite");
+    const root = path.dirname(lexical);
+    mkdirSync(path.join(root, "real", "deep"), { recursive: true });
+    symlinkSync("real/deep", path.join(root, "directory"), "dir");
+    symlinkSync("directory/../state.sqlite", path.join(root, "leaf.sqlite"));
+    const alias = path.join(root, "chain.sqlite");
+    symlinkSync("leaf.sqlite", alias);
+    const file = path.join(root, "real", "state.sqlite");
+    const owner = new WorkflowDatabase(alias);
+    try {
+      assert.equal(existsSync(file), true);
+      assert.equal(existsSync(lexical), false, "must follow directory links before resolving '..'");
+      for (const contender of [alias, file, `${root}/directory/../state.sqlite`]) {
+        assert.throws(() => {
+          const second = new WorkflowDatabase(contender);
+          second.close();
+        }, InstanceLockError);
+      }
+    } finally {
+      owner.close();
     }
   });
 

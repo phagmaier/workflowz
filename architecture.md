@@ -367,7 +367,7 @@ An optional later enhancement can provide automated recovery for proven side-eff
 
 ### 7.5 Phase 7.1 ownership, identity and reconciliation
 
-- **Writer lease.** `WorkflowDatabase` acquires an exclusive SQLite transaction on a separate `<canonical-database-path>.runner-lock` file before opening/migrating the main database. The kernel releases it on close or crash; no heartbeat, PID-file reclamation or stale-lock deletion is needed. Symlinks resolve first. Never unlink an owned lease file: replacing its inode can admit two owners. Use one stable database path on a local filesystem; hard-link aliases and unreliable network locks are unsupported. `:memory:` fixtures have connection-local ownership only.
+- **Writer lease.** `WorkflowDatabase` resolves the database's eventual creation target, including dangling file links and directory aliases, before acquiring an exclusive SQLite transaction on a separate `<canonical-database-path>.runner-lock` file. The main connection opens that same resolved path; ownership precedes migration, reconciliation and discovery publication. The kernel releases it on close or crash; no heartbeat, PID-file reclamation or stale-lock deletion is needed. Never unlink an owned lease file: replacing its inode can admit two owners. Use one stable database path on a local filesystem; hard-link aliases and unreliable network locks are unsupported. `:memory:` fixtures have connection-local ownership only.
 - **Read-only inspection.** `{readOnly: true}` opens no writer lease, performs no migration and rejects stale schemas needing migration. Consistent snapshots use deferred read transactions; writes remain SQLite-enforced errors. Writer state transitions still use `BEGIN IMMEDIATE`. A read-only connection cannot construct `RunService`. Main WAL reads do not touch the separate lease.
 - **Process identity.** The supervisor captures Linux boot UUID, PID, process group/session IDs and `/proc/<pid>/stat` start ticks immediately after spawn. Commands, all five adapters and correction handles carry that identity to transactional invocation history and the existing attempt PID/PGID/identity columns. Unsupported identity environments fail before spawn. Before every group signal, current evidence must agree; a reaped leader's remaining group members must retain its reserved group/session IDs and start bounds. Mismatch or unavailable evidence is uncertain settlement, never permission to signal an unrelated PID.
 - **Spawn boundary.** `invocation_dispatching` commits before each command/agent/correction launch, clearing the attempt's previous process identity without discarding session/report/correction history. A crash between spawn and identity persistence is intentionally unknown. Original process absence cannot establish correction-process absence.
@@ -441,6 +441,8 @@ Existing-run admission and revision validate live referenced inputs but exclude 
 
 SIGINT/SIGTERM or shutdown admission marks the facade closing, rejects new mutations and synchronously requests pause-after-current before acknowledgment. Teardown awaits any admitted control, rechecks pause and awaits drive settlement before closing connections/discovery/database. Shutdown acknowledgment precedes exit; a stage without a timeout can delay exit indefinitely. Clients may inspect while draining. Stop-now remains the explicit run termination action. If drive fails unexpectedly, its released guard permits conservative reconciliation into interruption; a safe failure notice remains visible in ping/status. No accepted report routes uncertain work, and restart never replays dispatch/signals.
 
+An authenticated shutdown schedules the idempotent teardown after attempting its acknowledgment, independently of response delivery or client reset. Losing the acknowledgment cannot strand an admitted shutdown or convert graceful drain into stop-now.
+
 Rationale: foreground ownership plus private loopback RPC is the smallest process model that lets independent CLI invocations control the actual child owner and lets the browser share the same application facade. Existing kernel ownership, SQLite revisions and recovery contracts avoid a second state authority or migration. Browser authorization integration is now described in §8.2; SSE, detachment and service-manager setup remain deferred.
 
 ### 8.2 Browser shell integration (Phase 8.1)
@@ -480,6 +482,10 @@ Requests delegate directly to the existing management facade; response DTOs stay
 not the pure contract layer. No browser state is execution authority and authorization is unchanged.
 Status retains the consistent management snapshot of effective settings, active task/attempt,
 elapsed time, accepted completion counts (null for graph-only), latest report and attention.
+`configuredPermissions` lists every agent stage's harness and runner-selected permission mode
+from shared adapter registry data, even when the cursor is an engine/task/command stage.
+The dashboard displays this selection and host-access implications before Start/Resume;
+invocation events remain separate observed launch evidence, not a pre-run compatibility claim.
 
 The client refreshes status/reports and one 100-event page every two seconds, advancing only to
 the returned exclusive cursor and retaining at most 300 fetched event rows. More history is

@@ -19,6 +19,15 @@ export interface HarnessCapabilities {
 
 export type AdapterStatus = "planned" | "conformance_passed";
 
+/** Runner-selected modes, shared by launch construction, invocation evidence and pre-run disclosure. */
+export const PERMISSION_MODES = {
+  codex: "dangerously-bypass-approvals-and-sandbox",
+  claude: "bypassPermissions",
+  omp: "yolo",
+  opencode: "session-allow-all",
+  pi: "default-unrestricted-tools",
+} as const;
+
 export interface HarnessDescriptor {
   readonly id: string;
   readonly product: string;
@@ -26,6 +35,7 @@ export interface HarnessDescriptor {
   readonly binary: string;
   readonly capabilities: HarnessCapabilities;
   readonly adapter: AdapterStatus;
+  readonly permissionMode?: string;
 }
 
 export type HarnessRegistry = ReadonlyMap<string, HarnessDescriptor>;
@@ -38,6 +48,7 @@ export type HarnessRegistry = ReadonlyMap<string, HarnessDescriptor>;
 const BUILT_IN: readonly HarnessDescriptor[] = [
   {
     id: "codex",
+    permissionMode: PERMISSION_MODES.codex,
     product: "OpenAI Codex CLI",
     binary: "codex",
     adapter: "conformance_passed",
@@ -52,6 +63,7 @@ const BUILT_IN: readonly HarnessDescriptor[] = [
   },
   {
     id: "pi",
+    permissionMode: PERMISSION_MODES.pi,
     product: "Pi coding agent",
     binary: "pi",
     adapter: "conformance_passed",
@@ -66,6 +78,7 @@ const BUILT_IN: readonly HarnessDescriptor[] = [
   },
   {
     id: "omp",
+    permissionMode: PERMISSION_MODES.omp,
     product: "oh-my-pi",
     binary: "omp",
     adapter: "conformance_passed",
@@ -80,6 +93,7 @@ const BUILT_IN: readonly HarnessDescriptor[] = [
   },
   {
     id: "opencode",
+    permissionMode: PERMISSION_MODES.opencode,
     product: "OpenCode",
     binary: "opencode",
     adapter: "conformance_passed",
@@ -94,6 +108,7 @@ const BUILT_IN: readonly HarnessDescriptor[] = [
   },
   {
     id: "claude",
+    permissionMode: PERMISSION_MODES.claude,
     product: "Claude Code",
     binary: "claude",
     adapter: "conformance_passed",

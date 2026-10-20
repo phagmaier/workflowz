@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, it, type TestContext } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import type { AgentAdapter } from "../adapters/agent-adapter.js";
 import { WorkflowDatabase } from "../store/database.js";
-import { REPO_ROOT } from "../test-support/paths.js";
 import { ScriptedAgentAdapter } from "../test-support/scripted-agent.js";
 import { workflowText } from "../test-support/workflows.js";
-import { ManagementService } from "./management-service.js";
+import { type BrowserRunStatus, ManagementService } from "./management-service.js";
 
 function deferred() {
   let resolve = () => {};
@@ -19,7 +19,7 @@ function deferred() {
 }
 
 function fixture(t: TestContext, adapter: AgentAdapter, release: () => void) {
-  const root = mkdtempSync(path.join(REPO_ROOT, ".tmp-management-service-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "wf-management-service-"));
   const database = new WorkflowDatabase(":memory:");
   const management = new ManagementService(
     database,
@@ -45,6 +45,62 @@ function fixture(t: TestContext, adapter: AgentAdapter, release: () => void) {
 }
 
 describe("management admission and inspection", { timeout: 20000 }, () => {
+  it("discloses all selected agent modes before execution and updates them with the selected revision", async (t) => {
+    const adapter = new ScriptedAgentAdapter([]);
+    const f = fixture(t, adapter, () => {});
+    const expected = [
+      { stepId: "codex", harness: "codex", mode: "dangerously-bypass-approvals-and-sandbox" },
+      { stepId: "claude", harness: "claude", mode: "bypassPermissions" },
+      { stepId: "omp", harness: "omp", mode: "yolo" },
+      { stepId: "opencode", harness: "opencode", mode: "session-allow-all" },
+      { stepId: "pi", harness: "pi", mode: "default-unrestricted-tools" },
+    ];
+    const command = `start: before
+steps:
+  before:
+    kind: command
+    argv: [echo, fixture]
+    on:
+      complete: {goto: done}
+      failed: {pause: true}
+  done: {kind: end}
+`;
+    const runId = f.management.service.createRun({
+      workflowDir: f.root,
+      workflowText: workflowText(
+        command +
+          expected
+            .map(
+              ({ stepId, harness }) => `  ${stepId}:
+    kind: agent
+    harness: ${harness}
+    session: fresh
+    prompt: Never launched
+    outcomes: [complete]
+    on:
+      complete: {goto: done}
+`,
+            )
+            .join(""),
+      ),
+    });
+    const status = () => f.management.handle({ op: "status", runId }) as Promise<BrowserRunStatus>;
+    const ready = await status();
+    assert.equal(ready.current?.kind, "command");
+    assert.deepEqual(ready.configuredPermissions, expected);
+    assert.equal(ready.activeAttempt, null);
+    assert.deepEqual(
+      f.management.store.listEvents(runId).filter((e) => e.type === "invocation_started"),
+      [],
+    );
+    f.management.service.reviseWorkflow(runId, {
+      workflowText: workflowText(command),
+      reason: "select command-only revision",
+    });
+    assert.deepEqual((await status()).configuredPermissions, []);
+    assert.deepEqual(f.management.store.listAttempts(runId), []);
+  });
+
   it("pauses synchronously at shutdown admission before the current attempt can settle", async (t) => {
     const release = deferred();
     const processSettled = deferred();

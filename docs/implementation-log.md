@@ -1856,3 +1856,130 @@ permanent test or tool abstraction; throwaway owned fixture files were removed.
 Owner review is the next boundary; no further feature scope is authorized by
 this completion.
 
+## Correctness/security repairs after the final MVP gate
+
+Bounded owner-requested repair, not a new roadmap phase. Initial working tree was
+clean and HEAD was exactly `ee6c4c7eb16cb7c1ff8e2ce240a1bb3c38c5a1a2`.
+HEAD remains unchanged; no commit or push. The historical gate above is preserved.
+No dependency, migration/schema history, YAML permission field, approval gate,
+global configuration, auth-file inspection or provider execution was added.
+
+### Repairs and regression coverage
+
+- **Database ownership:** resolve a dangling file symlink to its eventual creation
+  target before deriving the writer lease and opening SQLite. Native filesystem
+  resolution preserves directory-link/`..` semantics; relative/absolute targets
+  and bounded link chains are supported. Tests reject both same-alias and direct
+  target contenders, preserve existing-file/directory aliases and prove a competing
+  production daemon cannot reconcile the live command or replace discovery.
+- **Shutdown after reset:** after synchronous shutdown admission, schedule the
+  existing idempotent close independently of response delivery, allowing a turn
+  for acknowledgment first. Real production foreground owners receive complete
+  authenticated loopback requests followed by TCP reset. Idle shutdown exits;
+  active shutdown stays pausing until the held command settles, then exits without
+  running the next step. Existing normal acknowledgment, signal shutdown and
+  retry-wait drain coverage passes.
+- **Permission disclosure:** shared registry mode names now supply production
+  adapter launch metadata/arguments and the status DTO's `configuredPermissions`.
+  It lists all agent stages of the selected revision, including before a task,
+  engine or command cursor reaches one. The dashboard displays those modes and
+  practical user-level host access before Start/Resume, explicitly distinguishing
+  configured selection from observed invocation evidence. DTO tests cover all
+  five modes and revision changes; Chromium checks the visible mixed Codex/Pi
+  disclosure before Start at `task.next` and before explicit Resume.
+
+Structural exploration used the installed codebase-memory skill at Tier 2 with
+project `home-phagmaier-Code-workflowz`, initially indexed at
+`2026-10-20T03:10:31Z`. Targeted searches/traces and source reads verified the
+material paths. Coverage checks of every relied-on source path reported matching
+metadata and no recorded gaps, including a refreshed generation at
+`2026-10-20T03:37:34Z`. These are best-effort signals, not a completeness proof.
+Historical provider evidence was neither rerun nor promoted to fresh compatibility.
+
+### Exact validation commands and results
+
+An explicitly allocated private log/TMPDIR root was
+`/tmp/opencode/wf-repair-validation-3kWCOH`. The following environment was supplied
+to each command; child production repair owners additionally selected their own
+unique `WF_STATE_DIR` under `/tmp/opencode/wf-daemon-repair-*`:
+
+```bash
+export WF_STATE_DIR=/tmp/opencode/wf-repair-validation-3kWCOH/unused-state
+export TMPDIR=/tmp/opencode/wf-repair-validation-3kWCOH
+npm run build
+
+# Before the production fixes: red.log, 6 expected failures / 3 suites.
+node --test --test-isolation=none --test-reporter=spec \
+  --test-name-pattern='dangling database symlink|daemon correctness repairs|controls the owner with stale' \
+  dist/store/database.test.js dist/app/daemon-repairs.test.js dist/app/browser.test.js
+
+# After fixes, including existing normal acknowledgment/drain: focused-final.log.
+node --test --test-isolation=none --test-reporter=spec \
+  dist/store/database.test.js dist/app/daemon-repairs.test.js \
+  dist/app/management-service.test.js dist/app/browser.test.js dist/app/management.test.js
+
+npm run test:browser  # browser.log
+npm run check         # check.log; final complete code gate
+git diff --check
+```
+
+The red run demonstrated missing writer refusals, both stranded reset-client
+shutdowns and absent pre-agent permission DTO data. Initial sandbox-only attempts
+could not bind loopback (`EPERM`); the actual red and passing runtime checks used
+the required loopback sandbox escalation, without provider/network tooling.
+
+| Validation | Result |
+| --- | --- |
+| Final focused command above | **60 tests / 6 suites pass**, zero failures/cancellations/skips/TODOs |
+| `npm run test:browser` | **3 Chromium scenarios pass**, one worker, no retries; fake adapters only |
+| `npm run check` | Typecheck, Biome, build and **826 tests / 91 suites pass**, zero failures/cancellations/skips/TODOs; **+7 tests / +1 suite** relative to the reviewed gate |
+| `git diff --check` | Pass |
+
+The complete core gate covers the adapter constants through existing synthetic
+launch/conformance assertions and all six example-validation tests. Separate
+standalone reporting/tasks/capabilities/boundary/recovery smokes were not repeated:
+the focused production-daemon tests, existing CLI/API coverage, complete offline
+core gate and actual browser suite directly exercise these repair boundaries.
+No fresh harness probes, live workflow or compatibility claim was needed.
+
+### Cleanup proof, files and readiness
+
+Every new daemon fixture asserts owner exit **0**, owner PID/group absence,
+owned command-group absence, refused loopback connection, absent discovery and
+successful writer-lease reacquisition before removing its exact root. The final
+gate records repair owners **661793, 661917, 661994** satisfying these assertions.
+Red-run stranded owners were settled through explicit SIGTERM fallback in their
+test cleanup before the same absence checks; fallback does not make the regression
+pass. Chromium independently records **5/1/1** owned children gone, all three owners
+exit 0, durable reopen, listener/discovery removal and owned state/output removal.
+
+Nine daemon and three in-process browser startup roots from the sandbox-denied
+attempts were initially preserved. Before removal, independent inspection proved
+zero runs/attempts, absent discovery, unlocked lease files and no process using
+the owned roots; startup had failed binding before any listener publication or
+workflow admission. Test owners/processes had exited. After the successful gate,
+`/proc` cwd/descriptor inspection found no remaining process using the validation
+root. Only those proven inactive roots and owned tooling caches were removed.
+The validation root now contains only non-secret text `.log` files for owner
+review; no SQLite state, discovery, browser profile or runtime operation remains.
+No default owner state or unrelated temporary tree was inspected or removed.
+
+Changed-file inventory:
+
+- Ownership: `src/store/database.ts`, `src/store/database.test.ts`.
+- Daemon/API/DTO coverage: `src/app/daemon.ts`, new
+  `src/app/daemon-repairs.test.ts`, `src/app/management-service.ts`,
+  `src/app/management-service.test.ts`, `src/app/browser.test.ts`.
+- Shared mode data/consumers: `src/adapters/harness-registry.ts`,
+  `src/adapters/codex.ts`, `src/adapters/claude.ts`, `src/adapters/pi.ts`,
+  `src/adapters/opencode.ts` (omp uses the shared Pi adapter path).
+- Browser: `src/web/dashboard.ts`, `src/web/shell.html`,
+  `test/browser/gate.spec.mjs`, `test/browser/fixture.mjs` (explicit fixture state environment).
+- Documentation: `spec.md`, `architecture.md`, `docs/user-guide.md`, this log.
+
+**Ready for owner review; no unresolved repair issue.** Existing stable local-path,
+hard-link/network-lock and deliberate filesystem-tampering limits remain. Graceful
+shutdown still waits for unbounded active work; disclosure does not establish
+isolation, rollback or current provider compatibility. Spec §8 remains the canonical
+deferred-scope list; no roadmap checkbox or historical acceptance evidence changed.
+

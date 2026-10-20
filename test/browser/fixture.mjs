@@ -259,7 +259,13 @@ export const test = base.extend({
         detached: true,
         stdio: ["ignore", "pipe", "pipe", "ipc"],
         execArgv: [],
-        env: { PATH: process.env.PATH ?? "", HOME: root, TMPDIR: root, NODE_NO_WARNINGS: "1" },
+        env: {
+          PATH: process.env.PATH ?? "",
+          HOME: root,
+          TMPDIR: root,
+          WF_STATE_DIR: directory,
+          NODE_NO_WARNINGS: "1",
+        },
       });
       ownerIdentity = captureProcessIdentity(owner.pid);
       exited = new Promise((resolve, reject) => {

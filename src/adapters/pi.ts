@@ -21,7 +21,7 @@ import {
   ResumeUnavailableError,
 } from "./agent-adapter.js";
 import { childEnvironment } from "./environment.js";
-import type { HarnessCapabilities } from "./harness-registry.js";
+import { type HarnessCapabilities, PERMISSION_MODES } from "./harness-registry.js";
 import { readOmpSession } from "./omp-session.js";
 import { isPiSessionHeader, PiEvents, type PiSessionHeader } from "./pi-events.js";
 import {
@@ -213,7 +213,7 @@ export class PiAdapter implements AgentAdapter {
         "json",
         "--session-dir",
         sessionDir,
-        ...(this.id === "omp" ? ["--approval-mode", "yolo"] : []),
+        ...(this.id === "omp" ? ["--approval-mode", PERMISSION_MODES.omp] : []),
         ...(header
           ? this.id === "omp"
             ? ["--resume", prior as string]
@@ -238,7 +238,7 @@ export class PiAdapter implements AgentAdapter {
       sessionId: prior,
       launchInfo: {
         harnessVersion: this.compatibility.version,
-        permissionMode: this.id === "omp" ? "yolo" : "default-unrestricted-tools",
+        permissionMode: PERMISSION_MODES[this.id],
       },
       terminate: running.terminate,
       completed: running.completed.then((result) => {

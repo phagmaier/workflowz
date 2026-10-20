@@ -13,7 +13,7 @@ import {
   assertAdapterCapabilities,
   ResumeUnavailableError,
 } from "./agent-adapter.js";
-import type { HarnessCapabilities } from "./harness-registry.js";
+import { type HarnessCapabilities, PERMISSION_MODES } from "./harness-registry.js";
 import { openCodeEnvironment } from "./opencode-environment.js";
 import { isOpenCodeSessionId, OpenCodeEvents } from "./opencode-events.js";
 import {
@@ -190,7 +190,7 @@ export class OpenCodeAdapter implements AgentAdapter {
       sessionId: prior,
       launchInfo: {
         harnessVersion: this.compatibility.version,
-        permissionMode: "session-allow-all",
+        permissionMode: PERMISSION_MODES.opencode,
       },
       terminate: running.terminate,
       completed: running.completed.then((result) => {
