@@ -325,36 +325,76 @@ describe("management CLI and local daemon", { timeout: 90000 }, () => {
     );
   });
 
-  it("honors graceful daemon shutdown as pause-after-current and restart never auto-drives", async (t) => {
-    const f = await fixture(t);
-    const id = await f.create(COMMAND);
-    await f.control("start", id);
-    await until(
-      () => f.status(id),
-      (s) => s.activeAttempt?.processIdentity != null,
-    );
-    f.owner.child.kill("SIGTERM");
-    await until(
-      () => f.status(id),
-      (s) => s.run.status === "pausing",
-    );
-    f.file("release", "settle during graceful shutdown");
-    await f.owner.exited;
-    assert.equal(existsSync(path.join(f.directory, "daemon.json")), false);
-    assert.equal(existsSync(path.join(f.root, "effects")), false);
-    await f.launch();
-    const state = await f.status(id);
-    assert.equal(state.run.status, "paused");
-    assert.equal(state.run.cursorStepId, "next");
-    await delay(150);
-    assert.equal((await f.status(id)).expectedEventId, state.expectedEventId);
-    await f.control("resume", id, ["--reason", "explicitly continue"]);
-    await until(
-      () => f.status(id),
-      (s) => s.run.status === "completed",
-    );
-    assert.equal(readFileSync(path.join(f.root, "effects"), "utf8"), "x");
-  });
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    it(`honors ${signal} shutdown as pause-after-current and restart never auto-drives`, async (t) => {
+      const f = await fixture(t);
+      const id = await f.create(COMMAND);
+      const { port } = readDaemonAccess(f.directory);
+      await f.control("start", id);
+      const active = await until(
+        () => f.status(id),
+        (s) => s.activeAttempt?.processIdentity != null,
+      );
+      const identity = active.activeAttempt?.processIdentity;
+      assert.ok(identity);
+      assert.equal(f.owner.child.kill(signal), true);
+      const draining = await until(
+        () => f.status(id),
+        (s) => s.run.status === "pausing",
+      );
+      assert.equal(draining.activeAttempt?.attemptId, active.activeAttempt?.attemptId);
+      assert.equal(f.owner.child.exitCode, null);
+      assert.equal(f.owner.child.signalCode, null);
+      assert.equal(observeProcessGroup(identity), "alive");
+      assert.deepEqual(f.inspect(id).transitions, []);
+      assert.equal(existsSync(path.join(f.root, "effects")), false);
+      f.file("release", "settle during graceful shutdown");
+      await f.owner.exited;
+      assert.equal(f.owner.child.exitCode, 0);
+      assert.equal(f.owner.child.signalCode, null);
+      assert.equal(observeProcessGroup(identity), "gone");
+      assert.equal(existsSync(path.join(f.directory, "daemon.json")), false);
+      await assert.rejects(
+        fetch(`http://127.0.0.1:${port}/api/v1`, { signal: AbortSignal.timeout(1000) }),
+        (error: unknown) =>
+          error instanceof TypeError &&
+          error.cause instanceof Error &&
+          "code" in error.cause &&
+          error.cause.code === "ECONNREFUSED",
+      );
+      const settled = f.inspect(id);
+      assert.equal(settled.run.status, "paused");
+      assert.equal(settled.run.cursorStepId, "next");
+      assert.deepEqual(
+        settled.attempts.map((attempt) => [attempt.attemptId, attempt.status]),
+        [[active.activeAttempt?.attemptId, "succeeded"]],
+      );
+      assert.equal(settled.transitions.length, 1);
+      assert.equal(existsSync(path.join(f.root, "effects")), false);
+      const unavailable = await f.cli(["run", "list"]);
+      assert.equal(unavailable.code, 1);
+      assert.match(unavailable.stderr, /daemon unavailable.*wf daemon start/);
+      assert.equal(
+        (await f.cli(["workflow", "validate", path.join(f.root, "workflow.yaml")])).code,
+        0,
+      );
+      assert.equal(existsSync(path.join(f.directory, "daemon.json")), false);
+      await f.launch();
+      const state = await f.status(id);
+      assert.equal(state.run.status, "paused");
+      assert.equal(state.run.cursorStepId, "next");
+      await delay(150);
+      assert.equal((await f.status(id)).expectedEventId, state.expectedEventId);
+      assert.deepEqual(f.inspect(id), settled, "restart cannot replay or mutate settled history");
+      assert.equal(existsSync(path.join(f.root, "effects")), false);
+      await f.control("resume", id, ["--reason", "explicitly continue"]);
+      await until(
+        () => f.status(id),
+        (s) => s.run.status === "completed",
+      );
+      assert.equal(readFileSync(path.join(f.root, "effects"), "utf8"), "x");
+    });
+  }
 
   it("starts, revises and resumes from frozen tasks after the checklist is removed", async (t) => {
     const f = await fixture(t);
@@ -507,6 +547,24 @@ steps:
       () => f.status(id),
       (s) => s.activeAttempt?.processIdentity != null,
     );
+    const alias = path.join(f.root, "state-alias");
+    symlinkSync(f.directory, alias, "dir");
+    assert.deepEqual(await managementRequest(alias, { op: "ping" }), {
+      version: 1,
+      closing: false,
+      driveFailure: null,
+    });
+    const databaseFile = path.join(f.directory, "state.sqlite");
+    assert.equal(statSync(databaseFile).isFile(), true);
+    assert.equal(statSync(`${databaseFile}-wal`).isFile(), true);
+    assert.equal(statSync(`${databaseFile}.runner-lock`).isFile(), true);
+    assert.equal(statSync(path.join(f.directory, "logs")).isDirectory(), true);
+    const reader = new WorkflowDatabase(databaseFile, { readOnly: true });
+    try {
+      assert.equal(reader.prepare("PRAGMA journal_mode").get()?.["journal_mode"], "wal");
+    } finally {
+      reader.close();
+    }
     await f.ok(["daemon", "stop"]);
     const lifecycle = await f.ok<{ closing: boolean }>(["daemon", "status"]);
     assert.equal(lifecycle.closing, true);
@@ -515,6 +573,20 @@ steps:
     assert.equal(f.owner.child.exitCode, null);
     f.file("release", "finish admitted step");
     await f.owner.exited;
+    assert.equal(f.owner.child.exitCode, 0);
+    assert.equal(f.owner.child.signalCode, null);
+    assert.equal(existsSync(path.join(f.directory, "daemon.json")), false);
+    const settledReader = new WorkflowDatabase(databaseFile, { readOnly: true });
+    try {
+      const log = settledReader.prepare("SELECT log_path FROM attempts WHERE run_id = ?").get(id)?.[
+        "log_path"
+      ];
+      assert.equal(typeof log, "string");
+      assert.equal(path.dirname(String(log)), path.join(f.directory, "logs"));
+      assert.equal(statSync(String(log)).isFile(), true);
+    } finally {
+      settledReader.close();
+    }
     assert.equal(existsSync(path.join(f.root, "effects")), false);
   });
 
@@ -648,12 +720,20 @@ steps:
       () => f.status(id),
       (s) => s.latestReport != null && s.activeAttempt?.processIdentity != null,
     );
-    const discovery = readFileSync(path.join(f.directory, "daemon.json"), "utf8");
-    assert.equal((await f.cli(["daemon", "start"])).code, 1);
-    assert.equal(readFileSync(path.join(f.directory, "daemon.json"), "utf8"), discovery);
+    const discoveryFile = path.join(f.directory, "daemon.json");
+    const discovery = readFileSync(discoveryFile, "utf8");
+    const stale = JSON.stringify({ ...JSON.parse(discovery), token: "0".repeat(64) });
+    writeFileSync(discoveryFile, stale);
+    const competing = await f.cli(["daemon", "start"]);
+    assert.equal(competing.code, 1);
+    assert.match(competing.stderr, /another runner owns this state database/);
+    assert.equal(readFileSync(discoveryFile, "utf8"), stale);
+    writeFileSync(discoveryFile, discovery);
     await f.owner.crash();
+    assert.equal(readFileSync(discoveryFile, "utf8"), discovery);
     assert.equal((await f.cli(["daemon", "status"])).code, 1);
     await f.launch("hang");
+    assert.notEqual(readFileSync(discoveryFile, "utf8"), discovery);
     const interrupted = await f.status(id);
     assert.equal(interrupted.run.status, "interrupted");
     assert.ok(interrupted.latestReport);

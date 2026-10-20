@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6, Phases 7.1–7.5, browser Phases 8.1–8.5 and the Phase 9.1 offline acceptance audit are complete. Current authorization covers offline Phases 9.2–9.3 only; 9.4–9.5 and the final MVP gate remain open on the [`todo.md`](todo.md) roadmap. See the [implementation evidence](docs/implementation-log.md).
+**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6, Phases 7.1–7.5, browser Phases 8.1–8.5 and offline Phases 9.1–9.3 are complete. Phases 9.4–9.5 and the final MVP gate remain open on the [`todo.md`](todo.md) roadmap and outside this bounded pass. See the [implementation evidence](docs/implementation-log.md).
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -219,6 +219,20 @@ bin/wf daemon stop
 State selection is `--state-dir DIR` > `WF_STATE_DIR` > `${XDG_STATE_HOME:-~/.local/state}/workflowz`. The selected directory must belong to the current user with mode `0700`; a new one is created that way. It contains `state.sqlite`, SQLite WAL/lease files, `logs/` (attempt logs and adapter session artifacts), and private `daemon.json`. The daemon binds an ephemeral `127.0.0.1` port and atomically publishes a fresh owner-only token/port file (mode `0600`) after acquiring the database writer lease. Never publish that file. Competing owners fail without replacing it. Stale discovery does not authorize takeover: start a new owner explicitly; the kernel-backed lease decides ownership. The foreground terminal holds daemon diagnostics; no separate rotating daemon log/service manager is installed.
 
 SIGINT, SIGTERM and `daemon stop` request pause-after-current and wait for the step, report channel and log streams to settle before releasing the database. `daemon stop` acknowledges the shutdown request; it does not wait for daemon exit. A stage without a timeout can delay shutdown indefinitely. `run stop` is the explicit process-tree termination action and waits for settlement. Client disconnect has no effect. On crash/reopen, uncertain runs become interrupted and no stage/report/signal is replayed.
+
+Discovery reads reject symlinks (`O_NOFOLLOW`), non-regular files, another owner,
+group/other access and files larger than 4096 bytes. A state-directory symlink is
+allowed only through its canonical private target; it does not create a second
+owner. Blank explicit/environment state paths are errors, not fallback requests.
+If discovery is unsafe/unavailable, inspect the selected directory and explicitly
+start the owner; do not delete the live writer lease to force a takeover.
+
+Attempt log paths are recorded in invocation events, with separate correction
+logs. Stream logs retain at most 16 MiB plus a cap marker; stdout/stderr captures
+retain 64 KiB each and durable stderr diagnostics 4 KiB. Known injected secrets
+are scrubbed, but arbitrary harness/tool-created files are outside that boundary.
+See [report bounds and status codes](docs/schema-v1.md#reporting-decisions-phase-4)
+and [diagnostic limits](architecture.md#47-environment-and-diagnostic-boundaries-phase-67).
 
 Normal run controls use `--expected-event` from a fresh status inspection; recovery decision files carry the exact event/attempt cursor themselves. Changed state rejects the request; inspect again before making another decision. Resume requires paused state; interrupted runs first need an explicit recovery disposition. `run tasks RUN_ID`, `run reports RUN_ID`, and `run recovery RUN_ID` expose durable details. Events are ordered by increasing global `eventId`, filtered by run and exclusive `--after` cursor. `--limit` defaults to 100 (1–1000); JSON returns `{events,nextAfter,hasMore}`. No live event stream is added in this milestone.
 

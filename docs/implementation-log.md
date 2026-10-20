@@ -1382,3 +1382,131 @@ Executed on Node.js v26.8.2 / npm 11.19.1:
 **9.2 complete.** Only 9.2 is newly checked here. 9.3 remains next; 9.4–9.5
 and the final MVP gate remain open. No provider-backed verification is claimed.
 
+## Phase 9.3 — operational and failure audit
+
+Started after 9.2 was committed/pushed as `9482d70`. Offline only; no production
+changes are planned. The pre-edit audit below maps every requested boundary to
+existing evidence and identifies only focused coverage/documentation gaps.
+`C` means `npm run check`; paths and named cases are executable source evidence.
+Final exercised results are recorded after gap closure below.
+
+| Required boundary | Existing test / documentation evidence | Pre-edit gap / disposition |
+| --- | --- | --- |
+| Validate diagnostics and exit codes | `src/app/validate-cli.test.ts`: located duplicate-key diagnostic/exit 1, unreadable file/exit 2, missing root/exit 1, valid examples/exit 0 | Sufficient; retain overnight assertion |
+| Management diagnostics / exit codes, daemon unavailable, blank/unsafe state directory | `src/app/management.test.ts`: immutable import/preview case checks unreadable/invalid input, stale/wrong-state controls; README management exit 0/1/2 contract | Add direct process-boundary unavailable/no-auto-start, malformed command and blank/unsafe directory assertions |
+| Invalid report rejection | `src/runner/report-server.test.ts`: malformed/authority/origin/token rejection with unchanged full state; real `wf` undeclared/409/410 errors | Sufficient; no duplicate 9.1 scenario |
+| Unknown harness, capability errors, unavailable resume | `src/engine/compile.test.ts`: unknown-harness fixture and unsupported capabilities; `src/adapters/capabilities.test.ts`: required launch/model/reasoning/exact-resume rejection with zero extra launches and useful durable explanation; `src/runner/run-service.test.ts`: unavailable/lost session no fresh fallback | Sufficient; fake/offline only |
+| Attempt log paths, bounded logs/captures/diagnostics | `src/test-support/adapter-conformance.ts`: separate original/correction paths; `src/adapters/process.test.ts`: log cap head/marker, stdout/stderr cap, byte-bounded Unicode diagnostic; architecture §4.7: 16 MiB log + marker / 64 KiB captures / 4 KiB diagnostics | Add direct daemon layout/log-file assertions; reuse supervisor cap tests |
+| Known-secret scrubbing; no report tokens/credentials in diagnostic/durable state | `src/adapters/boundaries.test.ts`: all five adapters × report/provider-error/crash check scrubbed state/logs and diagnostic bounds; `src/adapters/secrets.test.ts`: representations across every byte boundary; report server rejects protected credentials; management case checks no token output | Sufficient; only known injected secrets/representations, not arbitrary harness-owned files |
+| Report HTTP 128 KiB, handoff 64 KiB, summary/issue 4 KiB, data 32 KiB, oversized 413 | `src/contracts/report.test.ts`: UTF-8/field/data/depth/node rejection; report-server invalid body case sends 131073 bytes → 413 | Add one real HTTP exact-limit acceptance and CLI handoff boundary coverage; retain over-limit rejection |
+| Bounded acknowledgment reads | `src/app/report-cli.ts`: bounded response reader; existing real CLI test only checks ordinary acknowledgments | Add real CLI oversized acknowledgment rejection with synthetic server |
+| Strict API request schemas | Management authority case rejects extras/malformed JSON; management contracts reject authority extras/cursors/reasons/unknown recovery; browser selected-input case rejects extras/nonallowlisted operations and malformed JSON | Sufficient |
+| Host / Origin / cookie / custom-header; separate bearer authority | `src/app/browser.test.ts`: exact Host/Origin/JSON/header and separate bearer/cookie authority, one-use/rotation/expiry/logout and in-flight revocation; management/report servers reject browser Origin and wrong tokens | Sufficient; Host/cookie/custom-header are browser rules, not new management/report requirements |
+| Management/browser 2 MiB body limits | Management authority case sends 2097153 bytes → 413; browser malformed/oversized case exceeds 2 MiB → 413 | Sufficient |
+| State directory precedence / ownership / permissions / symlinks | Management state-selection case checks explicit > environment > XDG, blank explicit; authority case checks 0700/0600 and unsafe/symlink discovery rejection | Add current-user ownership, canonical directory alias/unsafe target, blank environment, home fallback coverage without changing permissions globally |
+| O_NOFOLLOW discovery, 0600, 4096-byte cap | Management authority case rejects symlink and 0644 discovery; `src/app/state-directory.ts` checks opened descriptor ownership/type/size | Add exact 4096/4097 and ownership/type/schema cases; retain real symlink rejection |
+| Logs/WAL/lease layout; no stale discovery takeover | README management section; competing-owner case rejects lease competition and preserves original discovery | Add direct layout and stale-discovery/lease-authority evidence if not already asserted |
+| Foreground explicit start, no auto-start/detach | README management start command and foreground lifetime; CLI source awaits owner close | Add unavailable-client leaves no state/listener discovery; existing daemon child remains live until explicit shutdown |
+| SIGINT/SIGTERM/daemon stop pause-after-current/drain; acknowledgment vs exit | Management graceful SIGTERM and API-stop-held-step cases; management-service shutdown admission case | Parameterize signal case for SIGINT too; strengthen clean exit/listener/discovery assertions |
+| Restart reconciliation without automatic driving | Existing management graceful/crash/committed-cursor cases and runner recovery suites; README recovery/startup paragraphs | Sufficient; no replay/automatic signals; explicit disposition/resume retained |
+| Client/browser disconnect independence | Management start returns while held child still runs; permanent `test/browser/lifetime.spec.mjs` actual reload/last-tab closure evidence accepted in 9.1; README management/browser sections | Reuse accepted 9.1 browser evidence; no browser code changed |
+
+### Focused gap closure
+
+- Added `src/app/state-directory.test.ts`: six cases for blank environment/home
+  fallback, newly created 0700/current-user directory, canonical directory alias
+  and unsafe target, foreign directory/discovery ownership, exact 4096 versus
+  4097 discovery bytes, non-file/invalid-schema discovery, real CLI unavailable
+  without auto-creation/start, and distinct blank/unsafe startup versus malformed
+  CLI failures. Ownership rejection uses real filesystem metadata with a mocked
+  caller UID; it does not chown files or require root. Existing real discovery
+  symlink/0644 rejection tests remain unchanged.
+- Added `src/app/report-cli.test.ts`: exact 65536-byte UTF-8 handoff transmission;
+  65537-byte rejection before any request; oversized success/error acknowledgments
+  fail nonzero without echoing synthetic authorization or untrusted response text.
+  All listeners/children/files are disposable, bounded and torn down.
+- Added one report-server integration boundary: exact 4096-byte summary/issue,
+  65536-byte handoff and 32768-byte serialized data survive real acceptance in an
+  exactly 131072-byte padded HTTP request, without a cursor transition. Existing
+  oversized/undeclared/credential-bearing rejection tests are retained.
+- Parameterized the existing daemon signal scenario for both SIGINT and SIGTERM:
+  held owner/group remains alive with no transition until release, then clean exit,
+  group absence, refused listener, removed discovery, paused committed cursor and
+  unchanged history on reopen. Separate explicit resume executes the next effect
+  once. Local validation works after exit; unavailable management never auto-starts.
+- Extended the existing API-stop case with canonical state-directory alias and
+  actual `state.sqlite`/WAL/`.runner-lock`/`logs/`/attempt-log layout assertions.
+  Shutdown acknowledgment still returns while the held step drains; mutations
+  reject; owner exit/discovery removal follow settlement.
+- Extended the existing competing-owner case: valid-shaped stale discovery cannot
+  bypass a live writer lease and is not overwritten by the rejected contender.
+  Crash retains old discovery; only a successful explicit new owner replaces it.
+- README already documents foreground startup, all three graceful shutdown paths,
+  acknowledgment versus exit, no auto-driving/replay and disconnect independence.
+  Added only previously unstated discovery limits/canonical alias behavior and
+  concise log bounds/known-secret limits with links to the existing contracts.
+
+Two independent test-only slices (report CLI bounds and daemon lifecycle) were
+delegated; integration, matrix, state-directory tests, HTTP exact limits and docs
+remained parent-owned. No production/app/HTTP implementation, dependency, schema,
+migration or approval semantics changed. No production defect was identified.
+
+### Exercised acceptance and cleanup
+
+Node.js **v26.8.2**, npm **11.19.1**. Commands executed sequentially:
+
+| Exact command | Observed result |
+| --- | --- |
+| `npm run check` | Typecheck/lint pass; **819 tests / 90 suites**, zero failures/cancellations/skips/TODOs. Includes every matrix C case and all new boundaries. Informational lint suggestions remain. |
+| `node --test dist/app/state-directory.test.js dist/app/report-cli.test.js dist/app/validate-cli.test.js dist/app/management.test.js dist/app/browser.test.js dist/contracts/report.test.js dist/runner/report-server.test.js dist/adapters/process.test.js dist/adapters/boundaries.test.js dist/adapters/capabilities.test.js` | **182 tests / 16 suites**, zero failures/cancellations/skips/TODOs. |
+| `for file in examples/*.yaml; do npm run validate -- "$file" || exit; done` | All six valid, zero warnings; step counts unchanged from 9.2; overnight **8 steps**, hash prefix `8a4912284968`. |
+
+The first 9.3 `npm run check` stopped at Biome formatting in two newly added
+management-test expressions, before tests. The targeted diagnostic command
+`./node_modules/.bin/biome check src/app/state-directory.test.ts src/app/report-cli.test.ts src/app/management.test.ts src/runner/report-server.test.ts --max-diagnostics=50`
+identified the two wraps. Surgical formatting correction preceded the successful
+complete command sequence above; no production change or behavioral failure.
+
+An additional in-memory subprocess smoke ran the real CLI against an owned
+temporary `wf-ops-93-*` state root with only PATH inherited. Its exact command
+sequence (`STATE`, `RUN_ID` and `EVENT_ID` denote values returned by this run):
+
+```bash
+bin/wf --state-dir "$STATE" --json daemon start
+bin/wf --state-dir "$STATE" --json run create examples/command-only.yaml
+bin/wf --state-dir "$STATE" --json run status "$RUN_ID"
+bin/wf --state-dir "$STATE" --json run start "$RUN_ID" --expected-event "$EVENT_ID"
+bin/wf --state-dir "$STATE" --json run status "$RUN_ID"  # bounded polling until completed
+bin/wf --state-dir "$STATE" --json run tasks "$RUN_ID"
+bin/wf --state-dir "$STATE" --json run reports "$RUN_ID"
+bin/wf --state-dir "$STATE" --json daemon stop
+```
+
+Observed ready → explicit start → completed; exactly `node_version/succeeded` and
+`git_status/succeeded`, zero tasks/reports. The first attempt log contains
+`v26.8.2`. After foreground owner exit 0, read-only SQLite reopen preserved these
+attempts/log paths; the old listener refused connection and discovery was absent.
+The owned root was removed. No agent or mutating sample was executed.
+
+Final cleanup: the new test fixtures close their HTTP listeners, reap bounded
+children and remove owned roots. Management teardown additionally checks persisted
+owned process identities before removing state. Post-run glob found no repository
+`.tmp-management-*` / `.tmp-recovery-*`, or `/tmp/wf-state-audit-*`,
+`wf-report-cli-*`, `wf-ops-93-*`, `wf-reports-*`, `wf-boundaries-*`,
+`wf-capabilities-*`, `wf-validate-*` roots. Exact process check:
+
+```bash
+pgrep -af '[m]anagement-daemon.mjs|[f]ake-(agent|codex|pi|omp|claude|opencode).mjs|[b]in/wf.*daemon.*start'
+```
+
+No output, exit 1 (no matches). No unrelated files/processes were removed or
+signalled. No throwaway script file remains; the runtime smoke lived in memory.
+
+All matrix gaps are closed by the named additions or existing exercised evidence.
+**9.3 complete.** No documented product gap or production defect was found.
+Actual Chromium/disconnect proof is reused from accepted 9.1; this pass exercised
+browser HTTP boundary tests, not a new Chromium run. No production/app/HTTP code
+changed, so no affected browser suite was required. No dependencies/downloads,
+credentials, paid/live providers or global harness/configuration changes.
+Phases **9.4–9.5 and the final MVP gate remain open**.
+

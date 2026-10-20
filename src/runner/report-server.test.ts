@@ -134,6 +134,27 @@ describe("private reporting endpoint and CLI", () => {
       assert.deepEqual(f.coordinator.inspect(f.runId), before);
     }));
 
+  it("accepts exact UTF-8 field limits in an exact 128 KiB HTTP body", async () =>
+    fixture(async (f) => {
+      const report = {
+        outcome: "complete",
+        summary: "🙂".repeat(1024),
+        issue: "🙂".repeat(1024),
+        handoff: "🙂".repeat(16384),
+        data: { text: "x".repeat(32768 - Buffer.byteLength('{"text":""}')) },
+      };
+      const body = JSON.stringify(report);
+      const padded = body + " ".repeat(131072 - Buffer.byteLength(body));
+      assert.equal(Buffer.byteLength(padded), 131072);
+      assert.equal((await send(f.access, padded)).status, 201);
+      const accepted = f.coordinator.reportFor(f.attemptId);
+      assert.equal(accepted?.summary, report.summary);
+      assert.equal(accepted?.issue, report.issue);
+      assert.equal(accepted?.handoff, report.handoff);
+      assert.deepEqual(accepted?.data, report.data);
+      assert.equal(f.coordinator.inspect(f.runId).transitions.length, 0);
+    }));
+
   it("acknowledges durable acceptance, rejects duplicates and preserves the cursor", async () =>
     fixture(async (f) => {
       assert.equal((await send(f.access)).status, 201);
