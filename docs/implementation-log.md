@@ -1077,3 +1077,137 @@ Limitations: polling/recent-event display remain as before; unsaved drafts reset
 visual serialization can normalize YAML; per-task parameter editing and recovery remain
 headless/CLI-only; no raw logs, arbitrary filesystem browsing, rollback or isolation.
 Phase 8.5's permanent browser smoke suite, the full Phase 8 gate and MVP remain incomplete.
+
+## Phase 8.5 — permanent offline Chromium smoke coverage
+
+Started from clean `main` at accepted/pushed
+`e18c8fdec8fb3be12943c9859a432ae89285d336`. Current authorization covers offline
+implementation, disposable fake adapters, pinned local browser tooling, actual Chromium,
+documentation and commit/push. No live/paid providers, global harness configuration changes
+or Phase 9 implementation.
+
+### Implementation and preserved boundaries
+
+- Added exact `@playwright/test` **1.64.1** and lockfile entries. `npm run test:browser`
+  builds the real application and runs three sequential scenarios with no test retries.
+  Provisioning is explicit; test execution never installs dependencies or browsers.
+  README documents installation, Linux libraries/fonts, supported-platform references,
+  headless/headed use and the separate browser-independent core gate.
+- `test/browser/daemon.mjs` starts the existing foreground owner in a separate OS process.
+  Every registered harness has an explicitly injected fake adapter; exhausted/unexpected
+  plans fail rather than falling through to ScriptedAgentAdapter defaults or real factories.
+  Each test owns a new temporary project, state directory and ordinary browser pairing.
+- Small shared fixtures use real supervised fake children and actual `wf report`.
+  The only adapter-fixture extension is `report-wait-for-file`: report, wait for an owned
+  filesystem gate, then settle. No production fake-provider option, fixture endpoint,
+  schema/migration, management forwarding or new authority was introduced.
+- Browser requests stay loopback-only, service workers are blocked, contexts/profiles are
+  disposable and all pages are checked for uncaught application JavaScript errors.
+  No trace, video, profile, pairing code or credential artifact is retained. Mutation
+  requests are the actual UI's inspected-event requests; interception only delays their
+  delivery, never substitutes success responses or changes authority.
+- Existing Host/Origin/cookie/custom-header/JSON/body/CSP boundaries, inert rendering,
+  single state owner, process settlement/recovery barriers, immutable revisions/inputs,
+  task progress, session restrictions and separate Resume are unchanged.
+
+### Permanent browser scenarios
+
+1. **Complete Phase 8 visual gate.** Starting with **New workflow**, configure task import,
+   `task.next`, two executable agent stages (`codex` implement and `pi` review),
+   `task.complete`, end and direct routes using visual controls only. Inspect effective
+   routing; preview/save create no run. Creation is ready with no start time, attempt or
+   report. Explicit Start reaches blocked attention and paused state. Open the current
+   revision, change model/prompt visually, require reason/confirmation, apply without
+   resuming, then use separate explicit Resume. Both imported tasks complete. Durable
+   reopen verifies five attempts, the original frozen model plus new-revision inputs,
+   all subsequent attempt revision associations, unchanged task IDs and all five reports
+   (`blocked`, then four `complete`), including the original blocked report.
+2. **Mobile deliberate intervention and stale/draft state.** At 390px, select compatible
+   jump; explicitly choose a declared skip outcome; skip both review and `task.complete`
+   without fabricating reports or accepting tasks; complete only the selected other
+   unfinished task. Reasons/confirmation, targets/consequences and paused-after-action
+   behavior are exercised through UI controls. Five durable reasoned manual audits include
+   a concurrent operator's decision; the old browser decision receives real **409 stale**
+   rejection exactly once, stays disabled, and recovers only after explicit Refresh run
+   and Inspect manual intervention. A held real validation response, a newer unsaved
+   draft, actual event polling and selection of a different ready run cannot overwrite or
+   rebind the draft/target. HTML-like task text remains inert. Durable events/tasks/reports
+   and the alternate ready run are checked after owner exit.
+3. **Browser lifetime independence.** Wait for a real accepted report while a supervised
+   file-gated operation is still running with a live PID. Reload: dashboard selection
+   resets but the same attempt/PID remains running. Close the sole tab and verify no
+   browser page exists; independent management inspection still sees the same live
+   operation. Release the gate with no browser page open and observe durable completion.
+   Reconnect at 390px to the completed result. SQLite reopen proves exactly one attempt,
+   launch event, accepted report and attempt transition, with no duplicate/replay.
+
+Initial runs exposed only smoke-selector/assertion mistakes: an exact implicit-select label
+included option text, and Playwright's disabled assertion on a fieldset did not assert the
+effective disabled state of its controls. Corrected locators and asserted the actual authoring
+input. No application behavior fix or boundary weakening was necessary.
+
+### Exercised commands and results
+
+Node.js **v26.8.2**, npm **11.19.1**, Playwright **1.64.1**, pinned full Chromium
+**156.0.8078.4**, revision **1248** (`chromium` channel).
+
+```bash
+npm install --save-dev --save-exact @playwright/test@1.64.1
+./node_modules/.bin/playwright install chromium
+npm run test:browser
+npm run test:browser
+npm run check
+npm run smoke:recovery
+npm run smoke:reporting
+npm run smoke:boundaries
+npm run validate -- examples/overnight.yaml
+```
+
+- Permanent browser suite: **3/3 passed**, then **3/3 passed again** from fresh state
+  (16.4s and 16.3s). Each run used three new daemons and new browser contexts, with seven
+  supervised fake children total. No retries, prior profile or retained database.
+- `npm run check`: typecheck and lint passed; **800 tests / 88 suites**, zero failures,
+  cancellations, skips or TODOs. Existing informational lint suggestions remain unchanged.
+- Recovery smoke passed command/correction/between-step/spawn-intent crash dispositions,
+  no replay, explicit decisions, durable reopen and owned cleanup.
+- Reporting smoke passed report-before-settlement, bounded same-session correction success
+  and failure, durable reopen and removal of disposable databases/logs/sessions.
+- Boundary smoke passed synthetic OpenCode/Claude correction/provider-failure scenarios,
+  selected environments, scrubbed diagnostics/logs, sequential settlement and SQLite reopen.
+- Canonical example: **valid, 8 steps, zero warnings**, hash prefix `8a4912284968`.
+
+### Failure cleanup and actual visual evidence
+
+A throwaway browser scenario deliberately threw an assertion error while a real accepted-report
+child remained file-gated and active. Its command intentionally exited **1** for that assertion;
+fixture teardown still stopped/reaped the child, reopened durable state, observed owner exit
+**0**, refused the old listener, verified discovery absence and removed its owned root.
+Removed the throwaway scenario before the second complete permanent run.
+
+All permanent runs likewise verified owner exit **0**, all seven known supervised groups gone,
+listener/discovery absence, exact durable state/audits, and owned root removal. The runner removes
+its owned output directory on both success and failure. Unproven cleanup preserves the fixture
+root and fails rather than deleting uncertain evidence.
+
+Additionally inspected actual desktop dashboard and 390px paused-revision/manual-intervention
+screenshots against a separate owned fake-only foreground daemon. Target/consequence text,
+warnings, confirmation and action controls remained usable without page overflow. A browser-tool
+wait invocation initially injected an invalid-selector error; after clearing that tool error and
+reloading, fresh application inspection had **zero page errors**. Permanent browser tests also
+passed their uncaught-error checks. This extra fixture was explicitly stopped: owner exit **0**,
+fake PID gone, read-only SQLite retained stopped state plus blocked report with no active
+attempt, listener/discovery gone, managed tabs empty, owned root and screenshot artifacts removed.
+
+### Acceptance and concrete limits
+
+**8.5 complete. Full Phase 8 gate satisfied** by the complete visual-authoring → blocked
+attention → visual revision → separate explicit Resume scenario, not merely backend API setup.
+Phase 9 and MVP remain explicitly incomplete.
+
+Coverage is deliberately three Chromium scenarios with desktop/390px surfaces, not exhaustive
+cross-browser, accessibility, physical-mobile or all Phase 9 end-to-end coverage. This Linux
+distribution is not officially supported by Playwright; its Ubuntu 24.04 fallback Chromium
+passed with the host's existing shared libraries. No OS package installation was needed or
+performed. Browser provisioning requires a separate download; suite execution itself stays
+offline. SIGKILL/power-loss of the test runner is not a graceful-teardown guarantee. Existing
+same-user authority, escaped-process and external-side-effect limits remain unchanged.

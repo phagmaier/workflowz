@@ -435,7 +435,7 @@ Every browser route requires the exact `127.0.0.1:PORT` Host (DNS-rebinding prot
 
 The browser API started as a separate strict preparation allowlist: session inspection/logout, saved revisions, run list, source loading, configured task preview, save immutable revision and create ready run. Phase 8.2 adds read-only draft validation/serialization below; Phase 8.3 adds run inspection/basic execution, and Phase 8.4 adds narrow paused revision/intervention operations. Preview/import and creation delegate to the existing management facade and share its validator. No recovery, raw-log endpoints, arbitrary filesystem browsing/reading, generic management forwarding or new migrations are exposed. Files are uploaded as text with their absolute original directory or selected from saved revisions; the editor can also create a new draft. Project/input selections and stage/policy controls update that draft before saving/creating. Preview writes nothing; create rereads and freezes the actual checklist, never starts execution. Original project files are not rewritten.
 
-Stage/transition/policy/YAML editing is implemented in Phase 8.2 below; dashboard/basic controls in Phase 8.3 and paused-run editing in Phase 8.4 follow it. Later browser automation (8.5), the full Phase 8 gate and MVP remain incomplete.
+Stage/transition/policy/YAML editing is implemented in Phase 8.2 below; dashboard/basic controls in Phase 8.3 and paused-run editing in Phase 8.4 follow it. Permanent offline browser automation (Phase 8.5, §8.6 below) and the full visual-authoring Phase 8 gate now pass. Phase 9/MVP remain incomplete.
 
 ### 8.3 Draft editor integration (Phase 8.2; not execution dashboard)
 
@@ -510,6 +510,33 @@ pauses through existing engine-only routing. Manual completion may clear the act
 does not repair cursor compatibility. Repeat-stage side effects are explicitly warned about.
 Stop now remains the ending control; interrupted-run recovery remains CLI-only.
 
+### 8.6 Permanent offline browser smoke boundary (Phase 8.5)
+
+`npm run test:browser` builds the real static application and runs three bounded Playwright
+Chromium scenarios. Browser/package provisioning is explicit and separate; ordinary core
+checks require neither a browser nor a provider. The dependency is pinned in the lockfile.
+
+`test/browser/daemon.mjs` is a test-only foreground OS process. It supplies explicit fake
+adapters for every registered harness, rejects unexpected launches, and never reaches installed
+provider factories. Each scenario owns temporary project/state directories and pairs through
+the ordinary UI. No fake switch, control endpoint, schema, migration or production authority
+is added. The sole new fake-child mode reports through `wf report`, then waits for a fixture-owned
+file before settlement; this proves lifetime independence without timing assumptions.
+
+UI interactions exercise authoring, controls, revisions and overrides. Existing management
+inspection supplies independent evidence; setup/concurrent-operator actions stay outside the
+behavior under test. The fixture also reopens SQLite read-only after owner exit to compare
+durable tasks, attempts, reports, events and selected frozen inputs. Explicit request gates
+produce real stale-event rejection and delayed validation, never synthetic success responses.
+
+One worker, no retries, bounded condition waits, isolated nonpersistent browser contexts,
+loopback-only browser requests and uncaught-page-error checks keep this smoke reproducible.
+Teardown uses existing stop/close supervision, reaps owned groups/owner, verifies listener and
+discovery absence and durable state, then removes owned temporary state/output. Unproven
+cleanup preserves state and fails. Profiles, traces, videos and pairing credentials are not
+retained. This is bounded Chromium/390px coverage, not cross-browser coverage or isolation.
+
+
 
 ## 9. Testing strategy
 
@@ -525,7 +552,7 @@ Stop now remains the ending control; interrupted-run recovery remains CLI-only.
   A disposable tool helper checks actual `wf` acknowledgment; success also checks exact durable report content, session identity and ordered settled invocations. Report-only scenarios disable correction. Private artifacts remain; settled target projects are removed, uncertain ones preserved. Normal auth/resource discovery is retained, never replaced with empty HOME.
   Ordinary tests/check/build/probes never execute providers; synthetic CLI tests cover this developer surface. Live acceptance is recorded separately from tooling completion.
   The account-local `smoke:meta` convenience command reuses this same path with the owner's pinned Meta Contributor/low selection. Its explicitly authorized loader parses only `MUSE_SPARK_API_KEY` from the owner-only local secrets shell file as literal data, never executing the file or persisting the value. It maps the key to the selected adapter environment; Meta credential names join the existing allowlist/scrubber at both OpenCode boundaries and omp. A developer-only project-preparation callback writes credential-free OpenCode v2 provider configuration inside the disposable target. No global edits, provider client, workflow fields, migrations, engine model restrictions or new report/routing policy are introduced. Plan mode does not read credentials; exact live-execution admission remains separate.
-- UI smoke: create workflow, view compiled transitions, start fake workflow, see progress and attention queue, edit paused workflow, resume; automated browser tests can come near the end.
+- UI smoke: `npm run test:browser` permanently covers the complete visual two-stage gate, paused intervention/stale-state/draft pinning, and file-gated browser-lifetime independence (§8.6). Phase 9's broader end-to-end scenarios remain incomplete.
 
 **Quality gate:** TypeScript typecheck, tests, lint and documented local developer commands must pass before calling MVP complete. No external LLM spend needed for basic functionality.
 

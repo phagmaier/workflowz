@@ -29,6 +29,7 @@ export type AgentMode =
   | "invalid-then-valid"
   | "report-then-delay"
   | "report-then-hang"
+  | "report-wait-for-file"
   | "leak-token"
   | "provider-error";
 

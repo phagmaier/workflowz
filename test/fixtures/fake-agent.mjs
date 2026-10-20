@@ -1,6 +1,6 @@
 // Offline harness: all authoritative reporting uses the real wf CLI and loopback channel.
 import { spawn } from "node:child_process";
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 
 const [mode = "report", outcome = "complete", extra = ""] = process.argv.slice(2);
 const note = (text) => {
@@ -78,6 +78,11 @@ switch (mode) {
   case "report-then-delay":
     await report();
     await wait(Number(extra) || 300);
+    finish(0);
+    break;
+  case "report-wait-for-file":
+    await report();
+    while (!existsSync(extra)) await wait(20);
     finish(0);
     break;
   case "report-then-hang":

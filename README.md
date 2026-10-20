@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6, Phases 7.1–7.5 and browser Phases 8.1–8.4 are complete. This is not a complete MVP: Phase 8.5, the full Phase 8 gate and Phase 9 remain incomplete on the [`todo.md`](todo.md) roadmap. See the [implementation evidence](docs/implementation-log.md).
+**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6, Phases 7.1–7.5 and browser Phases 8.1–8.5 are complete, including the full Phase 8 visual-authoring gate. This is not a complete MVP: Phase 9 remains incomplete on the [`todo.md`](todo.md) roadmap. See the [implementation evidence](docs/implementation-log.md).
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -46,7 +46,8 @@ Requirements: Linux with `/proc`, Node.js 26 or newer (verified with v26.8.2) an
 
 ```bash
 npm ci                       # install the exact versions in package-lock.json
-npm run check                # typecheck + Biome lint + tests (the full gate)
+npm run check                # typecheck + Biome lint + tests (offline core gate)
+npm run test:browser         # separate offline Chromium smoke; provision browser first, below
 npm run typecheck            # tsc --noEmit, strict mode
 npm run lint                 # Biome check (lint and formatting)
 npm run format               # Biome auto-fix
@@ -64,6 +65,44 @@ npm run probe:harnesses      # isolated factory capability probes of codex, pi, 
 Process tests start real children: `sh`, `sleep`, and `node`. Linux `/proc` is required for supervised process identity; unsupported identity environments fail before launch.
 
 `npm run validate` exits 0 for a runnable workflow (warnings allowed), 1 when it has errors, and 2 when the file cannot be read. Diagnostics are printed as `file:line:column: severity [code] path: message`.
+
+### Offline Chromium smoke prerequisites
+
+Browser tooling is pinned to `@playwright/test` **1.64.1** in the lockfile. Install dependencies
+with `npm ci`, then provision that version's Chromium explicitly, before running the suite:
+
+```bash
+./node_modules/.bin/playwright install chromium --no-shell
+npm run test:browser
+# Optional: npm run test:browser -- --headed
+```
+
+The command builds the real application and runs three bounded Chromium scenarios, sequentially,
+with no test retries. It never installs packages/browsers or invokes a provider. A missing browser
+fails with provisioning guidance. `npm run check` remains browser-independent and offline.
+
+Linux needs `/proc`, `sh`, and Chromium's shared libraries/fonts (including NSS, ATK/AT-SPI,
+X11/XCB, xkbcommon, CUPS, DRM/GBM, Pango/Cairo and ALSA). On officially supported Debian/Ubuntu,
+the explicit administrator provisioning command is
+`./node_modules/.bin/playwright install-deps chromium`; **the smoke command never runs it**.
+Other distributions must provide equivalent packages themselves. Headless execution needs no
+display server; `--headed` needs a display. Browser binaries normally live in Playwright's user
+cache; set `PLAYWRIGHT_BROWSERS_PATH` consistently during provisioning and execution to choose
+another location. Never point tests at a personal browser profile.
+
+See the current official [browser provisioning](https://playwright.dev/docs/browsers),
+[Linux support](https://playwright.dev/docs/intro#system-requirements) and
+[isolated fixture](https://playwright.dev/docs/test-fixtures) documentation. The smoke uses the
+full pinned Chromium via its `chromium` channel, not an arbitrary installed Chrome.
+
+Each scenario starts an owned foreground daemon process with explicit test-only fake adapters,
+a temporary project/database, and ordinary UI pairing. Fake reports use the actual supervised
+child and `wf report`; no production fake-provider switch or fixture-control endpoint exists.
+Read-only durable inspection occurs after owner exit. Teardown closes owned tabs, stops active
+work through existing controls, reaps the owner/children, checks listener/discovery removal,
+and removes owned state and runner output on success or failure. Uncertain cleanup preserves
+state and fails rather than deleting evidence. No browser profile, trace, video or credential
+artifact is retained.
 
 ### Reporting (implemented headless path)
 
@@ -220,7 +259,7 @@ Polling, run selection and lifecycle changes never replace or rebind the run dra
 
 **Inspect manual intervention** pins a separate decision to the paused run/event. Explicitly choose a compatible jump stage, a declared outcome for skipping the current stage, or an unfinished task to accept complete. The page shows target/consequences before submission and requires a nonblank reason plus confirmation. Durable audit events distinguish manual decisions from execution. Skip creates no agent report and does not complete the task, even when skipping `task.complete`; a retry route pauses. Manual completion clears the active-task pointer only if that task was active; the unchanged cursor may need a compatible jump. Overrides remain paused. These controls do not implement, repair, reset or roll back repository files; repeating a stage can repeat external side effects. **Stop now** remains the run-ending control.
 
-If the daemon is unavailable, start it explicitly and request a fresh pairing code; nothing auto-starts. Tab close/reload/disconnect never stops the daemon. Starting an actual agent workflow invokes its configured provider; browser verification uses disposable fake adapters only. Phase 8.5, the full Phase 8 gate and MVP remain incomplete. Exact Host/Origin checks, a separate HttpOnly SameSite cookie, JSON/custom-header requirements and CSP still protect the narrow local API. No recovery/raw-log/filesystem-browsing endpoints, dependencies or migrations were added; this is not isolation from same-user programs.
+If the daemon is unavailable, start it explicitly and request a fresh pairing code; nothing auto-starts. Tab close/reload/disconnect never stops the daemon. Starting an actual agent workflow invokes its configured provider; browser verification uses disposable fake adapters only. Phase 8.5 and the full Phase 8 gate passed the permanent offline suite; Phase 9/MVP remain incomplete. Exact Host/Origin checks, a separate HttpOnly SameSite cookie, JSON/custom-header requirements and CSP still protect the narrow local API. No recovery/raw-log/filesystem-browsing endpoints or migrations were added; browser-testing dependencies are development-only. This is not isolation from same-user programs.
 
 ### Limits and stage retries (Phase 7.4)
 
@@ -362,6 +401,7 @@ npm run smoke:meta -- --harness omp --scenario report --timeout-seconds 60 \
 | `src/app/` | Command-line entry points. |
 | `src/architecture.test.ts` | Fails the build if an import crosses one of these boundaries. |
 | `test/fixtures/fake-agent.mjs` | Test-only stand-in for a harness: report, crash, hang, and child-process modes. |
+| `test/browser/` | Permanent offline Chromium smoke scenarios and disposable foreground-daemon fixtures. |
 | `test/fixtures/workflows/` | Invalid and warning-only workflow fixtures. Every invalid fixture must be listed with its expected code. |
 | `docs/` | [Harness compatibility note](docs/harness-compatibility.md) and [schema v1 decisions](docs/schema-v1.md). |
 
@@ -374,5 +414,6 @@ npm run smoke:meta -- --harness omp --scenario report --timeout-seconds 60 \
 | `typescript` | 7.0.2 | Strict typecheck and build. |
 | `@types/node` | 26.6.5 | Node API types, matching the Node version in use. |
 | `@biomejs/biome` | 2.5.15 | One tool for lint and formatting. |
+| `@playwright/test` | 1.64.1 | Separate offline Chromium smoke runner; browser provisioning is explicit. |
 
-SQLite uses the built-in `node:sqlite` module, which needs no native build step and loads on Node v26.8.2 without flags. Tests use the built-in `node:test` runner.
+SQLite uses the built-in `node:sqlite` module, which needs no native build step and loads on Node v26.8.2 without flags. Core tests use the built-in `node:test` runner; the separate Chromium smoke uses Playwright.
