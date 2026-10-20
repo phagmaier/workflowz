@@ -518,6 +518,108 @@ steps:
     assert.equal(existsSync(path.join(f.root, "effects")), false);
   });
 
+  it("executes a custom debugging return with tagged routing, direct precedence and ambiguous creation rejection", async (t) => {
+    const f = await fixture(t, "debugging");
+    const text = workflowText(`policies:
+  - match: {tags: [implementation]}
+    on:
+      needs_debugging: {goto: debug}
+  - match: {tags: [stage]}
+    on:
+      complete: {goto: done}
+start: implement
+steps:
+  implement:
+    kind: agent
+    harness: codex
+    session: fresh
+    tags: [implementation, stage]
+    prompt: Implement offline
+    outcomes: [complete, needs_debugging]
+    on:
+      complete: {goto: review}
+  debug:
+    kind: agent
+    harness: codex
+    session: fresh
+    prompt: Repair and return to implement
+    outcomes: [repaired]
+    on:
+      repaired: {goto: implement}
+  review:
+    kind: agent
+    harness: codex
+    session: fresh
+    tags: [stage]
+    prompt: Review offline
+    outcomes: [complete]
+  done: {kind: end}
+`);
+    const ambiguous = text.replace(
+      "start: implement",
+      "  - match: {tags: [stage]}\n    on:\n      complete: {pause: true}\nstart: implement",
+    );
+    const rejected = await f.cli(["run", "create", f.file("ambiguous.yaml", ambiguous)]);
+    assert.equal(rejected.code, 1);
+    assert.match(rejected.stderr, /conflicting_policy/);
+    assert.deepEqual(await f.ok(["run", "list"]), []);
+    const id = await f.create(text);
+    await f.control("start", id);
+    await until(
+      () => f.status(id),
+      (s) => s.run.status === "completed",
+    );
+    const state = f.inspect(id);
+    assert.deepEqual(
+      state.transitions.map((row) => [row.fromStepId, row.outcome, row.toStepId]),
+      [
+        ["implement", "needs_debugging", "debug"],
+        ["debug", "repaired", "implement"],
+        ["implement", "complete", "review"],
+        ["review", "complete", "done"],
+      ],
+    );
+    assert.deepEqual(
+      state.attempts.map((attempt) => [attempt.stepId, attempt.status, attempt.correctionCount]),
+      [
+        ["implement", "succeeded", 0],
+        ["debug", "succeeded", 0],
+        ["implement", "succeeded", 0],
+        ["review", "succeeded", 0],
+      ],
+    );
+    const reports = await f.ok<{ outcome: string }[]>(["run", "reports", id]);
+    assert.deepEqual(
+      reports.map((report) => report.outcome),
+      ["needs_debugging", "repaired", "complete", "complete"],
+    );
+    // Each actual report CLI acknowledged; no correction or hidden quality gate was added.
+    assert.equal(
+      readFileSync(path.join(f.directory, "agent-executions"), "utf8")
+        .split("\n")
+        .filter((line) => line === "ack 0").length,
+      4,
+    );
+    for (const attempt of state.attempts) {
+      assert.ok(attempt.processIdentity);
+      assert.equal(observeProcessGroup(attempt.processIdentity), "gone");
+    }
+    const { port } = readDaemonAccess(f.directory);
+    await f.ok(["daemon", "stop"]);
+    await f.owner.exited;
+    assert.equal(f.owner.child.exitCode, 0);
+    assert.equal(existsSync(path.join(f.directory, "daemon.json")), false);
+    await assert.rejects(
+      fetch(`http://127.0.0.1:${port}/api/v1`, { signal: AbortSignal.timeout(1000) }),
+      (error: unknown) =>
+        error instanceof TypeError &&
+        error.cause instanceof Error &&
+        "code" in error.cause &&
+        error.cause.code === "ECONNREFUSED",
+    );
+    assert.deepEqual(f.inspect(id), state, "history survives owner exit and SQLite reopen");
+  });
+
   it("keeps real wf report and one exact-session correction working through the daemon", async (t) => {
     const f = await fixture(t, "correction");
     const id = await f.create(AGENT);

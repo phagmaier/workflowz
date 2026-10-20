@@ -136,7 +136,10 @@ Current bounded authorization: **8.5 permanent offline Chromium smoke coverage**
 
 ## Phase 9 — Finish MVP
 
-- [ ] 9.1 Run all end-to-end scenarios from `spec.md` (happy path, debugging branch, report correction, outage, stop/resume, crash, UI reconnect).
+- [x] 9.1 Run all end-to-end scenarios from `spec.md` (happy path, debugging branch, report correction, outage, stop/resume, crash, UI reconnect).
+
+  Offline acceptance audit covers all **13 spec §9 scenarios plus pause/stop/resume**. Reused existing process/CLI/browser coverage; added one integrated custom-debugging/tag-policy/ambiguity scenario and strengthened the real CLI rejection's unchanged-state assertion. **801 tests / 88 suites**, typecheck/lint, **3 Chromium scenarios**, recovery/reporting/tasks/capabilities/boundary smokes and canonical validation passed. Durable reopen and owned process/listener/discovery/state cleanup passed. No production defect or contract change; no paid providers. [Exact evidence matrix, commands and limits](docs/implementation-log.md#phase-91--offline-end-to-end-acceptance-audit). Phases 9.2–9.5 and MVP remain incomplete.
+
 - [ ] 9.2 Provide sample workflows: minimal single-step, task loop, implement/review/commit, human checkpoint, command-only.
 - [ ] 9.3 Verify readable failures, logs, report payload bounds, API validation, local state directory behavior, and startup/shutdown documentation.
 - [ ] 9.4 Document how to install, configure, start the daemon, launch UI, run workflows, import tasks, troubleshoot adapters, and recover interrupted runs.

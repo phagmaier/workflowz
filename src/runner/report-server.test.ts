@@ -264,10 +264,12 @@ describe("private reporting endpoint and CLI", () => {
             WF_REPORT_TOKEN: f.access.token,
           },
         }).completed;
+      const before = f.coordinator.inspect(f.runId);
       const rejected = await cli(["report", "unknown", "--summary", "bad"]);
       assert.equal(rejected.exitCode, 1);
       assert.match(rejected.stderr, /Allowed outcomes: complete, blocked/);
       assert.equal(f.coordinator.reportFor(f.attemptId), undefined);
+      assert.deepEqual(f.coordinator.inspect(f.runId), before);
       const accepted = await cli([
         "report",
         "complete",

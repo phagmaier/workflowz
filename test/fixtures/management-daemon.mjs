@@ -11,6 +11,12 @@ const plans = {
   correction: [{ mode: "silent" }, { mode: "report", outcome: "complete" }],
   "correction-hang": [{ mode: "silent" }, { mode: "report-then-hang", outcome: "complete" }],
   "before-report": [{ mode: "hang" }],
+  debugging: [
+    { mode: "report", outcome: "needs_debugging" },
+    { mode: "report", outcome: "repaired" },
+    { mode: "report", outcome: "complete" },
+    { mode: "report", outcome: "complete" },
+  ],
   tasks: [
     { mode: "report", outcome: "complete" },
     { mode: "report", outcome: "blocked" },

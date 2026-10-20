@@ -1211,3 +1211,135 @@ passed with the host's existing shared libraries. No OS package installation was
 performed. Browser provisioning requires a separate download; suite execution itself stays
 offline. SIGKILL/power-loss of the test runner is not a graceful-teardown guarantee. Existing
 same-user authority, escaped-process and external-side-effect limits remain unchanged.
+
+## Phase 9.1 — offline end-to-end acceptance audit
+
+Started from clean `main`, synchronized with `origin/main`, at accepted Phase 8.5
+`3ef877b4d16a922c5b5d982a9dd2ebdbd7e47e85`. Authorization is offline acceptance,
+bounded gap closure, documentation and commit/push only. Phases 9.2–9.5 and the
+final MVP gate remain separate. No live providers or global configuration changes.
+
+### Evidence map (recorded before gap closure)
+
+Paths below are repository-relative. **C** = `npm run check` (includes every named
+`src/` test); **B** = `npm run test:browser`; **R** = `npm run smoke:recovery`;
+**P** = `npm run smoke:reporting`; **T** = `npm run smoke:tasks`.
+Integration evidence below uses actual SQLite/service boundaries and supervised
+fake children/`wf report`, not just reducer assertions. “Existing” describes source
+assertions inspected before this milestone's execution; results are recorded below.
+
+| §9 / boundary | Exact executable evidence and exercised behavior | Kind / command | Audit gap / disposition |
+| --- | --- | --- | --- |
+| 1 Happy path / progress | `src/runner/run-service.test.ts` — “follows deterministic branches through agent and command steps, one attempt at a time”: two task IDs, real command success/failure/repair, exact transitions, explicit completion and end. `scripts/smoke-tasks.mjs`: imported queue completed, Markdown unchanged. `test/browser/gate.spec.mjs` — “visual two-stage workflow: ready, blocked attention, revise, explicit resume”: stable task IDs complete after explicit resume. | Integration C; real-process T; browser B | Existing sufficient; report-before-settlement progress is additionally covered by browser API tests below. |
+| 2 Custom debugging branch | `src/engine/compile.test.ts` — “compiles with no diagnostics and resolves every outcome exactly” checks `needs_debugging` routing, but does not execute the custom branch. Existing headless branch is command failure, not agent debugging. | Compiler unit C | Missing integrated custom report → debugger → requested stage. Add one bounded management scenario, shared with row 11. |
+| 3 Undeclared → valid in-turn | `src/test-support/adapter-conformance.ts` — “rejects undeclared reports synchronously and accepts an in-turn correction”: actual CLI rejection/acceptance, one report, zero correction turns, all six adapters including scripted. `src/runner/report-server.test.ts` — “rejects malformed/invalid bodies, authority fields, origins and tokens without any mutation” compares full state; “real wf client waits for acknowledgment and submits handoff content and JSON” submits invalid then valid. | Real-process integration C | Add full-state equality at the existing real CLI rejection boundary; no duplicate scenario needed. |
+| 4 Exactly one correction | Conformance — “resumes the persisted session once after clean execution, without overlap”; “pauses after one failed correction (silent/report/crash/hang), with no third invocation”: exact session, ordering, one logical attempt, success or default `system.report_error` pause. `scripts/smoke-reporting.mjs`: accepted/correction-success/correction-failure with reopen. | Integration C; real-process P | Existing sufficient. Invalid report, technical correction failure and unavailable resume are distinct covered cases. |
+| 5 Provider unavailable | Conformance — “routes provider failure without correction even with a clean process status” and “routes a missing executable as spawn failure without correction”: normalized process/spawn outcome, zero corrections. `src/runner/run-service.test.ts` — “routes a synchronous adapter launch exception instead of stranding the attempt”: configured system route reaches end. Boundary smoke separately exercises synthetic provider failure through real adapters. | Real-process integration C; `npm run smoke:boundaries` | Existing sufficient; synthetic outages only, no paid call. |
+| 6 Command failure | Headless test in row 1 asserts exact `check/failed → fix → check/complete` transitions and real marker/output effects. | Real-process integration C | Existing sufficient; verification stage exists only because this fixture authors it. |
+| 7 Session / selected context | `src/runner/context.test.ts` — “assembles ordered instruction content, full task context and only selected same-task reports”: review receives current body/instructions and only `work`, excludes private/previous-task history, frozen input survives reopen. `src/runner/run-service.test.ts` — “a resume step uses the prior persisted session of the same harness”; “routes a lost persisted resume session explicitly instead of launching fresh”. Revision scope in row 10. | Real-process integration C | Existing sufficient; selected context and exact resume have separate focused proofs. |
+| 8 Committed persistence | `src/app/management.test.ts` — “honors graceful daemon shutdown as pause-after-current and restart never auto-drives”; “reopens a SIGKILL between committed steps and continues only after disposition plus resume”: persisted cursor/history unchanged, next effect once, old stage not repeated. Recovery smoke `between` repeats the actual crash boundary. | Foreground-daemon/CLI integration C; real-process R | Existing sufficient. Graceful restart and crash between transactions are distinguished. |
+| 9 Agent / command uncertainty | Management — “recovers a killed command daemon, escalates owned descendant cleanup and admits only one explicit retry”; “never replays an agent or routes its interrupted report after daemon SIGKILL at before-report/correction-hang”; “rejects competing owners; crash/reopen preserves accepted report, blocks replay and exposes exact recovery decisions”. Recovery smoke includes command/correction/unknown correction intent. | Foreground-daemon/CLI integration C; real-process R | Existing sufficient: live tree blocks execution, retained report cannot route, cleanup/decision/resume separate. |
+| 10 Paused edits / history | Management — “supports paused revision, cursor/skip/task overrides and reasoned task completion”; “preserves paused revisions, task progress and frozen settings across restarts without crossing session scope”. Browser gate plus `test/browser/intervention.spec.mjs` — “mobile manual decisions stay paused, audit durably, reject a real stale submission and pin drafts”: explicit selection/revision/resume, old reports/inputs/revisions retained. | Foreground-daemon/CLI integration C; browser B | Existing sufficient; CLI sequence and browser historical integrity complement each other. |
+| 11 Policy precedence / ambiguity | `src/engine/routing.test.ts` — “prefers the step's own transition over every policy and default”; “prefers a tag policy over an all-steps policy”; `src/engine/compile.test.ts` — “conflicting-policies.yaml fails with conflicting_policy”. | Compiler/router unit C | Add integrated tagged routes across steps, direct override and CLI rejection of ambiguous creation in the single row-2 scenario. |
+| 12 No tasks | Reporting smoke's standalone agent → `touch` command → end; browser lifetime's graph-only display and completed run. | Real-process P; browser B | Existing sufficient; no artificial task queue or percentage. |
+| 13 Browser disconnect | `test/browser/lifetime.spec.mjs` — “reload and last-tab closure do not stop or replay an active fake operation”: file-gated live PID/attempt survives reload and zero tabs, completes without browser, reconnect inspects same result; durable one attempt/report/transition. | Actual Chromium B | Existing sufficient; reuse permanent suite unchanged. |
+| Pause / stop / resume (todo 9.1) | Management — “controls a driven command from other CLI processes, rejects stale/wrong-state controls and reuses service after stop”: pausing waits at release gate, preserves routed cursor, explicit resume; stop then another drive. `src/runner/run-service.test.ts` — “stop-now terminates the agent's whole process tree and records the stop”; “stop-now also ends a running command”. `src/app/browser.test.ts` covers report-before-settlement counts and browser controls. | Real-process/CLI/browser-API integration C; browser B for explicit resume | Existing sufficient; stopped attempt has no success transition; owned descendant absence and sequential admission are asserted. |
+
+### Bounded gap closure
+
+- Added exactly one application-level scenario in `src/app/management.test.ts`:
+  **“executes a custom debugging return with tagged routing, direct precedence and
+  ambiguous creation rejection”**. The existing test-only daemon plan runs actual
+  supervised children and `wf report`: `implement/needs_debugging → debug/repaired
+  → implement/complete → review/complete → done`. The tag rule routes debugging
+  and inherited review completion; the implementation's direct rule beats the
+  shared completion policy. Conflicting equal-tag policies reject `run create`
+  through the real CLI before creating any run. Exact attempts, outcomes,
+  transitions, four successful CLI acknowledgments and zero corrections are checked.
+  All owned groups must be gone before shutdown. Owner exit 0, refused old listener,
+  discovery absence and full historical equality after read-only SQLite reopen
+  are asserted before the fixture removes its root.
+- Strengthened `src/runner/report-server.test.ts`'s existing **“real wf client
+  waits for acknowledgment and submits handoff content and JSON”** with full-state
+  equality immediately after rejected `wf report unknown`, before the valid report.
+  This covers unchanged cursor/attempt/events rather than inferring it from no report.
+- No production defect was exposed or behavior changed. No adapter API, workflow
+  field, migration, production fake switch, browser framework or quality gate was added.
+  Existing browser scenarios are reused unchanged.
+- The precise supplementary browser-API case in the pause/stop/resume row is
+  `src/app/browser.test.ts` — **“controls the owner with stale checks, waits for
+  settlement and counts only accepted task completion”**. This is HTTP/application
+  integration, not an actual-browser claim.
+
+Focused application execution:
+
+```bash
+npm run build
+node --test --test-name-pattern 'custom debugging return|real wf client waits' \
+  dist/app/management.test.js dist/runner/report-server.test.js
+```
+
+**2 tests / 2 suites passed**, zero failures/cancellations/skips. The new foreground
+daemon/CLI path and strengthened report boundary both passed on first execution.
+
+### Exercised acceptance and cleanup
+
+Node.js **v26.8.2**, npm **11.19.1**, Playwright **1.64.1**, provisioned full
+Chromium **156.0.8078.4**, revision **1248**. No provisioning command, package/browser
+download or live provider was run. The following commands ran sequentially and
+all exited successfully:
+
+| Command | Observed result |
+| --- | --- |
+| `npm run test:browser` | **3/3 passed**, 16.3s, one worker, no retries. All three original permanent scenarios reused unchanged. |
+| `npm run check` | Typecheck and lint passed; **801 tests / 88 suites passed**, zero failures/cancellations/skips/TODOs. Existing informational lint suggestions only. Includes every C row above and the new integrated debugging/policy scenario. |
+| `npm run smoke:recovery` | Command retry, correction skip, committed-cursor continue and unknown correction-intent end passed: actual owner SIGKILL, no automatic replay, explicit process decisions and durable reopen. |
+| `npm run smoke:reporting` | Accepted report observed before settlement with unchanged cursor; direct completion with zero corrections; successful correction completed with exactly one; failed correction paused with exactly one and `system.report_error`. SQLite reopen passed. |
+| `npm run smoke:tasks` | 3 total / 1 prechecked / 2 runnable; both imported tasks completed in order via real reporting, source Markdown unchanged and task input persisted. |
+| `npm run smoke:capabilities` | Required-feature incompatibility and model-selection rejection launched zero invocations; supported fresh reporting launched one; unavailable correction and explicit resume each retained one prior invocation, with no correction/fresh fallback. Durable outcomes checked. |
+| `npm run smoke:boundaries` | Synthetic OpenCode/Claude correction and provider-failure paths passed: selected environments, scrubbed logs/diagnostics, sequential settlement, durable reopen; provider failure had zero correction. |
+| `npm run validate -- examples/overnight.yaml` | **Valid, 8 steps, zero warnings**, unchanged hash prefix `8a4912284968`. |
+
+All **13 §9 scenarios plus pause/stop/resume** now have exercised sufficient
+evidence. Rows 2/11 use the newly named management scenario; row 3 uses the
+strengthened existing CLI case. The other rows reuse existing assertions, not a
+new duplicate integration/browser suite. No unresolved acceptance blocker or
+production defect was found.
+
+Cleanup evidence:
+
+- Browser output explicitly confirmed durable reopen, **5 + 1 + 1 owned children
+  gone**, each foreground owner exit **0**, listener/discovery absence and owned
+  root removal. Disposable Playwright contexts/browser instances exited with the
+  suite; no screenshots, traces, profiles or videos were retained.
+- New debugging scenario independently required all four recorded groups gone,
+  daemon exit **0**, actual `ECONNREFUSED` from its old listener, removed discovery
+  and unchanged complete run/attempt/input/transition/event history on read-only
+  reopen after owner exit. Management fixture removal asserted root absence.
+- Recovery smoke explicitly cleaned owned processes/sessions/leases/databases
+  after each durable reopen; reporting/tasks smokes removed their disposable
+  projects, sessions, logs and databases. Capability/boundary fixtures closed
+  databases and removed their owned roots after checking durable results.
+- Independent post-run glob checks found no `.tmp-management-*`,
+  `.tmp-recovery-smoke-*` or `.tmp-recovery-*` roots in the repository, and no
+  `/tmp/workflowz-chromium-*`, `wf-browser-output-*`, `wf-report-smoke-*`,
+  `wf-tasks-smoke-*`, `wf-capability-smoke-*` or `wf-boundary-smoke-*` roots.
+  A post-run `pgrep -af` for management/recovery/fake-agent/browser-daemon and
+  foreground `bin/wf ... daemon start` fixtures returned no matches (exit 1).
+  No unrelated processes were signalled or historical/uncertain artifacts deleted.
+- No throwaway script was needed. Existing Phase 8.5 failure-teardown evidence
+  remains applicable to the unchanged browser fixture; no new intentional failure
+  was injected or claimed in this pass.
+
+**Phase 9.1 complete.** Only its checkbox is closed. Phases **9.2–9.5** and the
+**final MVP gate remain incomplete**. README/spec/architecture and the canonical
+example intentionally remain unchanged: no product contract changed.
+
+Limits: fake providers prove deterministic offline behavior, not current live
+authentication, provider availability or paid-account compatibility. Chromium
+desktop/390px coverage is not cross-browser/physical-mobile/accessibility proof.
+SIGKILL cases do not simulate every power-loss/storage fault. Existing Linux
+`/proc`/local SQLite requirements, non-atomic identity checks/signalling,
+escaped-descendant limits, operator-asserted cleanup trust and absence of rollback
+or exactly-once external effects remain unchanged.
+
