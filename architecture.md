@@ -1,6 +1,6 @@
 # Technical Architecture — Agent Workflow Runner
 
-**Status:** MVP design contract  
+**Status:** Implemented MVP contract; final offline gate passes (Phase 9.5 evidence in implementation log)  
 **Read first:** [Product specification](spec.md)
 
 ## 1. System overview
@@ -8,7 +8,7 @@
 ```text
                    Local browser UI
                          |
-                   HTTP / SSE / API
+                   HTTP / polled API
                          |
    wf CLI --------> LOCAL RUNNER <--------- control CLI
    (reports)           |  |
@@ -42,6 +42,13 @@ A **single local daemon process** owns orchestration and event storage. The brow
 
 Monorepo packages are optional organizational boundaries; use a single repository and avoid distributed services or an internal microservices architecture.
 
+The implemented surface and canonical [deferred-feature list](spec.md#deferred-features-and-permanent-non-goals)
+take precedence over early illustrative interfaces below. MVP uses immutable
+task snapshots and workflow revisions, paginated events/polling and local log
+files; it adds no mutable workflow library, task re-import or browser recovery.
+Rationale: retain one durable state owner and the accepted narrow API rather
+than invent identity merging or transports to satisfy an earlier sketch.
+
 ## 2. Durable state model
 
 SQLite is authoritative. The production default for DB and run artifacts is `${XDG_STATE_HOME:-~/.local/state}/workflowz/`, with `WF_STATE_DIR` and higher-precedence `--state-dir` overrides. The project contains user-authored workflow files and optional input docs; offline tests use explicit disposable project-local directories. File paths stored in DB are absolute or normalized at run creation.
@@ -53,7 +60,7 @@ SQLite is authoritative. The production default for DB and run artifacts is `${X
 | `workflows` | workflow_id, name, file_path, created_at | Workflow identity |
 | `workflow_revisions` | revision_id, workflow_id, definition_yaml, definition_hash, created_at | Immutable revisions; a run references one |
 | `runs` | run_id, current_revision_id, project_root, status, cursor_step_id, active_task_id, created_at, updated_at, start_time, end_time | One authoritative status and cursor per run |
-| `tasks` | task_id, run_id, source_order, source_identity, title, body, heading_path, state | Imported snapshot, source order fixed absent manual update |
+| `tasks` | task_id, run_id, source_order, source_identity, title, body, heading_path, state | Immutable imported snapshot; progress is engine-owned |
 | `attempts` | attempt_id, run_id, step_id, task_id nullable, revision_id, sequence_no, session_id nullable, pid/pgid nullable, process_identity, status, started_at, finished_at, exit_code, error_code | Exactly one active attempt globally |
 | `reports` | report_id, attempt_id UNIQUE, outcome, summary, issue, handoff, data_json, received_at | At most one **accepted** report per attempt |
 | `events` | event_id AUTOINCREMENT, run_id, attempt_id nullable, type, data_json, timestamp, revision_id | Append-only event stream; correlate transition commits |
@@ -130,7 +137,7 @@ A step attempt has an **input snapshot**: task, project root, prompt, instructio
 
 `RunService.createRun` is the filesystem entry point for Markdown import; `previewTasks` is read-only. The coordinator retains its supplied-task seam for fixtures. Migration 4 stores immutable source text/hash/import settings and per-task source positions/check state, transactionally with task rows and the import event. The parser preserves separate nested checkbox tasks and heading ancestry without deriving dependencies. File edits never update the active queue.
 
-At attempt preparation the runner reads configured instruction content, resolves explicit placeholders and adds the current task plus only selected reports from the same run/task. Missing selected history is omitted until produced; missing explicit placeholder values or instruction files fail before launch. Migration 5 stores the exact assembled agent input once per attempt with an `attempt_prepared` event in the same transaction. Report tokens are generated afterward and never enter that snapshot. Per-task parameters and paused revisions are implemented as described below. Re-import remains unimplemented.
+At attempt preparation the runner reads configured instruction content, resolves explicit placeholders and adds the current task plus only selected reports from the same run/task. Missing selected history is omitted until produced; missing explicit placeholder values or instruction files fail before launch. Migration 5 stores the exact assembled agent input once per attempt with an `attempt_prepared` event in the same transaction. Report tokens are generated afterward and never enter that snapshot. Per-task parameters and paused revisions are implemented as described below. Neither manual re-import into an existing run nor Markdown auto-sync/write-back is implemented; create a new run for another snapshot (spec §8).
 
 ### 3.3 Run-local parameters and paused revisions (Phase 5.5)
 
@@ -159,7 +166,7 @@ interface AgentAdapter {
 }
 ```
 
-Actual input/result signatures live in `src/adapters/agent-adapter.ts`. Async factories perform the probes and expose their snapshot; there is no second per-invocation probe method. Responsibilities remain: adapter handles harness-specific launch/session/streaming; runner validates reports, stores state, routes outcomes.
+Actual input/result signatures live in `src/adapters/agent-adapter.ts`; this sketch is not a second API contract. Canonical YAML uses optional `timeout_seconds` and required agent `session: fresh | resume`. Resume requires exact non-creating adapter admission of a persisted identity in the same harness/run/task/revision, never permissive/latest/fresh fallback. Async factories perform probes and expose their snapshot; there is no second per-invocation probe method. Responsibilities remain: adapter handles harness-specific launch/session/streaming; runner validates reports, stores state, routes outcomes.
 
 The static **harness registry** maps `HarnessId` to descriptor/capability data. Executable adapters are supplied explicitly through `RunService` options. Workflow validation resolves `harness` against the registry and reports a clear "unknown or unsupported harness" error instead of failing an enum. The registry is a lookup table, not a plugin system; dynamic third-party plugin loading is deferred (see [spec.md](spec.md) §8).
 
@@ -168,7 +175,7 @@ Adapter responsibilities are uniform across harnesses; only the four harness-spe
 | `HarnessId` | Headless launch | Event/settle source | Correction resume | Capabilities to verify |
 | --- | --- | --- | --- | --- |
 | `codex` | `codex exec` | JSONL via `--json`; final message + process exit | `codex exec resume` | resume, event stream, structured output, permission mode, model selection |
-| `pi` | `pi --print --mode json` / `--mode rpc` | LF-delimited JSONL/RPC; `agent_settled` | resume by persisted session id/path | resume, event stream, permission mode, model selection |
+| `pi` | `pi --print --mode json` | LF-delimited JSON; `agent_settled` | validated journal/full UUID in its exact directory; no create on resume | resume, event stream, permission mode, model selection |
 | `omp` | `omp --print --mode json` | LF JSON; final successful assistant and `agent_end.isTerminal: true` + process settlement | `--resume <exact-persisted-path>` | offline conformance passed; live provider/tool behavior unverified |
 | `opencode` | private `serve --stdio` child + v2 API | prompt admission, wait-for-idle, persisted terminal outcome + process settlement | exact session API, never create on resume | resume, permission mode, model/variant selection; no provider event stream in this slice |
 | `claude` | `claude -p --output-format stream-json` | stream-json lines; terminal `result` message | `--resume <session-id>` | resume, event stream, permission mode, model selection |
@@ -177,11 +184,16 @@ Every adapter must pass the offline **adapter conformance suite** (see §9) befo
 
 **Adapter acceptance (2026-10-19):** Authorized Codex/Pi Luna/low reporting and exact-session correction passed the Phase 6 gate. The later explicitly authorized omp/OpenCode Meta Contributor/low pass also completed direct reporting and exact-session correction, including actual helper acknowledgment, sequential process settlement, durable SQLite reopen and target cleanup. The all-adapter offline gate at milestone 0.5 completion passed **704 tests**. Claude's separately authorized Haiku/low correction passed after its earlier direct report, closing **milestone 0.5**: one logical attempt, one exact-session correction after original settlement, one accepted report before final settlement, completed run, durable reopen and removed target. The earlier omp OpenAI credential failure remains historical evidence, not an automatic retry or provider fallback. The owner's named Meta secret source is loaded locally without sourcing shell code or persisting its value; global configuration is unchanged. omp assistant metadata matched the Contributor provider/model; Claude assistant and terminal model evidence matched Haiku. OpenCode's transport lacks independent actual-model evidence. Earlier unknown MCP credential exposure remains outside known-value scrubbing; private artifacts must not be published. These results supersede only exercised paths' historical live-pending notes below. Exact evidence and limits are in `docs/harness-compatibility.md`. The subsequently authorized Phase 7.1 lifecycle implementation and append-only migration 7 are described in §7.5; headless 7.2 and management 7.3 were later authorized separately; 7.4 was subsequently authorized for offline implementation; 7.5 onward and further paid execution still require new authorization.
 
+Phase-local notes below retain the evidence available when implemented.
+Pending live/provider claims there are superseded only by the later scoped
+acceptance above and compatibility record; the final offline gate does not
+refresh authentication or paid-provider compatibility.
+
 ### 4.1 Codex integration
 
 Start with the **non-interactive Codex CLI**, not direct API calls. Capture JSONL events and CLI exit status; extract/persist the session ID from documented events; support normal work and same-session follow-up for correction. Check locally installed flags/version at integration time.
 
-Codex docs describe `codex exec` headless mode, JSONL through `--json`, `--output-schema` structured final responses, and `codex exec resume` for continuing sessions. They also document permission configuration, including unrestricted modes. Structured output may be used as a fallback, but `wf report` remains the common contract. Do **not** assume the first JSONL agent-message item is the final completion boundary.
+Codex docs describe `codex exec` headless mode, JSONL through `--json`, `--output-schema` structured final responses, and `codex exec resume` for continuing sessions. They also document permission configuration, including unrestricted modes. Structured-output reporting fallback is deferred; current adapters require `wf report`. Do **not** assume the first JSONL agent-message item is the final completion boundary.
 
 **Official references:**
 
@@ -309,7 +321,7 @@ This design allows an agent to fix a rejected report *during its original turn* 
 
 ## 6. Commands and filesystem state
 
-Each command is an ordinary subprocess launched with explicit argv and cwd. Capture bounded stdout/stderr (stream to disk with tail in UI); return normalized `complete` / `failed` on exit codes; return system errors on spawn failure/timeout/interruption. `stdout` is available as a bounded interpolation field for downstream steps. Script authors who need complex shell behavior may explicitly call `sh -lc` or a checked-in script; the engine does not parse shell source.
+Each command is an ordinary subprocess launched with explicit argv and cwd. Capture bounded stdout/stderr and stream bounded diagnostics to local disk; invocation events expose log paths, not a raw-log endpoint or UI tail. Return normalized `complete` / `failed` on exit codes; return system errors on spawn failure/timeout/interruption. `stdout` is available as a bounded interpolation field for downstream steps. Script authors who need complex shell behavior may explicitly call `sh -lc` or a checked-in script; the engine does not parse shell source.
 
 **Git/worktree example:** a command step creates a named worktree, followed by an agent step whose `cwd` targets that path. Do not assume command process `cd` changes subsequent step directories. Automatic checkout/checkpointing/rollback is not built into the runner. The user can put these commands in the workflow.
 
@@ -419,6 +431,12 @@ Replies are JSON: 200 success, 202 shutdown admission, 401 invalid management au
 
 Resume through management requires paused state; interrupted runs first need an explicit Phase 7.2 disposition and separate resume. Manual jump checks task-compatible cursor selection. Existing-run edits retain reason/audit, declared-outcome and unresolved-process barriers. All state/event writes stay with the coordinator and its transactions. `workflow import` reuses immutable revision storage; listing includes revisions also saved by run creation/editing. It does not add mutable named-workflow CRUD or re-import tasks.
 
+Per-task settings and interrupted recovery remain CLI/service-only; the browser
+has no settings editor or recovery-decision operation. Management resume admits
+only paused state: explicit process resolution and recovery disposition must
+precede a separate resume. Polling/paginated events replace the early SSE/log-tail
+proposal; no raw-log or filesystem-browsing endpoint is exposed (spec §8).
+
 Existing-run admission and revision validate live referenced inputs but exclude the checklist already frozen at creation. Status uses the active attempt's frozen settings, or the active task's current saved settings when there is no attempt, so paused model inspection agrees with subsequent execution.
 
 SIGINT/SIGTERM or shutdown admission marks the facade closing, rejects new mutations and synchronously requests pause-after-current before acknowledgment. Teardown awaits any admitted control, rechecks pause and awaits drive settlement before closing connections/discovery/database. Shutdown acknowledgment precedes exit; a stage without a timeout can delay exit indefinitely. Clients may inspect while draining. Stop-now remains the explicit run termination action. If drive fails unexpectedly, its released guard permits conservative reconciliation into interruption; a safe failure notice remains visible in ping/status. No accepted report routes uncertain work, and restart never replays dispatch/signals.
@@ -435,7 +453,7 @@ Every browser route requires the exact `127.0.0.1:PORT` Host (DNS-rebinding prot
 
 The browser API started as a separate strict preparation allowlist: session inspection/logout, saved revisions, run list, source loading, configured task preview, save immutable revision and create ready run. Phase 8.2 adds read-only draft validation/serialization below; Phase 8.3 adds run inspection/basic execution, and Phase 8.4 adds narrow paused revision/intervention operations. Preview/import and creation delegate to the existing management facade and share its validator. No recovery, raw-log endpoints, arbitrary filesystem browsing/reading, generic management forwarding or new migrations are exposed. Files are uploaded as text with their absolute original directory or selected from saved revisions; the editor can also create a new draft. Project/input selections and stage/policy controls update that draft before saving/creating. Preview writes nothing; create rereads and freezes the actual checklist, never starts execution. Original project files are not rewritten.
 
-Stage/transition/policy/YAML editing is implemented in Phase 8.2 below; dashboard/basic controls in Phase 8.3 and paused-run editing in Phase 8.4 follow it. Permanent offline browser automation (Phase 8.5, §8.6 below) and the full visual-authoring Phase 8 gate now pass. Phase 9/MVP remain incomplete.
+Stage/transition/policy/YAML editing is implemented in Phase 8.2 below; dashboard/basic controls in Phase 8.3 and paused-run editing in Phase 8.4 follow it. Permanent offline browser automation (Phase 8.5, §8.6 below) and the full visual-authoring Phase 8 gate pass, including their rerun in the final Phase 9.5 gate.
 
 ### 8.3 Draft editor integration (Phase 8.2; not execution dashboard)
 
@@ -552,7 +570,7 @@ retained. This is bounded Chromium/390px coverage, not cross-browser coverage or
   A disposable tool helper checks actual `wf` acknowledgment; success also checks exact durable report content, session identity and ordered settled invocations. Report-only scenarios disable correction. Private artifacts remain; settled target projects are removed, uncertain ones preserved. Normal auth/resource discovery is retained, never replaced with empty HOME.
   Ordinary tests/check/build/probes never execute providers; synthetic CLI tests cover this developer surface. Live acceptance is recorded separately from tooling completion.
   The account-local `smoke:meta` convenience command reuses this same path with the owner's pinned Meta Contributor/low selection. Its explicitly authorized loader parses only `MUSE_SPARK_API_KEY` from the owner-only local secrets shell file as literal data, never executing the file or persisting the value. It maps the key to the selected adapter environment; Meta credential names join the existing allowlist/scrubber at both OpenCode boundaries and omp. A developer-only project-preparation callback writes credential-free OpenCode v2 provider configuration inside the disposable target. No global edits, provider client, workflow fields, migrations, engine model restrictions or new report/routing policy are introduced. Plan mode does not read credentials; exact live-execution admission remains separate.
-- UI smoke: `npm run test:browser` permanently covers the complete visual two-stage gate, paused intervention/stale-state/draft pinning, and file-gated browser-lifetime independence (§8.6). Phase 9's broader end-to-end scenarios remain incomplete.
+- UI smoke: `npm run test:browser` permanently covers the complete visual two-stage gate, paused intervention/stale-state/draft pinning, and file-gated browser-lifetime independence (§8.6). Phase 9.1 audited the broader end-to-end scenarios; Phase 9.5 reran the offline/browser/smoke gates and added integrated real-CLI recovery proof. See the implementation log for exact results and limits.
 
 **Quality gate:** TypeScript typecheck, tests, lint and documented local developer commands must pass before calling MVP complete. No external LLM spend needed for basic functionality.
 

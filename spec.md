@@ -1,7 +1,7 @@
 # Product and Behavior Specification — Agent Workflow Runner
 
 **Version:** MVP design v0.1  
-**Status:** Ready for staged implementation  
+**Status:** Implemented MVP; final offline gate passes (Phase 9.5 evidence in implementation log)  
 **Related:** [Architecture](architecture.md) · [Implementation checklist](todo.md) · [Example workflow](examples/overnight.yaml)
 
 ## 1. Purpose
@@ -34,17 +34,17 @@ A user imports 10 unchecked Markdown tasks, chooses a Codex implement stage foll
 - Import flat or nested Markdown checkboxes, `- [ ]`, `- [x]`, `* [ ]`, into ordered task records. Preserve text and enclosing headings; nested items are separate tasks in source order, not implicit dependencies.
 - Each imported task receives an internal stable ID within the run snapshot; record source path, original line/location where possible, title/body, completion state, order, and heading ancestry.
 - Import excludes already-completed checkboxes from the runnable queue unless the user explicitly includes them.
-- Import is a snapshot: edits to Markdown while the workflow runs do not silently change the active queue. Manual re-import is allowed while paused, with a preview of additions/removals and preserved existing task IDs when resolvable.
-- The engine's SQLite run state, not Markdown text or the agent's direct edits, is authoritative for progress. Read-only task import initially; automated `todo.md` write-back is **not required in MVP**.
+- Import is an immutable snapshot: edits to Markdown do not change the active queue. Neither manual re-import into an existing run nor automatic sync/write-back is implemented; create a new run for a new snapshot (see §8).
+- The engine's SQLite run state, not Markdown text or the agent's direct edits, is authoritative for progress.
 - The user may also author one-off workflows with **no** task list.
 
 ### 2.2 Workflow authoring
 
-- Create, edit, duplicate, delete, import, export, and validate a named YAML workflow.
+- Author and validate YAML in a file or the local YAML/visual editor; import/list/save immutable reusable revisions and create runs from them. Editing saves a new revision, not a mutable named workflow. Duplicate/export can be done by copying/saving YAML externally; named-workflow duplicate/delete/export management commands are deferred (§8).
 - Add, remove, reorder visually, and connect stages. Stable **step IDs** are distinct from display order and task numbers.
 - Stages: `agent`, `command`, `task.next`, `task.complete`, and `end` in MVP.
-- Agent stages specify a harness (see §2.4 "Supported agent harnesses"), optional model and reasoning effort, fresh/resume session policy, prompt/instruction references, permissible custom outcomes, context selection, and working directory.
-- Command stages specify an argv array, working directory, environment overrides, timeout, and mapping from exit result to `complete`/`failed`.
+- Agent stages specify a harness (see §2.4 "Supported agent harnesses"), optional model and reasoning effort, required `session: fresh | resume`, prompt/instruction references, permissible custom outcomes, context selection, and working directory.
+- Command stages specify an argv array, working directory, environment overrides, optional `timeout_seconds`, and mapping from exit result to `complete`/`failed`.
 - Each stage has transitions mapping outcomes to `{goto: step_id}`, `{pause: true}`, or `{retry: ...}` actions. A dedicated `end` step represents normal completion.
 - Common transition policies can match all steps, steps by tag, or enumerated step IDs. Direct step overrides take precedence.
 - For same-precedence overlapping policies, reject conflicts at validation rather than rely on YAML order.
@@ -72,7 +72,7 @@ a new event stream transport. Basic controls retain inspected-event, settlement 
 barriers, including nonblank stop/resume reasons and no automatic mutation retries. Browser
 close/reload/logout never stops execution. Interrupted recovery stays in the existing CLI;
 paused-run browser revision/manual intervention is implemented in 8.4 below. Permanent browser
-smokes (8.5) now prove the full Phase 8 gate; Phase 9/MVP remain incomplete.
+smokes (8.5) prove the full Phase 8 gate; final Phase 9.5 verification is recorded in the implementation log.
 
 **Phase 8.4 browser path:** a paused run's exact current revision/source directory opens in
 the existing canonical YAML/visual editor, distinct from reusable workflow preparation.
@@ -101,7 +101,7 @@ visual-authoring → ready → explicit Start → blocked attention → visual r
 explicit Resume path passes, retaining imported tasks and historical reports/attempt inputs.
 Other scenarios prove deliberate audited intervention, stale rejection/fresh inspection,
 unsaved draft pinning and active-operation reload/last-tab closure independence. No new
-production authority or engine behavior is introduced. Phase 9 remains separate and incomplete.
+production authority or engine behavior is introduced. The final Phase 9.5 gate reran this suite successfully.
 
 
 ### 2.4 Supported agent harnesses
@@ -111,7 +111,7 @@ The engine is deliberately harness-agnostic: every harness is an adapter behind 
 | `harness` value | Product | Headless invocation | Session resume used for report correction |
 | --- | --- | --- | --- |
 | `codex` | OpenAI Codex CLI | `codex exec` with JSONL events | `codex exec resume` |
-| `pi` | Pi coding agent | `pi --print --mode json` or `--mode rpc` | resume by session id/path |
+| `pi` | Pi coding agent | `pi --print --mode json` | validated persisted journal/full UUID in its exact directory; no create on resume |
 | `omp` | oh-my-pi (Pi-family) | `omp --print --mode json` | `--resume <exact-persisted-path>` |
 | `opencode` | OpenCode | invocation-local `serve --stdio` + v2 API | exact persisted session API admission; no create on resume |
 | `claude` | Claude Code | `claude -p` with `--output-format stream-json` | `--resume <session-id>` |
@@ -124,6 +124,10 @@ The engine is deliberately harness-agnostic: every harness is an adapter behind 
 - MVP ordering: `codex` and `pi` are implemented first; `claude`, `opencode`, and `omp` follow the same interface and must pass the same conformance suite.
 
 **Adapter acceptance (2026-10-19):** The Phase 6 gate passed with authorized Codex/Pi Luna/low reporting and exact-session correction. A later authorized omp/OpenCode `meta/muse-spark-1.3-contributor`/low pass also completed direct reporting and exact-session correction, with actual helper acknowledgment, sequential settlement, durable SQLite reopen and target cleanup. All registered adapters passed offline conformance in the **704-test** gate at milestone 0.5 completion. Claude's separately authorized `claude-haiku-5-5`/low exact-session correction passed after its earlier direct report: exactly two sequential invocations, one correction, matching persisted identity, real acknowledgment, durable reopen and target removal. **Milestone 0.5 is complete.** The historical omp OpenAI credential failure was not retried; the owner explicitly selected and authorized Meta Contributor and the named local secret source. omp's streamed assistant provider/model fields matched that selection; Claude's assistant and terminal model evidence matched Haiku. OpenCode's private transport does not expose independent actual-model evidence. Earlier OpenCode diagnostics exposed an unknown configured MCP credential, confirming the known-value scrubber limitation; raw artifacts remain private. These results supersede only exercised paths' live-pending statements below. See `docs/harness-compatibility.md` for evidence and limits. Phase 7.1 was subsequently authorized separately; its headless runtime contract is in §6. Headless 7.2 and management 7.3 were later authorized separately; 7.4 was subsequently authorized for offline implementation; 7.5 onward and further paid execution require new authorization.
+
+The following Phase 6 notes describe evidence **at implementation time**.
+Their pending live-verification statements are superseded only by the later
+scoped acceptance above and the compatibility record, not by fresh offline tests.
 
 Phase 6.1 provides an offline-conformant Codex CLI adapter through the headless service API. It uses stdin prompts, explicit persisted session UUIDs, JSONL process/session evidence and the common `wf report` channel. Version and selected unrestricted permission mode are audited. Authentication and provider-backed stream/resume compatibility remain unverified; the full Phase 6 live gate remains unfinished. See `docs/harness-compatibility.md` for evidence and limits.
 
@@ -166,9 +170,9 @@ The parser must reject duplicate YAML keys, invalid interpolation, unknown outco
 
 ### 3.2 Types of steps
 
-**`agent`**: fields `harness`, optional `model`, optional `reasoning_effort`, `session: fresh | resume`, `prompt` or `prompt_file`, `instructions`, `cwd`, `outcomes`, `on`, optional `tags`, `timeout`, `context`. An agent stage receives the current task if present. A resume stage must have a valid persisted session identity or fail with `system.resume_unavailable`.
+**`agent`**: fields `harness`, optional `model`, optional `reasoning_effort`, required `session: fresh | resume`, `prompt` or `prompt_file`, `instructions`, `cwd`, `outcomes`, `on`, optional `tags`, `timeout_seconds`, `context`. An agent stage receives the current task if present. Resume selects a persisted identity in the same harness/run/task/revision scope and requires exact non-creating adapter admission; missing/unavailable identities fail with `system.resume_unavailable`, never a fresh/latest/selector fallback.
 
-**`command`**: fields `argv: string[]`, `cwd`, optional `env`, `timeout`, `on`, optional `tags`. Spawn without a shell by default. Shell syntax is allowed only through an explicit shell executable in `argv` (e.g., `['sh','-lc','...']`). Exit code 0 maps to `complete`; a nonzero exit maps to `failed`. Spawn errors map to engine outcomes.
+**`command`**: fields `argv: string[]`, `cwd`, optional `env`, `timeout_seconds`, `on`, optional `tags`. Spawn without a shell by default. Shell syntax is allowed only through an explicit shell executable in `argv` (e.g., `['sh','-lc','...']`). Exit code 0 maps to `complete`; a nonzero exit maps to `failed`. Spawn errors map to engine outcomes.
 
 **`task.next`**: requires task source. Select first not-completed task if no task is active; returns `task_ready` or `exhausted`. If a task is already active, this step produces `system.task_state_error` rather than silently skipping it.
 
@@ -250,7 +254,7 @@ wf report blocked --summary "Need a secret to continue" --issue "Missing deploym
 
 The CLI reads an engine-provided attempt-scoped endpoint/token from its environment, sends the report to the **running local engine**, validates synchronously, and returns a useful exit code and human-readable error for invalid submissions. The engine validates again before writing an accepted report transactionally. The CLI cannot write arbitrary run-state or transition objects. Never leak the report token into logs or UI reports.
 
-A file/structured-final-response **adapter fallback** may normalize a harness's returned final message into the exact same report schema; it must obey the same validation and uniqueness rules. Do not launch a separate formatting LLM. For initial adapters, CLI reporting is preferred. Schema-constrained output is an optimization, not a reason to trust unchecked model text.
+A file/structured-final-response fallback is deferred; current adapters advertise `supportsStructuredFinalOutput: false`. Only acknowledged `wf report` submissions have report authority. No stdout normalization or separate formatting LLM is implemented.
 
 ### 4.3 Submission lifecycle and one bounded correction
 
@@ -285,10 +289,10 @@ Run states: `draft`, `ready`, `running`, `pausing`, `paused`, `completed`, `stop
 
 - **Pause after current step:** sets `pausing`; after current step settles, persist pause instead of dispatching next. If no step is active, pause immediately.
 - **Stop now:** terminate active process tree, record that files may have partial changes, mark run `stopped`. Stop is not a Git rollback.
-- **Resume:** only from paused/interrupted, after resolving any uncertain operation and validating selected workflow revision and step pointer.
+- **Resume:** management accepts only paused runs, after validating selected revision/cursor and resolving process barriers. Interrupted runs first require an explicit reasoned recovery disposition, which leaves non-ending choices paused; resume is a separate action.
 - **Manual advance/skip:** may override the run cursor or mark a task complete; requires an explicit user action and reason, recorded in history. The UI should explain that it does not alter the codebase automatically.
 - **Edit while paused:** create a revised workflow snapshot; reject invalid revisions or edits referring to now-missing active step without an explicit new cursor.
-- **Delete run:** requires a separate explicit action; does not delete the project directory or undo external side effects. Archive/hide rather than destructive delete initially.
+- **Run retention:** durable history remains inspectable. Run deletion/archive/hide controls are deferred (§8); ending a run does not delete its project or undo external side effects.
 
 Permissions: the runner executes processes on the user's machine, using the chosen harness options (including unrestricted or 'yolo' permissions where supported). It must not impose approval gates. The UI should clearly display the selected permission mode because arbitrary shell commands and unrestricted agents can modify any files accessible to the user. No claims of sandboxing or guaranteed rollback.
 
@@ -327,9 +331,9 @@ No global retry-budget field, provider call, automatic recovery replay or workfl
 ## 7. UI requirements
 
 
-**Workflow editor:** project picker, task import/preview, stage graph/list, stage detail panel (type, harness, model, prompts, cwd, outcomes), outcome-to-next-step picker, global/tag/step policy panel with effective-transition preview, YAML view, validation errors, save/duplicate, Start. Avoid a large node-editor library until needed; a clean stage list + connectors is sufficient in MVP.
+**Workflow editor:** explicit project/instruction/checklist paths, task preview, immutable revision save/load, stage list/connectors, stage details (type, harness, model, prompts, cwd, outcomes), outcome-to-next-step controls, global/tag/step policies with effective-transition preview, canonical YAML validation and ready-run creation. No filesystem picker/browsing or named-workflow CRUD.
 
-**Runner dashboard:** run status; active task/stage and harness; progress when known; elapsed duration; readable logs and outcome reports; pause/stop/resume controls; task history; pending human-attention items; manual override/revision controls when paused.
+**Runner dashboard:** run status; active task/stage and harness; progress when known; paginated events, report details and attention; pause/stop/resume; paused revision/manual intervention. Inspect raw bounded logs locally using invocation paths; no browser log tail. Per-task settings and interrupted recovery remain CLI-only.
 
 The browser UI is a client; closing the tab does not terminate the runner. UI is served locally, with no required cloud account. Prefer localhost binding and no open remote administrative interface by default.
 
@@ -347,13 +351,32 @@ The browser UI is a client; closing the tab does not terminate the runner. UI is
 - Pause, stop, resume, manual override, event/report/log history.
 - Small local UI + CLI commands for headless testing and control.
 
-### Deferred
+### Deferred features and permanent non-goals
 
-- Parallel agents; distributed workers; multi-host scheduling; worktree merging orchestration; enterprise RBAC; cloud sync; autoscaling; a marketplace or dynamic third-party plugin loader (adding new in-tree harness adapters is in scope; a plugin framework is not).
-- AI-generated workflows without review; LLM supervisor; automatic 'quality gating'; automatic code rollback.
-- General-purpose arbitrary JavaScript/Python in transition expressions; arbitrary dynamic graph rewriting while running.
-- True nested subworkflow interpreter and complex dependency scheduler.
-- Markdown checklist auto-sync/write-back; polished graph-canvas drag-and-drop; notifications/integrations.
+This is the canonical scope boundary; "deferred" is not a promise to implement.
+
+| Area | Not implemented / not claimed |
+| --- | --- |
+| Workflow authority (non-goal) | No supervisor LLM, automatic quality gate, mandatory reviewer/test/approval, repository repair or automatic rollback. The author may explicitly add review/test/Git steps. |
+| Scheduling | No parallel workers/agents, job queue, distributed or multi-host scheduling, complex dependency scheduler or worktree-merge orchestration; one active operation/run per state database. |
+| Service lifecycle | No service manager, detachment, auto-start/restart, daemon log rotation or automatic driving/resume after restart. Start the foreground owner explicitly; uncertainty requires a decision. |
+| Task source | No manual re-import into an existing run, Markdown auto-sync or completion write-back. Create another run for another immutable snapshot. |
+| Workflow library | No mutable named-workflow CRUD, named duplicate/delete/export commands, or run delete/archive/hide controls. Import/list/save immutable revisions and create/revise runs; copy/save YAML externally. |
+| Inspection transports | No SSE/event stream, raw-log endpoint, UI log tail or filesystem-browsing endpoint. Use polling, paginated events/reports and local bounded log files. |
+| Per-task settings | CLI/service only; no task-settings editing UI. Whole per-task graph rewrites are also deferred. |
+| Interrupted recovery | CLI/service only; no browser recovery decisions. Resolve processes, choose a disposition, then separately resume. No automatic replay. |
+| Extensions | No dynamic third-party plugin loading/marketplace. In-tree adapter additions and their conformance suite are supported. No nested subworkflow interpreter or arbitrary transition code/expressions/dynamic running-graph rewriting. |
+| Reporting | No stdout/file/structured-final-output report fallback. `wf report` is mandatory; one bounded exact-session correction is not an unlimited retry policy. |
+| Presentation/integrations | No polished drag/drop graph canvas, notifications/integrations, cloud sync, enterprise RBAC or autoscaling. AI-generated workflows without review are outside scope. |
+| Isolation (non-goal) | No sandbox/isolation or guaranteed rollback claim. Unrestricted harnesses and explicit commands can modify any user-accessible files; escaped descendants and arbitrary external effects remain outside process-group guarantees. |
+
+**Rationale (Phase 9.5):** These boundaries reconcile the early design sketches
+with the already implemented immutable snapshot/revision model and narrow
+management/browser allowlists. Adding re-import identity merging, mutable
+workflow entities or another transport solely to satisfy aspirational prose
+would expand state authority and recovery obligations without improving the
+accepted MVP path. This is a documentation cutover, not a schema, migration,
+report, CLI/RPC or recovery behavior change.
 
 ## 9. End-to-end acceptance scenarios
 

@@ -81,4 +81,3 @@ export const daemonAccessSchema = z.strictObject({
   port: z.number().int().min(1).max(65535),
   token: z.string().regex(/^[a-f0-9]{64}$/),
 });
-export type DaemonAccess = z.infer<typeof daemonAccessSchema>;

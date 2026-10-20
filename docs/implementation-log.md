@@ -1635,3 +1635,224 @@ was needed. **No production code, tests, dependencies, migrations, providers,
 downloads, credentials or global harness/configuration changed.** No commit or
 push was made. **Only 9.4 is newly checked; 9.5 and the final MVP gate remain open.**
 
+## Phase 9.5 / final gate — dead weight and explicit MVP boundaries
+
+Owner authorized committing/pushing and optional cheap live execution. The
+accepted 9.4 operator-guide work was committed **first and separately** as
+`8aa5f8a` (`docs: add operator guide and record Phase 9.4 evidence`).
+This pass stayed offline: the requested fixtures prove deterministic control,
+reporting and recovery without refreshing paid provider/authentication claims.
+
+### Audit method, evidence and decisions
+
+Scope: `src/` (contracts, engine, store, runner, adapters, app, web and
+test-support), `scripts/`, `bin/` and `test/`, plus canonical design/operator
+documents. Exact case-sensitive unfinished-marker inventory:
+`grep` tool pattern `\b(TODO|FIXME|XXX|HACK)\b|unimplemented|not implemented`.
+Only `src/adapters/capabilities.test.ts`'s unsupported structured-report-fallback
+assertion matched; lower-case roadmap references and deferred timer variables
+are not unfinished work. No hidden implementation TODO was removed by renaming.
+
+Graph project `home-phagmaier-Code-workflowz` was ready/full/watched, generation
+`2026-10-20T02:52:27Z`, later refreshed to `2026-10-20T03:01:47Z`.
+`check_index_coverage` checked all four scopes and 17 exact evidence paths:
+source/scripts/bin had no recorded gaps and matching metadata. The intentional
+invalid fixture `test/fixtures/workflows/invalid/yaml-syntax.yaml:1–7` is unusable
+to the graph; direct source read confirmed its unclosed YAML sequence.
+Coverage is best effort, not proof of completeness. Generated `dist/` and
+dependencies were intentionally excluded.
+
+`search_graph(max_degree=0, exclude_entry_points=true)` was fully paged for
+Function (7), Method (17), Type (2), Interface/Class (0 each), and Variable
+(191, all YAML data, not source dead code). Names below omit the common graph
+prefix `home-phagmaier-Code-workflowz.`. Source reads, qualified-name graph
+search/`trace_path(direction: both, include_tests: true)` and TypeScript-native
+LSP references distinguished callbacks/types from absent consumers. A graph
+OPTIONAL-MATCH/count query returned an inconsistent empty census; it was
+reported to tool QA and **not used as negative evidence**. An initial delegated
+no-consumer claim for the recovery fixture was independently disproved and
+withdrawn; only the corrected parent evidence is used below.
+
+| Candidate / qualified symbol or bounded group | Reference/call evidence | Decision and safety rationale |
+| --- | --- | --- |
+| `src.contracts.management.DaemonAccess` (`src/contracts/management.ts`, formerly line 84) | Graph Type census: zero degree. LSP references: declaration only. Repository-wide exact identifier/qualified-name search: declaration only. Actual discovery consumer `src/app/state-directory.ts:34–46` infers the result of `daemonAccessSchema.parse`. | **Removed**, one unused exported type alias. Type-only erasure means no runtime output/behavior change; schema, inferred return, RPC, discovery validation and persistence are unchanged. No documented deferred or test consumer. |
+| `src.app.daemon.finish` | LSP: declaration, Promise resolver assignment, `closing.then(finish, fail)`. | **Retained**; callback/resolver is live despite zero graph call degree. |
+| `src.app.management-cli.shutdown` | LSP: declaration and SIGINT/SIGTERM registration/removal; invokes `owner.close`. | **Retained**; real CLI lifecycle callback, not dead branch. |
+| `src.app.meta-smoke-cli.stop` | LSP: declaration and SIGINT/SIGTERM registration/removal; aborts smoke controller. | **Retained**; opt-in smoke cancellation, not executed against providers here. |
+| `src.engine.paths.test.everything` | `paths.test.ts:104–111` passes this `StatFn` into `checkReferencedPaths`. | **Retained**; test-only filesystem seam is explicitly protected by this audit's rules. |
+| `src.app.browser.test.receiving` | `browser.test.ts:190–224` assigns the Promise resolver and invokes it on HTTP continue before rotating authorization. | **Retained**; deterministic partial-request security test synchronization. |
+| `src.runner.limits.test.resumeForReportCorrection` | Object implements `AgentAdapter`; LSP follows the interface to `run-service.ts:436,500–502`; test observes the remaining invocation budget. | **Retained**; interface-dispatched regression coverage, not a disconnected function. |
+| `src.test-support.adapter-conformance.start` | `adapter-conformance.ts:64–82` supplies the wrapped adapter to `RunService`, records inputs then delegates launch. | **Retained**; shared adapter conformance instrumentation; one forwarding call is purposeful. |
+| The 17 zero-degree constructor methods: `src.store.database.InstanceLockError`; `src.engine.run-configuration.RunConfigurationError`; `src.contracts.report.ReportRejected`; `src.app.meta-smoke.MetaCredentialError`; `src.adapters.agent-adapter.ResumeUnavailableError`; `src.contracts.parse-workflow.Locator`; `src.runner.report-server.ReportServer`; `src.store.run-store.RunStore`; `src.app.browser-service.BrowserService`; `src.app.http-body.HttpRequestError`; `src.adapters.pi-events.PiEvents`; `src.engine.interpolate.InterpolationError`; `src.adapters.output.OutputCapture`; `src.engine.run-coordinator.RunStateError`, `UnknownAttemptError`, `UndeclaredOutcomeError`; `src.adapters.probe.CapabilityProbeError` | Exact `new ClassName` source searches find callers: database lease rejection; task specialization/cursor validation; strict report rejection; credential-loader error classification; adapter resume preflight; YAML locator; `RunService` report channel; coordinator/management store; browser transport; bounded HTTP body; Pi/omp event parsing; interpolation; process output capture; coordinator state/outcome errors; installed adapter probes. Constructor entry edges are not reliably represented as method calls. | **All retained**; instances/errors are live runtime paths. No constructor/body or error message changed. |
+| `src.app.management.test.Recovery` | LSP: declaration and `f.ok<Recovery>` type argument at lines 858/860. | **Retained**; test-local DTO, graph misses the type use. |
+| `src.test-support.recovery.startRecoveryFixture` / `untilRecovery` | Graph gives three incoming fixture/test callers and outgoing cleanup/environment paths. LSP finds eight references for `startRecoveryFixture`; source additionally finds `scripts/smoke-recovery.mjs:9,16` importing compiled support. Both runner recovery suites consume these helpers. | **Retained**; real SIGKILL/orphan cleanup fixtures, not dead production modules. |
+| Other test-support modules: `scripted-agent`, `adapter-conformance`, `paths`, `workflows`; smoke/browser wrappers | Consumers in adapter/runner/app tests, `scripts/smoke-*.mjs`, `test/browser/daemon.mjs`; browser fixture supplies all five fake registry entries. `package.json` wires build/validate/probe/smoke/browser entry scripts; `bin/wf` dispatches report versus management. | **Retained**; executable/test entry modules are not removable merely for low degree. |
+| `src.app.workflow-validation.validateWorkflow` / `inspectWorkflow` | LSP gives 11 declaration/import/type/call references for `validateWorkflow`. Graph traces `inspectWorkflow` to parser/compiler/path checks, with callers `validateWorkflow` and browser draft handling. | **Retained**; thin summary wrapper shares one validation pass and preserves CLI/RPC/browser diagnostics. Not a duplicate validator or a redundant one-caller abstraction. |
+| Management `shutdown` / `browser-access` dispatch throws; browser `logout` guard | `daemon.ts:94–108` intercepts management transport/lifecycle operations; browser transport intercepts logout. Strict unions still include these operations and direct service calls must not silently accept them. | **Retained**; intentional layer guards, not missing RPC implementations. |
+| Management/browser schemas, `READS`, CLI option mapping and browser op branches | `contracts/management.ts`, `contracts/browser.ts`, `management-cli.ts:38–203`, `ManagementService.handle/dispatch`, `BrowserService.handle` and both transports traced together. CLI consumes/checks option leftovers; schema operations route to service or explicit transport/lifecycle branches. Browser deliberately has a narrower authority allowlist while reusing edit/workflow schemas. | **Retained**; no never-wired documented flag/RPC or duplicate authoritative contract established. Similar bounded IDs/control fields do not justify an API refactor. |
+| Unsupported structured-final report fallback / `supportsStructuredFinalOutput: false` | Capability assertion plus factory snapshots and runner's acknowledged report-only path; spec §4.2 now explicitly defers fallback. | **Retained and documented deferred**; deleting the capability distinction would misrepresent supported behavior. |
+| Early re-import, mutable library CRUD, SSE/log-tail, `timeout` and permissive resume prose | Actual strict schemas/dispatch, immutable task import, dashboard polling, adapter exact-session paths and recovery admission disagree with the older sketches, as recorded in 9.4. | **Removed/corrected as documentation**, not implemented by expanding behavior. Canonical spec §8 lists gaps/non-goals; architecture, schema decision 30, README and guide §11 agree. |
+
+No other unused module/export, dead/unreachable production branch, duplicated
+authority or trivial one-caller abstraction was proven removable. This is a
+bounded conservative audit, not a formal dead-code proof. The compiler's
+existing `noUnusedLocals`/`noUnusedParameters` and full gate supplement graph
+inspection. No test-only/deferred seam, migration, report validation, recovery
+rule, asserted CLI output or RPC shape changed. No new permanent test was added
+for type erasure; existing behavioral suites and actual-surface smokes verify
+the retained contracts instead of testing source text.
+
+### Documentation cutover
+
+`spec.md` §8 is the single skimmable deferred/non-goal list, linked by README,
+architecture and guide §11. It covers supervisor/automatic quality/rollback,
+parallel/queued/distributed scheduling, explicit foreground service lifecycle,
+immutable task sources and workflow revisions, polling/local logs, CLI-only
+task settings and recovery, in-tree versus dynamic adapters, nested/arbitrary
+transition execution, reporting fallback, presentation/integrations and lack of
+isolation. Spec §§2.1/2.2/3.2/4.2/6/7 and architecture §§1/3.2/4/6/8 now describe
+the implemented surface. The one-paragraph rationale in spec §8 explains why
+re-import merging, mutable library entities and another transport are not added
+merely to satisfy aspirational prose. Historical phase-local live-verification
+notes remain historical; later compatibility acceptance is not rerun or broadened.
+
+### Integrated real-CLI gate and owned cleanup
+
+An in-memory Python standard-library subprocess driver created only
+`/tmp/opencode/wf-final-gate-m05xdvv4` (0700), with a private `state/` and
+disposable project containing fixture `spec.md`, `AGENTS.md`, two Markdown tasks,
+YAML and a file-gated command script. Child environment contained only `PATH`
+and explicit `WF_STATE_DIR`; the user's default state was never selected.
+The workflow uses `task.next → command → task.complete → task.next`, ending
+on exhaustion. The command appends the selected task ID, then awaits an owned
+release file. It uses `timeout_seconds: 60` and no agent/provider factory.
+
+Exact CLI sequence (status condition polling repeats are collapsed; IDs and
+event cursors came from inspection):
+
+```bash
+export WF_STATE_DIR=/tmp/opencode/wf-final-gate-m05xdvv4/state
+# cwd: /tmp/opencode/wf-final-gate-m05xdvv4/project; bin/wf is the repository executable
+bin/wf --json daemon start                         # owned foreground process 617138
+bin/wf --json workflow validate workflow.yaml
+bin/wf --json tasks preview workflow.yaml
+bin/wf --json workflow import workflow.yaml
+bin/wf --json workflow list
+bin/wf --json run create --revision 1
+RUN_ID=run_be56daed-4aa5-47c3-92e9-0fc00b08450d
+bin/wf --json run status "$RUN_ID"
+bin/wf --json run start "$RUN_ID" --expected-event 2
+bin/wf --json run status "$RUN_ID"
+bin/wf --json run reports "$RUN_ID"
+bin/wf --json run events "$RUN_ID" --after 0 --limit 100
+# Driver sends SIGKILL only to owned owner 617138 and awaits exit (-9).
+bin/wf --json daemon start                         # replacement foreground process 617371
+bin/wf --json run status "$RUN_ID"
+bin/wf --json run recovery "$RUN_ID"
+bin/wf --json run resume "$RUN_ID" --expected-event 9 \
+  --reason "Must refuse unresolved interrupted work" # expected exit 1
+bin/wf --json run recovery-terminate "$RUN_ID" \
+  --request /tmp/opencode/wf-final-gate-m05xdvv4/terminate.json
+bin/wf --json run recovery "$RUN_ID"
+bin/wf --json run recovery-decide "$RUN_ID" \
+  --request /tmp/opencode/wf-final-gate-m05xdvv4/decision.json
+bin/wf --json run status "$RUN_ID"
+# Driver writes release and removes only its fixture tasks.md, proving immutable import.
+bin/wf --json run resume "$RUN_ID" --expected-event 13 \
+  --reason "Explicitly execute the reviewed retry and remaining imported task"
+bin/wf --json run status "$RUN_ID"
+bin/wf --json run reports "$RUN_ID"
+bin/wf --json run events "$RUN_ID" --after 0 --limit 3
+bin/wf --json run events "$RUN_ID" --after 3 --limit 1000
+bin/wf --json daemon stop
+```
+
+Both JSON requests used fresh `expectedEventId`, the exact interrupted
+`attemptId` and nonblank reasons. Termination asked to end the verified orphan;
+decision selected `action: retry`, explicitly acknowledging the first recorded
+effect would repeat. No token/discovery content was printed.
+
+Observed: valid definition with no diagnostics; preview/import/list/ready
+creation; first task starts; crash leaves stale discovery and a surviving
+owned command. Replacement owner rotates discovery, records `interrupted/alive`
+and **does not replay**. Premature resume exits 1:
+`interrupted runs require an explicit recovery decision before resume`.
+Termination records `gone`; retry decision stays paused without another effect.
+Separate resume finishes both stable task IDs even with checklist removed:
+**2/2 completed**, attempts `interrupted/succeeded/succeeded`, **7 committed
+transitions**, **34 ordered unique events**, zero reports (command-only).
+The first task's effect occurs twice only after explicit retry; second occurs
+once. Paginated events concatenate without duplication.
+
+A throwaway assertion initially expected nine transitions; inspection showed
+the correct seven (three picks, two successful work steps, two task completions;
+neither interrupted work nor terminal `end` commits a transition). The driver
+expectation was corrected; no production/test contract changed. The completed
+run itself was not rerun to hide this driver error.
+
+Before shutdown and after owner exit, exact independent read-only snapshots
+were obtained with:
+`node --input-type=module -e '<open WorkflowDatabase(file,{readOnly:true}); new RunCoordinator(db).inspect(runId); close>' FILE RUN_ID`
+from the repository. Entire snapshots compared equal, including tasks,
+attempts, revisions, transitions, retained history and events.
+
+Cleanup assertions: crash owner exit **SIGKILL/-9**, replacement owner graceful
+exit **0**; owner PIDs/groups **617138, 617371** absent; every invocation
+PID/group **617308, 617576, 617595** absent; TCP connections to former loopback
+ports **38891, 35161** refused; final `daemon.json` absent. Only after those
+checks and durable reopen did the driver remove its exact owned root and assert
+its absence. No default state, project, harness state or unrelated `/tmp` tree
+was removed. The owned fixture scripts/request files disappeared with that root.
+
+### Final verification matrix and verdict
+
+| Exact command / exercised surface | Observed result | Limit |
+| --- | --- | --- |
+| `npm run check` | Typecheck, Biome, build and **819 tests / 90 suites** pass; 819 passes, **0 failures/cancellations/skips/TODOs**. Delta from 9.4: **0 tests, 0 suites, 0 failures/skips/TODOs**. | Existing informational Biome style suggestions remain; no lint failure. Offline fixtures, not fresh provider compatibility. |
+| `for file in examples/*.yaml; do npm run validate -- "$file" || exit; done` | All **6 valid / 0 warnings**: command-only 3 steps, human-checkpoint 2, implement-review-commit 7, minimal-single-step 2, overnight 8, task-loop 4. Overnight hash prefix unchanged: `8a4912284968`. | Validation executes no workflow; Git/agent samples were not launched. |
+| `npm run test:browser` | **3 passed**, one worker, no retries, fresh disposable state and explicit fake-only entries for all registered harnesses. Visual ready/start/blocked/revision/separate resume, intervention/stale decisions and reload/last-tab independence pass. Fixture output proves 5/1/1 owned children gone, each owner exit 0, durable reopen, listener/discovery absence and owned root removal. | Chromium only, bounded desktop/390px coverage. An inherited NO_COLOR/FORCE_COLOR warning is informational; no browser download/provider launch. |
+| `npm run smoke:reporting` | Accepted report durable while process active/cursor unchanged; direct success 1 report/0 corrections; correction success 1/1; correction failure paused/0/1 with `system.report_error`; SQLite reopen and temporary cleanup pass. | Synthetic agent sessions through actual `wf report`, not paid providers. |
+| `npm run smoke:capabilities` | Required incompatibility/model rejection: 0 launches; fresh reporting: 1 launch; missing correction/explicit resume produce `system.report_error` / `system.resume_unavailable`, no fresh fallback. | Synthetic installed-feature fixtures, not authentication/session availability for current user accounts. |
+| `npm run smoke:tasks` | 3 checkboxes, 1 prechecked, 2 runnable; both complete in source order through real reports; Markdown unchanged, prepared context persisted, temporary state removed. | Supported local Markdown subset, not complete CommonMark or re-import. |
+| `npm run smoke:boundaries` | OpenCode/Claude synthetic correction succeeds and original process failure routes `system.process_error`; selected environment, scrubbed logs/diagnostics, sequential settlement and durable reopen pass. | Known synthetic credentials only; not isolation or protection against unknown harness-loaded secrets. |
+| `npm run smoke:recovery` | Four SIGKILL boundaries: command/retry, correction/skip, between/continue, correction-intent/end; no replay, explicit durable decisions/reopen and owned cleanup pass. | Linux `/proc` identity/process-group limits; operator assertions do not prove escaped descendants absent. |
+| Integrated `bin/wf` sequence above, driven with Python standard library | YAML configure/save/list/create, two imported tasks, unattended command, crash inspection/barrier, verified termination, explicit decision and separate resume reach completed 2/2; 3 attempts, 7 transitions, 34 events. Reopen/cleanup assertions pass. | Command-only; repeated first-task effect is deliberate authorized retry, not exactly-once external effects. Initial throwaway transition-count expectation corrected as described above. |
+
+The browser and five required smoke commands were executed in one fail-fast
+chain:
+
+```bash
+npm run test:browser && npm run smoke:reporting && npm run smoke:capabilities && npm run smoke:tasks && npm run smoke:boundaries && npm run smoke:recovery
+```
+
+The exact read-only durable inspection command used by the integrated driver
+(before shutdown and again after exit) was:
+
+```bash
+node --input-type=module -e \
+  'import {WorkflowDatabase} from "./dist/store/database.js"; import {RunCoordinator} from "./dist/engine/run-coordinator.js"; const db=new WorkflowDatabase(process.argv[1],{readOnly:true}); try{console.log(JSON.stringify(new RunCoordinator(db).inspect(process.argv[2])))}finally{db.close()}' \
+  /tmp/opencode/wf-final-gate-m05xdvv4/state/state.sqlite \
+  run_be56daed-4aa5-47c3-92e9-0fc00b08450d
+```
+
+Documentation verification used an in-memory Python standard-library checker
+over the 12 known repository Markdown files, outside fenced code. It resolved
+relative paths, explicit anchors and GitHub-style deduplicated heading slugs:
+**130 relative links, zero missing paths/anchors**. External URLs were not
+fetched. The checker created no files or dependencies.
+
+**Final MVP gate passes; 9.5 is checked.** The YAML/CLI integrated gate and
+permanent visual-authoring/lifetime scenarios jointly demonstrate the requested
+configure → unattended execution → inspection/intervention/recovery scenario
+without a supervisor LLM. No production defect was found. Four known prose
+mismatches are reconciled, not hidden by implementing extra features or weakening
+contracts. Deferred scope remains explicit in spec §8; historical provider
+evidence and documented OS/credential/isolation limits are unchanged.
+
+No dependencies/downloads, schema/migration history, report fields, runtime
+behavior, global configuration or user/default state changed. No live provider,
+authentication or credential/auth-file inspection was used. This pass adds no
+permanent test or tool abstraction; throwaway owned fixture files were removed.
+Owner review is the next boundary; no further feature scope is authorized by
+this completion.
+

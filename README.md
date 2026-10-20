@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6, Phases 7.1–7.5, browser Phases 8.1–8.5 and offline Phases 9.1–9.4 are complete. Phase 9.5 and the final MVP gate remain open on the [`todo.md`](todo.md) roadmap. Start with the [user guide](docs/user-guide.md); see the [implementation evidence](docs/implementation-log.md).
+**Status:** MVP gate passes: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, five harness adapters, local CLI and browser authoring/control. Phases 0–9, including 9.5, are complete on the [`todo.md`](todo.md) roadmap. Final offline verification: **819 tests / 90 suites**, three Chromium scenarios, all six examples and required smokes; real-CLI crash/recover/resume and owned cleanup passed. Start with the [user guide](docs/user-guide.md); see the [final-gate evidence and limits](docs/implementation-log.md#phase-95--final-gate--dead-weight-and-explicit-mvp-boundaries).
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -34,6 +34,10 @@ workflow steps: `npm run validate -- examples/command-only.yaml`.
 - **Errors are routable.** The program distinguishes workflow outcomes from execution failures and delegates each to a configured deterministic transition.
 - **Sequential first.** No concurrent coding agents, distributed jobs, enterprise permissions, or complex scheduling in the MVP.
 - **Unattended but inspectable.** Persistent event history, intervention queue, pause/resume, stop, and modest local UI.
+
+**What this is not:** see the canonical [deferred features and non-goals](spec.md#deferred-features-and-permanent-non-goals):
+no supervisor/automatic quality gate, distributed scheduler, mutable workflow
+library, task re-import, service auto-restart/resume, sandbox or rollback.
 
 ## Typical usage
 
@@ -283,7 +287,7 @@ Polling, run selection and lifecycle changes never replace or rebind the run dra
 
 **Inspect manual intervention** pins a separate decision to the paused run/event. Explicitly choose a compatible jump stage, a declared outcome for skipping the current stage, or an unfinished task to accept complete. The page shows target/consequences before submission and requires a nonblank reason plus confirmation. Durable audit events distinguish manual decisions from execution. Skip creates no agent report and does not complete the task, even when skipping `task.complete`; a retry route pauses. Manual completion clears the active-task pointer only if that task was active; the unchanged cursor may need a compatible jump. Overrides remain paused. These controls do not implement, repair, reset or roll back repository files; repeating a stage can repeat external side effects. **Stop now** remains the run-ending control.
 
-If the daemon is unavailable, start it explicitly and request a fresh pairing code; nothing auto-starts. Tab close/reload/disconnect never stops the daemon. Starting an actual agent workflow invokes its configured provider; browser verification uses disposable fake adapters only. Phase 8.5 and the full Phase 8 gate passed the permanent offline suite; Phase 9/MVP remain incomplete. Exact Host/Origin checks, a separate HttpOnly SameSite cookie, JSON/custom-header requirements and CSP still protect the narrow local API. No recovery/raw-log/filesystem-browsing endpoints or migrations were added; browser-testing dependencies are development-only. This is not isolation from same-user programs.
+If the daemon is unavailable, start it explicitly and request a fresh pairing code; nothing auto-starts. Tab close/reload/disconnect never stops the daemon. Starting an actual agent workflow invokes its configured provider; browser verification uses disposable fake adapters only. The permanent three-scenario suite passed again in the final MVP gate. Exact Host/Origin checks, a separate HttpOnly SameSite cookie, JSON/custom-header requirements and CSP still protect the narrow local API. No recovery/raw-log/filesystem-browsing endpoints or migrations were added; browser-testing dependencies are development-only. This is not isolation from same-user programs.
 
 ### Limits and stage retries (Phase 7.4)
 

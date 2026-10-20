@@ -12,7 +12,7 @@
 
   The earlier [remaining-harness pass](docs/harness-compatibility.md#remaining-milestone-05-results--stopped-at-omp-authentication) stopped at omp's missing OpenAI credential after Claude/OpenCode reporting passed. The later explicitly authorized [Meta Contributor pass](docs/harness-compatibility.md#authorized-meta-contributor-live-results) passed omp/OpenCode direct reporting and exact-session correction. The separately authorized [Claude Haiku/low correction](docs/harness-compatibility.md#authorized-claude-correction--milestone-05-complete) now passed with exact-session identity, real acknowledgment, sequential settlement, durable reopen and target removal. **All milestone 0.5 acceptance evidence is reviewed.** No successful scenario or failed OpenAI path was repeated.
 
-  Standing choice: Meta Muse Spark 1.3 Contributor/low for OpenCode/omp, using `MUSE_SPARK_API_KEY` in `~/.config/secrets.zsh` through `smoke:meta`. Local loading and live use are verified; do not request the key/source again. Completed live passes do not authorize additional paid execution. Milestone 0.5, Phase 6, Phase 8 and the Phase 9.1 offline audit are complete. Current authorization covers offline Phases 9.2 then 9.3, with separate milestone commits and standing commit/push permission. No live providers, downloads or global configuration changes; 9.4–9.5 and the final MVP gate remain outside this pass.
+  Historical model preference: Meta Muse Spark 1.3 Contributor/low for OpenCode/omp through `smoke:meta`; do not request the key/source again. Live acceptance remains scoped to the recorded runs. The final owner signoff authorized Phase 9.5, the final gate, separate 9.4/9.5 commits and push, with optional cheap live execution. The final pass stayed offline; no downloads, credential inspection or global configuration changes.
 
 **Gate:** Fresh clone installs, typechecks, tests, and has a short local development README; version probe works or explains missing binaries.
 
@@ -92,7 +92,7 @@
 
 ## Phase 7 — Crash recovery, management CLI, and reliability
 
-Authorized scope: Phase 7 milestones and Phases 8.1–8.4 were separately implemented, accepted and committed/pushed. The current authorization covers offline Phase 8.5, actual-browser verification with disposable fake adapters, and commit/push. No live provider execution is authorized.
+Historical scope: Phase 7 milestones and browser milestones were separately authorized and accepted. Their acceptance notes below record evidence at each milestone; final offline verification is recorded under Phase 9.5.
 
 - [x] 7.1 Implement daemon instance lock, process identity tracking (PID+start identity), in-flight attempt reconciliation, and interrupted/uncertain pause semantics.
 
@@ -114,7 +114,7 @@ Authorized scope: Phase 7 milestones and Phases 8.1–8.4 were separately implem
 
 ## Phase 8 — Small browser UI
 
-Phase 8 is accepted and committed/pushed, including its permanent offline Chromium suite and full visual-authoring gate. Historical acceptance notes below describe scope at each milestone. Phase 9.1 is accepted; current bounded authorization is offline 9.2–9.3 only. No paid/live providers or Phase 9.4–9.5/final MVP gate work.
+Phase 8 is accepted and committed/pushed, including its permanent offline Chromium suite and full visual-authoring gate. Historical acceptance notes below describe each milestone; the suite passed again in the final Phase 9.5 gate.
 
 - [x] 8.1 Create localhost UI shell with project root, instruction selection, Markdown task preview/import, saved workflows, and run list.
 
@@ -147,6 +147,8 @@ Phase 8 is accepted and committed/pushed, including its permanent offline Chromi
 
   Evidence matrix covers every requested boundary; focused discovery/ownership/CLI/payload/acknowledgment and SIGINT/SIGTERM/drain/stale-discovery gaps closed without production changes. `npm run check`: **819 tests / 90 suites**; focused audit **182 tests / 16 suites**; all examples validate; actual read-only command-only daemon smoke and owned cleanup pass. [Matrix, exact commands, limits and cleanup](docs/implementation-log.md#phase-93--operational-and-failure-audit).
 - [x] 9.4 Document how to install, configure, start the daemon, launch UI, run workflows, import tasks, troubleshoot adapters, and recover interrupted runs.
-- [ ] 9.5 Remove unused abstractions and known TODOs that undermine reliability. Publish a clear list of deferred features.
+- [x] 9.5 Remove unused abstractions and known TODOs that undermine reliability. Publish a clear list of deferred features.
 
-**Final MVP gate:** A developer with a spec, `AGENTS.md`, and Markdown tasks can configure a reusable workflow through YAML or UI, leave it running, and reliably inspect or recover state without a supervisor LLM.
+  Conservative graph/LSP/source audit removed only an unreferenced type alias; test-only callbacks/support and live boundary contracts retained with a candidate ledger. Four documentation mismatches reconciled; canonical deferred list is in spec §8. Final offline gate: **819 tests / 90 suites** (no baseline deltas), **3 Chromium scenarios**, all **6 examples / zero warnings**, reporting/capabilities/tasks/boundaries/recovery smokes, integrated real-CLI configure/import/run/SIGKILL/inspect/terminate/decide/resume, durable reopen and asserted owned cleanup passed. [Exact evidence, candidate decisions and limits](docs/implementation-log.md#phase-95--final-gate--dead-weight-and-explicit-mvp-boundaries).
+
+**Final MVP gate (satisfied):** A developer with a spec, `AGENTS.md`, and Markdown tasks can configure a reusable workflow through YAML or UI, leave it running, and reliably inspect or recover state without a supervisor LLM. Proven by the permanent visual-authoring/lifetime suite plus the integrated command-only real-CLI crash/recovery scenario; provider acceptance remains historical and version/account-scoped. Stop for owner review before further scope.

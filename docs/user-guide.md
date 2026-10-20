@@ -773,20 +773,9 @@ Do not delete runner state to resolve uncertain external effects, or edit SQLite
 cursors by hand. Project and harness-owned files are not rolled back or cleaned
 by ending a run.
 
-Implemented limits are deliberate:
-
-- One active run/operation per state database; no parallel worker pool or job queue.
-- No service manager, daemon log rotation, automatic restart, auto-start or automatic
-  driving/resume after restart.
-- No task re-import into an existing run, Markdown auto-sync or completion write-back.
-- Per-task settings have CLI authority but no editing UI; interrupted recovery is
-  CLI-only.
-- No raw-log/filesystem-browsing endpoints and no event streaming; inspect private
-  local logs and use paginated events/polling.
-- No sandbox, automatic quality gate, repository repair or rollback.
-
-See [spec §8 deferred features](../spec.md#8-mvp-scope-and-non-goals) for the broader
-scope boundary: distributed scheduling, dynamic plugins, nested subworkflows,
-arbitrary transition code, automatic rollback, polished graph canvas and
-notifications are not implemented promises. Phase 9.5 and the final MVP gate
-remain open; completing this guide does not complete the MVP.
+The canonical [deferred-feature and non-goal list](../spec.md#deferred-features-and-permanent-non-goals)
+is in spec §8. It distinguishes implemented immutable revisions, snapshots,
+polling and CLI-only controls from unimplemented library CRUD, re-import,
+transports, scheduling and extension surfaces. These are scope boundaries, not
+promises of future implementation; unrestricted execution provides no isolation
+or rollback.
