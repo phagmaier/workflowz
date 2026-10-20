@@ -12,7 +12,7 @@
 
   The earlier [remaining-harness pass](docs/harness-compatibility.md#remaining-milestone-05-results--stopped-at-omp-authentication) stopped at omp's missing OpenAI credential after Claude/OpenCode reporting passed. The later explicitly authorized [Meta Contributor pass](docs/harness-compatibility.md#authorized-meta-contributor-live-results) passed omp/OpenCode direct reporting and exact-session correction. The separately authorized [Claude Haiku/low correction](docs/harness-compatibility.md#authorized-claude-correction--milestone-05-complete) now passed with exact-session identity, real acknowledgment, sequential settlement, durable reopen and target removal. **All milestone 0.5 acceptance evidence is reviewed.** No successful scenario or failed OpenAI path was repeated.
 
-  Standing choice: Meta Muse Spark 1.3 Contributor/low for OpenCode/omp, using `MUSE_SPARK_API_KEY` in `~/.config/secrets.zsh` through `smoke:meta`. Local loading and live use are verified; do not request the key/source again. Completed live passes do not authorize additional paid execution. Milestone 0.5 and the Phase 6 gate are complete. Subsequent milestones were authorized and committed separately. Current authorization covers offline Phase 8.5 implementation/browser verification and commit/push; Phase 9 remains outside scope.
+  Standing choice: Meta Muse Spark 1.3 Contributor/low for OpenCode/omp, using `MUSE_SPARK_API_KEY` in `~/.config/secrets.zsh` through `smoke:meta`. Local loading and live use are verified; do not request the key/source again. Completed live passes do not authorize additional paid execution. Milestone 0.5, Phase 6, Phase 8 and the Phase 9.1 offline audit are complete. Current authorization covers offline Phases 9.2 then 9.3, with separate milestone commits and standing commit/push permission. No live providers, downloads or global configuration changes; 9.4–9.5 and the final MVP gate remain outside this pass.
 
 **Gate:** Fresh clone installs, typechecks, tests, and has a short local development README; version probe works or explains missing binaries.
 
@@ -114,7 +114,7 @@ Authorized scope: Phase 7 milestones and Phases 8.1–8.4 were separately implem
 
 ## Phase 8 — Small browser UI
 
-Current bounded authorization: **8.5 permanent offline Chromium smoke coverage**, building on accepted/committed/pushed 8.4 (`e18c8fd`), with commit/push authorization. The complete visual-authoring gate must pass before closing Phase 8. No paid/live providers or Phase 9 implementation. Historical acceptance notes below describe scope at each milestone; Phase 9/MVP remain incomplete.
+Phase 8 is accepted and committed/pushed, including its permanent offline Chromium suite and full visual-authoring gate. Historical acceptance notes below describe scope at each milestone. Phase 9.1 is accepted; current bounded authorization is offline 9.2–9.3 only. No paid/live providers or Phase 9.4–9.5/final MVP gate work.
 
 - [x] 8.1 Create localhost UI shell with project root, instruction selection, Markdown task preview/import, saved workflows, and run list.
 
@@ -140,7 +140,9 @@ Current bounded authorization: **8.5 permanent offline Chromium smoke coverage**
 
   Offline acceptance audit covers all **13 spec §9 scenarios plus pause/stop/resume**. Reused existing process/CLI/browser coverage; added one integrated custom-debugging/tag-policy/ambiguity scenario and strengthened the real CLI rejection's unchanged-state assertion. **801 tests / 88 suites**, typecheck/lint, **3 Chromium scenarios**, recovery/reporting/tasks/capabilities/boundary smokes and canonical validation passed. Durable reopen and owned process/listener/discovery/state cleanup passed. No production defect or contract change; no paid providers. [Exact evidence matrix, commands and limits](docs/implementation-log.md#phase-91--offline-end-to-end-acceptance-audit). Phases 9.2–9.5 and MVP remain incomplete.
 
-- [ ] 9.2 Provide sample workflows: minimal single-step, task loop, implement/review/commit, human checkpoint, command-only.
+- [x] 9.2 Provide sample workflows: minimal single-step, task loop, implement/review/commit, human checkpoint, command-only.
+
+  Five focused samples plus the unchanged canonical example validate with zero warnings. Parameterized real-CLI coverage discovers all YAML examples; original overnight eight-step assertion retained. `npm run check`: **807 tests / 88 suites**, typecheck/lint pass. No production changes. [Inventory and exact commands](docs/implementation-log.md#phase-92--focused-sample-workflows).
 - [ ] 9.3 Verify readable failures, logs, report payload bounds, API validation, local state directory behavior, and startup/shutdown documentation.
 - [ ] 9.4 Document how to install, configure, start the daemon, launch UI, run workflows, import tasks, troubleshoot adapters, and recover interrupted runs.
 - [ ] 9.5 Remove unused abstractions and known TODOs that undermine reliability. Publish a clear list of deferred features.

@@ -1,6 +1,6 @@
 # Agent Workflow Runner — Starter Pack
 
-**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6, Phases 7.1–7.5 and browser Phases 8.1–8.5 are complete, including the full Phase 8 visual-authoring gate. This is not a complete MVP: Phase 9 remains incomplete on the [`todo.md`](todo.md) roadmap. See the [implementation evidence](docs/implementation-log.md).
+**Status:** Implemented core: strict workflow compilation, transactional SQLite coordination, sequential command/agent execution, mandatory reporting with one same-session correction, immutable task import, parameters/revisions, and all five harness adapters. Milestone 0.5, Phase 6, Phases 7.1–7.5, browser Phases 8.1–8.5 and the Phase 9.1 offline acceptance audit are complete. Current authorization covers offline Phases 9.2–9.3 only; 9.4–9.5 and the final MVP gate remain open on the [`todo.md`](todo.md) roadmap. See the [implementation evidence](docs/implementation-log.md).
 
 A deterministic, local workflow runner for coding agents. The runner executes a user-authored graph of agent steps and ordinary commands, accepts agents' declared outcomes without imposing mandatory review, and follows user-configured transitions. One agent runs at a time in the MVP.
 
@@ -12,8 +12,17 @@ A deterministic, local workflow runner for coding agents. The runner executes a 
 | [`architecture.md`](architecture.md) | Components, persistence, reporting, process lifecycle, recovery, API boundaries |
 | [`todo.md`](todo.md) | Ordered implementation checklist with testable milestones |
 | [`AGENTS.md`](AGENTS.md) | Rules for coding agents contributing to **this tool** |
+| [`docs/schema-v1.md`](docs/schema-v1.md) | Exact accepted schema and runtime decisions |
+| [`examples/README.md`](examples/README.md) | Focused sample index, prerequisites, task sources and execution risks |
 | [`examples/overnight.yaml`](examples/overnight.yaml) | Example user-authored workflow, including task iteration, reviews, and failures |
 | [`examples/tasks.md`](examples/tasks.md) | Input Markdown task-list example |
+
+### Example workflows
+
+See the [sample index](examples/README.md) for the minimal single-step, task loop,
+implement/review/commit, human checkpoint and read-only command-only workflows,
+alongside the canonical overnight example. Validation is offline and executes no
+workflow steps: `npm run validate -- examples/command-only.yaml`.
 
 ## Philosophy
 

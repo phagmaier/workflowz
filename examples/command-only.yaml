@@ -1,0 +1,21 @@
+# Read-only project commands: no provider, task import, staging or commits.
+version: 1
+name: Read-only environment inspection
+project:
+  root: ".."
+start: node_version
+steps:
+  node_version:
+    kind: command
+    argv: [node, --version]
+    on:
+      complete: { goto: git_status }
+      failed: { pause: true }
+  git_status:
+    kind: command
+    argv: [git, status, --short]
+    on:
+      complete: { goto: done }
+      failed: { pause: true }
+  done:
+    kind: end

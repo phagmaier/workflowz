@@ -1,0 +1,19 @@
+# Validation is offline; execution invokes the configured provider.
+version: 1
+name: Minimal single agent
+project:
+  root: ".."
+start: inspect
+steps:
+  inspect:
+    kind: agent
+    harness: codex
+    session: fresh
+    prompt: |
+      Inspect README.md without modifying files.
+      Submit wf report complete --summary "Read the project overview".
+    outcomes: [complete]
+    on:
+      complete: { goto: done }
+  done:
+    kind: end

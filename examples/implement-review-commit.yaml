@@ -1,0 +1,66 @@
+# User-authored review and Git commands, not engine-imposed quality gates.
+# Execution modifies files and stages ALL repository changes. Use a disposable copy.
+version: 1
+name: Implement review and commit tasks
+project:
+  root: ".."
+tasks:
+  source:
+    kind: markdown_checklist
+    path: examples/sample-tasks.md
+start: pick_task
+limits:
+  max_step_executions: 60
+steps:
+  pick_task:
+    kind: task.next
+    on:
+      task_ready: { goto: implement }
+      exhausted: { goto: done }
+  implement:
+    kind: agent
+    harness: codex
+    session: fresh
+    context:
+      include_reports: [review]
+    prompt: |
+      Implement {{task.text}}, addressing any selected review feedback.
+      Report complete or blocked through wf report with a meaningful summary.
+    outcomes: [complete, blocked]
+    on:
+      complete: { goto: review }
+      blocked: { pause: true }
+  review:
+    kind: agent
+    harness: pi
+    session: fresh
+    context:
+      include_reports: [implement]
+    prompt: |
+      Review the implementation of {{task.text}} without modifying files.
+      Report approved, revise, or blocked through wf report with a summary and
+      actionable feedback. These declared outcomes select the authored branches;
+      the engine does not independently certify code quality.
+    outcomes: [approved, revise, blocked]
+    on:
+      approved: { goto: git_add }
+      revise: { goto: implement }
+      blocked: { pause: true }
+  git_add:
+    kind: command
+    argv: [git, add, -A]
+    on:
+      complete: { goto: commit }
+      failed: { pause: true }
+  commit:
+    kind: command
+    argv: [git, commit, -m, "Complete task {{task.id}}"]
+    on:
+      complete: { goto: mark_done }
+      failed: { pause: true }
+  mark_done:
+    kind: task.complete
+    on:
+      complete: { goto: pick_task }
+  done:
+    kind: end

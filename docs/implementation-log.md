@@ -1343,3 +1343,42 @@ SIGKILL cases do not simulate every power-loss/storage fault. Existing Linux
 escaped-descendant limits, operator-asserted cleanup trust and absence of rollback
 or exactly-once external effects remain unchanged.
 
+## Phase 9.2 — focused sample workflows
+
+Started from clean `main` at `1dbc6cc`, tracking `origin/main`. This pass is
+offline 9.2 then 9.3 with separate milestone commits and standing push permission;
+no live providers, credentials, downloads or global configuration changes.
+
+Added exactly five YAML samples; the canonical overnight file is unchanged:
+
+| Sample | Steps | Task source / authored behavior |
+| --- | --- | --- |
+| `minimal-single-step.yaml` | 2 | No tasks; one agent report then end |
+| `task-loop.yaml` | 4 | Two-item `sample-tasks.md`; explicit next/implement/complete loop |
+| `implement-review-commit.yaml` | 7 | Same checklist; review revise loop and explicit Git staging/commit |
+| `human-checkpoint.yaml` | 2 | No tasks; pause transition, explicit operator inspection/jump/revision/resume |
+| `command-only.yaml` | 3 | No tasks/agents; read-only Node version and Git status |
+| `overnight.yaml` (retained) | 8 | Existing `tasks.md`; unchanged hash prefix `8a4912284968` |
+
+`examples/README.md` indexes prerequisites, task sources and execution risks.
+The checkpoint is not an approval kind: plain resume repeats the paused step;
+jump or prompt revision is an explicit separate operator choice. Mutating samples
+are documentation only: validation never executes them. README's read/example
+indexes and stale authorization/status notes now describe this bounded pass.
+
+`src/app/validate-cli.test.ts` discovers and parameterizes every `examples/*.yaml`
+through the actual CLI/compiler/path checker, requiring success and zero warnings.
+The original overnight eight-step assertion remains unchanged. No production
+source, schema, adapter, dependency, migration or runtime behavior changed.
+
+Executed on Node.js v26.8.2 / npm 11.19.1:
+
+| Exact command | Result |
+| --- | --- |
+| `for file in examples/*.yaml; do npm run validate -- "$file" || exit; done` | Six CLI runs exit 0; every sample valid with zero warnings, counts above; overnight unchanged |
+| `node --test dist/app/validate-cli.test.js` | 10 tests / 1 suite pass, zero failures/cancellations/skips |
+| `npm run check` | Typecheck/lint pass; 807 tests / 88 suites pass, zero failures/cancellations/skips/TODOs; existing informational lint suggestions only |
+
+**9.2 complete.** Only 9.2 is newly checked here. 9.3 remains next; 9.4–9.5
+and the final MVP gate remain open. No provider-backed verification is claimed.
+

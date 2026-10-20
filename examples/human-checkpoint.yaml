@@ -1,0 +1,24 @@
+# A checkpoint is only a pause transition, not an approval step or permission gate.
+# Inspect the report, then explicitly jump to done and resume to finish.
+# Resume alone reruns inspect; it does not approve or bypass this checkpoint.
+version: 1
+name: Human inspection checkpoint
+project:
+  root: ".."
+start: inspect
+steps:
+  inspect:
+    kind: agent
+    harness: codex
+    session: fresh
+    prompt: |
+      Read README.md without modifying files. Summarize what an operator should
+      inspect, then submit wf report checkpoint --summary "Describe findings".
+      To continue without a jump, the operator may explicitly revise this prompt
+      while paused to request a complete report, then resume.
+    outcomes: [checkpoint, complete]
+    on:
+      checkpoint: { pause: true }
+      complete: { goto: done }
+  done:
+    kind: end

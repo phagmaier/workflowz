@@ -1,0 +1,35 @@
+version: 1
+name: Small task loop
+project:
+  root: ".."
+tasks:
+  source:
+    kind: markdown_checklist
+    path: examples/sample-tasks.md
+start: pick_task
+limits:
+  max_step_executions: 30
+steps:
+  pick_task:
+    kind: task.next
+    on:
+      task_ready: { goto: implement }
+      exhausted: { goto: done }
+  implement:
+    kind: agent
+    harness: codex
+    session: fresh
+    prompt: |
+      Implement this task: {{task.text}}
+      Submit wf report complete --summary "Describe the change", or report blocked
+      with the reason. Do not edit the source checklist to advance runner state.
+    outcomes: [complete, blocked]
+    on:
+      complete: { goto: mark_done }
+      blocked: { pause: true }
+  mark_done:
+    kind: task.complete
+    on:
+      complete: { goto: pick_task }
+  done:
+    kind: end

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it } from "node:test";
@@ -18,6 +18,17 @@ describe("validate CLI (process boundary)", () => {
     assert.equal(run.status, 0, run.stderr);
     assert.match(run.stdout, /overnight\.yaml: valid \(8 steps, 0 warning\(s\)/);
   });
+
+  for (const file of readdirSync(path.join(REPO_ROOT, "examples")).filter((name) =>
+    name.endsWith(".yaml"),
+  )) {
+    it(`validates examples/${file} through the CLI with zero warnings`, () => {
+      const run = validate(path.join(REPO_ROOT, "examples", file));
+      assert.equal(run.status, 0, run.stderr || run.stdout);
+      assert.match(run.stdout, /: valid \(\d+ steps, 0 warning\(s\),/);
+      assert.doesNotMatch(run.stdout + run.stderr, /(?:error|warning) \[/);
+    });
+  }
 
   it("exits 1 and prints file:line:column diagnostics for an invalid workflow", () => {
     const file = path.join(INVALID_FIXTURES, "duplicate-step-key.yaml");
