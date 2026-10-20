@@ -20,6 +20,13 @@ export const browserRequestSchema = z.discriminatedUnion("op", [
   z.strictObject({ op: z.literal("workflows") }),
   z.strictObject({ op: z.literal("runs") }),
   z.strictObject({ op: z.literal("load"), source: browserSourceSchema }),
+  z.strictObject({
+    op: z.literal("draft"),
+    workflowDir: workflowInputSchema.shape.workflowDir,
+    workflowText: z.string().max(1024 * 1024),
+    // Serialization is read-only; the ordinary YAML parser remains the sole model validator.
+    model: z.record(z.string(), z.unknown()).optional(),
+  }),
   z.strictObject({ op: z.literal("preview"), ...selection }),
   z.strictObject({ op: z.literal("save"), ...selection }),
   z.strictObject({ op: z.literal("create"), ...selection }),

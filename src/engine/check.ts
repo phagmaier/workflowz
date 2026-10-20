@@ -5,12 +5,14 @@
  */
 import type { Diagnostic, DiagnosticPath, SourceLocation } from "../contracts/diagnostics.js";
 import { hasErrors } from "../contracts/diagnostics.js";
-import { parseWorkflowText } from "../contracts/parse-workflow.js";
+import { type ParsedWorkflow, parseWorkflowText } from "../contracts/parse-workflow.js";
 import { type CompileOptions, compileWorkflow } from "./compile.js";
 import type { CompiledWorkflow } from "./model.js";
 
 export interface CheckResult {
   readonly compiled?: CompiledWorkflow;
+  /** Shape-valid model remains editable even when semantic compilation fails. */
+  readonly document?: ParsedWorkflow["document"];
   readonly diagnostics: readonly Diagnostic[];
   readonly sourceSha256: string;
   /** Maps a diagnostic path to a source position, for follow-up checks such as missing files. */
@@ -32,10 +34,11 @@ export function checkWorkflowText(
   const outcome = compileWorkflow(parsed.document, { ...options, locate: parsed.locate });
   const diagnostics = [...parsed.diagnostics, ...outcome.diagnostics];
   if (hasErrors(diagnostics) || !outcome.compiled) {
-    return { diagnostics, sourceSha256: parsed.sourceSha256, locate: parsed.locate };
+    return { ...parsed, diagnostics };
   }
   return {
     compiled: outcome.compiled,
+    document: parsed.document,
     diagnostics,
     sourceSha256: parsed.sourceSha256,
     locate: parsed.locate,

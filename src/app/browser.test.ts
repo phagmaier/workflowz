@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it, type TestContext } from "node:test";
 import { parseWorkflowText } from "../contracts/parse-workflow.js";
+import type { BrowserDraft } from "./browser-service.js";
 import { startDaemon } from "./daemon.js";
 import { managementRequest } from "./management-client.js";
 import { readDaemonAccess } from "./state-directory.js";
@@ -302,5 +303,165 @@ describe("localhost browser shell boundary", () => {
     assert.equal((await f.post("/ui/api", { op: "session" })).status, 200);
     assert.equal(f.owner.management.store.getRun(runId).status, "ready");
     assert.deepEqual(f.owner.management.store.listAttempts(runId), []);
+  });
+
+  it("retains invalid drafts with located diagnostics and never promotes them to revisions or runs", async (t) => {
+    const f = await fixture(t);
+    await f.pair();
+    for (const text of [
+      "",
+      "version: [",
+      `${FLOW}\nunknown_field: true\n`,
+      FLOW.replace("start: pick", "start: absent"),
+      FLOW.replace("{goto: finish}", "{goto: absent}"),
+      FLOW.replace("task_ready:", "undeclared:"),
+      FLOW.replace("instructions.md", "missing.md"),
+      `${FLOW}\npolicies:\n  - match: {all: true}\n    on: {system.error: {pause: true}}\n  - match: {all: true}\n    on: {system.error: {goto: done}}\n`,
+    ]) {
+      const result = await f.post("/ui/api", {
+        op: "draft",
+        workflowText: text,
+        workflowDir: f.root,
+      });
+      assert.equal(result.status, 200);
+      const draft = (await result.json()) as BrowserDraft;
+      assert.equal(draft.valid, false);
+      assert.equal(draft.workflowText, text);
+      assert.ok(
+        draft.diagnostics.some((d) => d.severity === "error"),
+        text,
+      );
+      if (text)
+        assert.ok(
+          draft.diagnostics.some((d) => d.location),
+          text,
+        );
+      for (const op of ["save", "create"]) {
+        const response = await f.post("/ui/api", {
+          ...f.selection,
+          op,
+          source: { workflowText: text, workflowDir: f.root },
+        });
+        assert.equal(response.status, 422);
+      }
+    }
+    assert.deepEqual(f.owner.management.store.listRevisions(), []);
+    assert.deepEqual(f.owner.management.store.listRuns(), []);
+  });
+
+  it("exposes canonical precedence, exact system rules, fallback and terminal behavior", async (t) => {
+    const f = await fixture(t);
+    await f.pair();
+    const workflowText = `version: 1
+name: Policy editor
+project: {root: .}
+start: direct
+defaults:
+  on: {complete: {goto: done}, failed: {pause: true}}
+policies:
+  - match: {all: true}
+    on: {failed: {goto: done}, system.timeout: {retry: {max_attempts: 3, backoff_seconds: 7}}}
+  - match: {tags: [worker]}
+    on: {failed: {pause: true}}
+  - match: {step_ids: [explicit]}
+    on: {failed: {goto: direct}}
+steps:
+  direct: {kind: command, argv: [echo], tags: [worker], on: {failed: {goto: explicit}, system.error: {goto: done}}}
+  explicit: {kind: command, argv: [echo], tags: [worker]}
+  tagged: {kind: command, argv: [echo], tags: [worker]}
+  global: {kind: command, argv: [echo]}
+  done: {kind: end}
+`;
+    const result = await f.post("/ui/api", { op: "draft", workflowText, workflowDir: f.root });
+    const draft = (await result.json()) as BrowserDraft;
+    assert.equal(draft.valid, true);
+    const rule = (step: string, outcome: string) =>
+      draft.transitions[step]?.find((r) => r.outcome === outcome);
+    for (const [step, level] of [
+      ["direct", "step"],
+      ["explicit", "step_id_policy"],
+      ["tagged", "tag_policy"],
+      ["global", "all_policy"],
+    ]) {
+      assert.equal(rule(step ?? "", "failed")?.source.level, level);
+      assert.equal(rule(step ?? "", "complete")?.source.level, "defaults");
+    }
+    assert.deepEqual(rule("direct", "system.timeout")?.action, {
+      kind: "retry",
+      maxAttempts: 3,
+      backoffSeconds: 7,
+    });
+    assert.equal(rule("direct", "system.timeout")?.viaSystemError, false);
+    assert.deepEqual(rule("direct", "system.report_error")?.action, {
+      kind: "goto",
+      target: "done",
+    });
+    assert.equal(rule("direct", "system.report_error")?.viaSystemError, true);
+    assert.equal(rule("global", "system.report_error")?.source.level, "built_in_pause");
+    assert.deepEqual(draft.transitions.done, []);
+    assert.deepEqual(f.owner.management.store.listRevisions(), []);
+  });
+
+  it("round-trips visual model fields and freezes prior saved definitions and ready runs", async (t) => {
+    const f = await fixture(t);
+    await f.pair();
+    const initial = await f.post("/ui/api", { op: "draft", ...f.selection.source });
+    const first = (await initial.json()) as BrowserDraft;
+    assert.ok(first.document);
+    const original = await f.post("/ui/api", { op: "save", ...f.selection });
+    const { revisionId } = (await original.json()) as { revisionId: number };
+    const created = await f.post("/ui/api", { op: "create", ...f.selection });
+    const { runId } = (await created.json()) as { runId: string };
+    const model = {
+      ...first.document,
+      name: "Edited revision",
+      limits: { max_wall_time_seconds: 60, max_step_executions: 20, agent_idle_timeout_seconds: 9 },
+      steps: {
+        ...first.document.steps,
+        worker: {
+          kind: "agent",
+          harness: "codex",
+          model: "chosen",
+          reasoning_effort: "low",
+          session: "fresh",
+          prompt_file: "instructions.md",
+          cwd: "{{project.root}}",
+          instructions: ["instructions.md"],
+          outcomes: ["complete"],
+          context: { include_reports: [] },
+          tags: ["worker"],
+          timeout_seconds: 12,
+          on: { complete: { goto: "done" } },
+        },
+        command: {
+          kind: "command",
+          argv: ["echo", "", "two words"],
+          env: { VALUE: "verbatim" },
+          on: { complete: { goto: "done" }, failed: { pause: true } },
+        },
+      },
+    };
+    const result = await f.post("/ui/api", { op: "draft", ...f.selection.source, model });
+    const edited = (await result.json()) as BrowserDraft;
+    assert.equal(edited.valid, true);
+    assert.deepEqual(edited.document, model);
+    assert.equal(f.owner.management.store.listRevisions().length, 1);
+    const saved = await f.post("/ui/api", {
+      op: "save",
+      ...f.selection,
+      source: { workflowText: edited.workflowText, workflowDir: f.root },
+    });
+    const next = (await saved.json()) as { revisionId: number };
+    assert.notEqual(next.revisionId, revisionId);
+    assert.equal(f.owner.management.store.getRevision(revisionId).definitionYaml, FLOW);
+    assert.equal(f.owner.management.store.getRun(runId).revisionId, revisionId);
+    assert.equal(f.owner.management.store.getRun(runId).status, "ready");
+    assert.deepEqual(f.owner.management.store.listAttempts(runId), []);
+    const reused = await f.post("/ui/api", {
+      op: "save",
+      ...f.selection,
+      source: { workflowText: edited.workflowText, workflowDir: f.root },
+    });
+    assert.equal(((await reused.json()) as { revisionId: number }).revisionId, next.revisionId);
   });
 });

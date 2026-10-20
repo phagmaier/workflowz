@@ -30,6 +30,7 @@
               <label for="workflow-dir">Original workflow directory (absolute)</label><input id="workflow-dir" placeholder="/home/you/project/workflows" required />
               <p class="hint">Browsers cannot reveal a file’s original directory. Relative project paths resolve against this directory on the daemon machine.</p>
               <button type="submit">Load workflow file</button>
+              <button id="new-workflow" type="button">New workflow in this directory</button>
             </form>
           </section>
           <section>
@@ -41,12 +42,21 @@
                 <label for="task-path">Markdown checklist path (blank for no tasks)</label><input id="task-path" placeholder="todo.md" />
                 <p class="hint">Instruction/checklist paths are relative to the selected project root, or absolute. Missing inputs are errors. Step-specific instructions remain unchanged.</p>
                 <label class="checkbox"><input id="include-completed" type="checkbox" />Include prechecked tasks explicitly</label>
-                <div class="actions"><button type="submit">Preview tasks &amp; validate</button><button id="save" type="button">Save configured workflow</button><button id="create" type="button">Import tasks &amp; create ready run</button></div>
+                <div class="actions"><button id="preview-tasks" type="submit">Preview tasks &amp; validate</button><button id="save" type="button">Save configured workflow</button><button id="create" type="button">Import tasks &amp; create ready run</button></div>
               </fieldset>
             </form>
-            <p class="hint">Saving may normalize YAML formatting; original files are never overwritten. Stages, transitions and policies cannot be edited here. A new pairing replaces the previous browser session.</p>
+            <p class="hint">Selection changes update the YAML draft. New pairing replaces the previous browser session.</p>
           </section>
         </div>
+        <section aria-labelledby="editor-heading">
+          <h2 id="editor-heading">3. Edit workflow</h2>
+          <p class="hint">Apply visual fields before leaving a stage. Text edits take precedence and freeze visual controls until validated. Parse/schema errors require YAML correction; compile/path errors can also be corrected visually. Visual edits normalize YAML formatting/comments; original files and saved history are never overwritten. Reload discards unsaved drafts.</p>
+          <label for="yaml">Canonical YAML draft</label><textarea id="yaml" rows="16" spellcheck="false" aria-describedby="draft-status"></textarea>
+          <button id="validate-draft" type="button">Validate YAML draft</button>
+          <p id="draft-status" role="status">Load or create a workflow first.</p>
+          <pre id="draft-diagnostics" role="alert"></pre>
+          <fieldset id="visual-fields" disabled></fieldset>
+        </section>
         <section aria-labelledby="preview-heading"><h2 id="preview-heading">Task preview</h2><p id="preview-summary">No preview yet.</p><div id="preview"></div></section>
         <section aria-labelledby="runs-heading"><h2 id="runs-heading">Runs</h2><p class="hint">Saved states, refreshed on request. No execution controls or live dashboard in this shell.</p><div class="table-scroll"><table><thead><tr><th>Run</th><th>State</th><th>Project</th><th>Revision</th><th>Cursor</th><th>Created</th></tr></thead><tbody id="runs"></tbody></table></div><p id="empty-runs">No runs yet.</p></section>
       </div>

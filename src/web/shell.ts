@@ -4,6 +4,7 @@ import type { BrowserRequest, BrowserSource } from "../contracts/browser.js";
 import type { Diagnostic } from "../contracts/diagnostics.js";
 import type { TaskImportPreview } from "../contracts/task-import.js";
 import type { RunRow } from "../store/run-store.js";
+import { WorkflowEditor } from "./editor.js";
 
 function element<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -23,7 +24,7 @@ function diagnostics(items: Diagnostic[]) {
     )
     .join("\n");
 }
-let source: BrowserSource | undefined;
+let workflowDir = "";
 let busy = false;
 function connected(yes: boolean) {
   element("auth").hidden = yes;
@@ -69,15 +70,21 @@ async function action(work: () => Promise<void>) {
   busy = true;
   showError("");
   element("message").textContent = "";
-  const buttons = [...document.querySelectorAll("button")];
-  for (const button of buttons) button.disabled = true;
+  const controls = [
+    ...document.querySelectorAll<
+      HTMLInputElement | HTMLButtonElement | HTMLSelectElement | HTMLTextAreaElement
+    >("button, input, select, textarea"),
+  ];
+  const disabled = controls.map((control) => control.disabled);
+  for (const control of controls) if (control.id !== "yaml") control.disabled = true;
   try {
     await work();
   } catch (error) {
     showError(error instanceof Error ? error.message : "Operation failed");
   } finally {
     busy = false;
-    for (const button of buttons) button.disabled = false;
+    for (const [index, control] of controls.entries()) control.disabled = disabled[index] ?? false;
+    editor.sync();
   }
 }
 interface Saved {
@@ -125,31 +132,43 @@ function clearPreview() {
   element("preview-summary").textContent =
     "Inputs changed. Preview again before importing; creation always rereads the source.";
 }
+const editor = new WorkflowEditor(
+  api,
+  action,
+  (draft) => {
+    workflowDir = draft.workflowDir;
+    const model = draft.document;
+    if (model) {
+      element<HTMLInputElement>("project-root").value = draft.projectRoot ?? model.project.root;
+      element<HTMLTextAreaElement>("instructions").value =
+        model.project.instructions?.join("\n") ?? "";
+      element<HTMLInputElement>("task-path").value = model.tasks?.source.path ?? "";
+      element("source-label").textContent = `${model.name} · draft · ${draft.workflowDir}`;
+    }
+    clearPreview();
+  },
+  clearPreview,
+);
 async function load(next: BrowserSource) {
-  const loaded = await api<{
-    name: string;
-    workflowDir: string;
-    projectRoot: string;
-    instructions: string[];
-    taskPath: string | null;
-    diagnostics: Diagnostic[];
-  }>({ op: "load", source: next });
-  source = next;
-  element<HTMLInputElement>("project-root").value = loaded.projectRoot;
-  element<HTMLTextAreaElement>("instructions").value = loaded.instructions.join("\n");
-  element<HTMLInputElement>("task-path").value = loaded.taskPath ?? "";
+  let text: string;
+  if ("revisionId" in next) {
+    const loaded = await api<{ workflowText: string; workflowDir: string }>({
+      op: "load",
+      source: next,
+    });
+    text = loaded.workflowText;
+    workflowDir = loaded.workflowDir;
+  } else {
+    text = next.workflowText;
+    workflowDir = next.workflowDir;
+  }
   element<HTMLInputElement>("include-completed").checked = false;
-  element<HTMLFieldSetElement>("input-fields").disabled = false;
-  element("source-label").textContent =
-    `${loaded.name} · ${"revisionId" in next ? `saved r${next.revisionId}` : "uploaded file"} · ${loaded.workflowDir}`;
-  clearPreview();
-  element("message").textContent = diagnostics(loaded.diagnostics);
+  await editor.open(text, workflowDir);
 }
 function selection(op: "preview" | "save" | "create"): BrowserRequest {
-  if (!source) throw new Error("Load a workflow first");
   return {
     op,
-    source,
+    source: editor.requireValid(),
     projectRoot: value("project-root").trim(),
     instructions: value("instructions")
       .split("\n")
@@ -195,6 +214,27 @@ element("upload-form").addEventListener("submit", (event) => {
   });
 });
 element("inputs-form").addEventListener("input", clearPreview);
+element("inputs-form").addEventListener("change", (event) => {
+  if ((event.target as HTMLElement).id === "include-completed") return;
+  editor.project(
+    value("project-root").trim(),
+    value("instructions")
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    value("task-path").trim() || null,
+  );
+});
+element("new-workflow").addEventListener("click", () => {
+  void action(async () => {
+    const dir = value("workflow-dir").trim();
+    await load({
+      workflowDir: dir,
+      workflowText:
+        "version: 1\nname: New workflow\nproject: {root: .}\nstart: done\nsteps:\n  done: {kind: end}\n",
+    });
+  });
+});
 element("inputs-form").addEventListener("submit", (event) => {
   event.preventDefault();
   void action(async () => {

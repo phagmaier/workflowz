@@ -730,3 +730,140 @@ git diff --check
 - Required diff whitespace check passed. Browser verification used real loopback listeners/local processes without sandbox workarounds or skipped scenarios; fixture-owned daemon exits, closed tabs/listeners and removed directory were explicitly verified above. No live/paid provider was invoked.
 
 **Only 8.1 is checked** after these results. README, specification, architecture and schema decisions describe the implemented boundary and limitations. No separate handoff document was created. Changes remain uncommitted/unpushed pending separate owner approval. Proposed commit: `Implement Phase 8.1 localhost workflow preparation shell`.
+
+## Phase 8.2 — canonical visual stage and policy editor
+
+Started from clean `main`, synchronized with `origin/main`, at owner-accepted/pushed
+`8a2caf010fc8f0d6cdb21a66fd4dc5b2ef6237ff`. Current authorization supersedes historical
+8.1-only/pending-commit statements above and covers offline 8.2 only. No subagents, provider
+execution, credential-file inspection, global setup changes, migrations or later roadmap
+implementation were used. Commit/push still requires separate owner approval.
+
+Read guidance, README, spec, architecture, roadmap and example in order, then schema decisions
+and 8.1 evidence. Codebase-memory reported ready generation `2026-10-19T23:27:39Z`;
+eight cited paths and engine scope had no recorded coverage issue and metadata matches.
+Graph symbol discovery, direct source and TypeScript LSP references established the native
+frontend → browser service → shared validation/compiler/router boundary. Source inspection
+supplied routing details after a narrow graph filter returned no candidates.
+
+### Design
+
+- Retained native HTML/CSS/TypeScript, `tsc` and the existing static-asset copy step. Added
+  `web/editor.ts` and one explicit same-origin module asset; no dependency, bundler or extra server.
+- Exact YAML remains draft authority. The read-only typed `draft` operation optionally serializes
+  a visual document, then returns canonical strict parse/compile/path diagnostics, its shape-valid
+  model and router-resolved normal/system transitions. Existing `resolveOutcome` supplies
+  precedence/provenance and catch-all/built-in fallback; there is no browser policy resolver.
+  Shared check results retain the parsed model on semantic failure; `inspectWorkflow` shares one
+  parse/compile/path pass with existing summary validation without changing management replies.
+- All canonical stage kinds and applicable fields, stable-ID add/remove/display reordering,
+  direct goto/pause/bounded retry, all/tag/explicit-step policies, defaults, correction settings
+  and optional limits are configurable. JSON argv/env controls retain exact strings and empty
+  arguments. Removal leaves invalid references visible rather than repairing the graph.
+- Visual groups apply explicitly. YAML input immediately invalidates visual/save/create state.
+  Explicit validation adopts only a matching generation and exact source; unchanged text does
+  not reset selection/caret. Parse/schema failures retain editable text and disable visual
+  mutation; semantic/path failures keep a shape-valid model available for correction. Visual
+  serialization may normalize comments/formatting and materialize canonical defaults; text-only
+  validation/saving retains exact source identity. Originals are never written.
+- Save/create validate the raw current draft before applying selections and again through the
+  ordinary management path. Invalid drafts cannot become revisions/runs by accidentally replacing
+  a bad input path. Saves reuse immutable storage; editing/saving does not mutate old runs.
+  Preview/draft validation writes nothing and creation only returns ready runs.
+- Cookie/pairing/Host/Origin/JSON/custom-header/CSP/revocation protections and private CLI/report
+  authority are unchanged. No execution, existing-run mutation, recovery, arbitrary-file or
+  generic management-proxy API was added.
+
+### Focused and actual-browser evidence
+
+Focused browser/compiler/router/management admission run: **71 tests / 9 suites passed**.
+After sharing the parse/compile/path inspection, browser/compiler/path/client run:
+**65 tests / 7 suites passed**. Browser boundary suite now includes three consumer-visible tests
+covering invalid-draft retention/rejection, policy/system precedence/provenance and model-field
+round-trip/immutable revisions/ready runs.
+
+Two initial focused failures improved the boundary/test: an empty document has no source location,
+so location assertions apply only when text exists; and selection replacement could otherwise
+save a source draft with a bad path, so save/create now reject invalid raw input before overrides.
+An actual delayed-response exercise exposed unnecessary textarea assignment resetting selection
+during replacement; adoption now checks generation plus exact source and avoids assigning equal
+text. Retesting retained the entire newer text and left save blocked until fresh validation.
+
+Actual Chromium against owned disposable foreground daemons under
+`/tmp/wf-editor-82-2RO4aw`, without executing any configured stage:
+
+- Created a workflow and added/connected agent/command/task.next/task.complete/end stages.
+  Display reorder preserved start/IDs. Edited fresh/resume, inline/file prompt, model/reasoning,
+  stage instructions/cwd/timeout/tags/context, command argv (including empty argument)/env and
+  terminal label; malformed JSON displayed an operation error without changing canonical YAML.
+  Removing a referenced terminal produced `unknown_step` and blocked saving.
+- Edited defaults/correction/limits and all/tag/explicit-step selectors; compiler tables showed
+  direct-over-tag precedence, inheritance after removing a direct rule, each policy specificity,
+  defaults, exact retry (3 total attempts / 5-second backoff), `system.error` fallback and built-in
+  pause. Empty outcome input displayed a useful error without an uncaught page error.
+- YAML syntax, unknown field, missing start/target, undeclared direct outcome, unknown policy
+  outcome, equal-precedence conflict and missing root all retained exact drafts and blocked save.
+  Diagnostics included model paths and source locations. Corrected YAML restored visual controls.
+  A delayed real validation response could not overwrite newer text.
+- Changed project root and ordered two-file instructions; nested/prechecked Markdown preview and
+  explicit inclusion worked. HTML-like task text remained inert (zero injected image nodes).
+  Changed the checklist after preview: ready creation imported the new actual source; a later file
+  edit did not change frozen task titles.
+- Saved/reused revisions, then saved another definition: both created runs stayed ready with their
+  original revision/root/task snapshots. Selecting the historical revision reproduced its exact
+  prior YAML. Uploading valid and malformed files preserved text appropriately. Reload reset
+  unsaved YAML and retained both run rows/saved revisions; logout left daemon ping available.
+- Desktop and 390px mobile screenshots inspected. Document width equaled viewport (390px);
+  effective tables stayed inside a 320px scrolling container with 520px content. No uncaught
+  JavaScript errors; the deliberate stopped-daemon request reported connection refusal.
+
+The final foreground restart exercised the shared inspection path in actual Chromium, including
+an invalid report-context step reference, correction through visual fields and another immutable
+save. Both original runs still reported ready with revisions 1 and 3. A stopped-daemon validation
+showed the transport/retry warning and retained the entire draft. All three owned foreground
+daemons exited with code 0. Explicit connection attempts to ports 36533, 35243 and 44863 were
+refused; discovery was absent. Closed the managed browser tab (no managed tabs remained), removed
+only this session's fixture root and verified absence. Historical/uncertain artifacts were
+preserved.
+
+### Final acceptance
+
+Node.js **v26.8.2**, npm **11.19.1**. The first full run exposed a contract-layer violation from
+a type-only reference to engine routing metadata. Moved the response DTO to `app/browser-service.ts`,
+migrated all consumers and kept the architecture guard unchanged. Focused architecture/browser
+check then passed **15 tests / 2 suites**. The subsequent complete `npm run check` passed
+**793 tests / 88 suites**, zero failures/cancellations/skips, with typecheck and lint passing.
+The first combined command's final whitespace check caught the temporary blank EOF while this
+log was being completed; `git diff --check` passed after completing the documentation.
+
+Executed the required acceptance commands:
+
+```bash
+npm run check
+npm run smoke:recovery
+npm run smoke:reporting
+npm run smoke:boundaries
+node dist/app/validate-cli.js examples/overnight.yaml
+git diff --check
+```
+
+Recovery smoke passed all four crash/disposition paths, durable reopen, no replay and owned cleanup.
+Reporting smoke passed acknowledgment before settlement, direct reporting, exactly one successful
+correction and failed-correction routing with durable reopen/cleanup. Boundary smoke passed synthetic
+OpenCode/Claude correction/provider-failure paths, scrubbing, environment selection, sequential
+settlement and reopen. Overnight example: **valid, 8 steps, zero warnings**, unchanged hash prefix
+`8a4912284968`. No provider was executed; no migration, dependency or harness behavior changed.
+
+**Only 8.2 is completed here, not the full Phase 8 gate.** Limits: native stage-list rather than a
+graph canvas; command argv/env use JSON; field groups apply explicitly and unapplied fields are
+discarded on stage switch or text validation; unsaved drafts reset on reload; visual serialization
+may normalize comments/formatting/defaults and therefore create a new textual revision even with
+equivalent semantics. Paths remain explicit, with no filesystem picker API. No dashboard/execution
+controls, paused-run editing or later-phase browser suite was added. Existing same-user,
+process/recovery and external-side-effect limitations remain unchanged. Changes are uncommitted
+and unpushed pending owner approval. Proposed commit:
+`Implement Phase 8.2 canonical visual workflow editor`.
+
+After acceptance, the owner approved committing and pushing Phase 8.2. This supersedes the
+pending-approval statements above. The next ordered milestone is Phase 8.3; no Phase 8.3–8.5
+or Phase 9 implementation is included in this commit.

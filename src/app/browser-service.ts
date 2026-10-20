@@ -1,11 +1,27 @@
-/** Selection changes only project inputs; canonical validation and writes stay in management. */
-import { parseDocument } from "yaml";
+/** Browser edits are drafts only; validation, immutable writes and execution stay in management. */
+import { parseDocument, stringify } from "yaml";
 import type { BrowserRequest, BrowserSource } from "../contracts/browser.js";
+import type { Diagnostic } from "../contracts/diagnostics.js";
+import { SYSTEM_OUTCOMES } from "../contracts/identifiers.js";
 import { parseWorkflowText } from "../contracts/parse-workflow.js";
+import type { WorkflowDocument } from "../contracts/workflow-schema.js";
 import { checkWorkflowText } from "../engine/check.js";
+import type { ResolvedTransition } from "../engine/model.js";
+import { resolveOutcome } from "../engine/routing.js";
 import { WorkflowInvalidError } from "../engine/run-coordinator.js";
 import type { ManagementService } from "./management-service.js";
+import { inspectWorkflow, validateWorkflow } from "./workflow-validation.js";
 
+export interface BrowserDraft {
+  workflowText: string;
+  workflowDir: string;
+  document: WorkflowDocument | null;
+  valid: boolean;
+  diagnostics: readonly Diagnostic[];
+  projectRoot: string | null;
+  transitions: Record<string, readonly ResolvedTransition[]>;
+  systemOutcomes: readonly string[];
+}
 export class BrowserService {
   constructor(private readonly management: ManagementService) {}
 
@@ -18,6 +34,35 @@ export class BrowserService {
   }
 
   async handle(request: BrowserRequest): Promise<unknown> {
+    if (request.op === "draft") {
+      const workflowText =
+        request.model === undefined ? request.workflowText : stringify(request.model);
+      if (workflowText.length > 1024 * 1024) throw new Error("Workflow draft exceeds 1 MiB");
+      const input = { workflowText, workflowDir: request.workflowDir };
+      const { checked, validation } = inspectWorkflow(input);
+      const transitions: BrowserDraft["transitions"] = Object.create(null);
+      const compiled = checked.compiled;
+      if (compiled) {
+        for (const step of compiled.steps.values()) {
+          const declared = new Set(step.outcomes);
+          transitions[step.id] =
+            step.kind === "end"
+              ? []
+              : [...step.outcomes, ...SYSTEM_OUTCOMES].map((outcome) =>
+                  resolveOutcome(compiled, step.id, outcome, declared),
+                );
+        }
+      }
+      return {
+        ...input,
+        document: checked.document ?? null,
+        valid: validation.valid,
+        diagnostics: validation.diagnostics,
+        projectRoot: checked.compiled?.projectRoot ?? null,
+        transitions,
+        systemOutcomes: SYSTEM_OUTCOMES,
+      } satisfies BrowserDraft;
+    }
     if (request.op === "session") return this.management.handle({ op: "ping" });
     if (request.op === "logout") throw new Error("logout is handled by browser transport");
     if (request.op === "runs") return this.management.handle(request);
@@ -41,11 +86,16 @@ export class BrowserService {
       return {
         name: parsed.document.name,
         workflowDir: input.workflowDir,
+        workflowText: input.workflowText,
         projectRoot: checked.compiled.projectRoot,
         instructions: parsed.document.project.instructions ?? [],
         taskPath: parsed.document.tasks?.source.path ?? null,
         diagnostics: checked.diagnostics,
       };
+    }
+    if (request.op === "save" || request.op === "create") {
+      const validation = validateWorkflow(input);
+      if (!validation.valid) throw new WorkflowInvalidError(validation.diagnostics);
     }
     // Do not serialize untouched sources: keep exact revision identity where possible.
     const document = parseDocument(input.workflowText, { schema: "core" });

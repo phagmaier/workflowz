@@ -433,9 +433,26 @@ The same foreground daemon serves dependency-free HTML/CSS and compiled browser 
 
 Every browser route requires the exact `127.0.0.1:PORT` Host (DNS-rebinding protection). Browser POSTs additionally require the exact daemon Origin, JSON and a custom request header, with no CORS. API access requires the separate browser cookie, never management/report bearer authority. Pairing and API bodies use the existing 2 MiB/five-second bounds. Static responses prohibit framing, external resources, inline scripts, caching and referrer propagation via CSP and security headers. Workflow/task strings render as text, never HTML.
 
-The browser API is a separate strict allowlist: session inspection/logout, saved revisions, run list, source loading, configured task preview, save immutable revision and create ready run. It delegates validation, preview/import and creation to the existing management facade. There are no start/resume/control/recovery/log endpoints, arbitrary filesystem browsing/reading, commands or new migrations. A workflow file is explicitly uploaded as text with its absolute original directory, or selected from saved revisions. Project root, ordered instruction paths and optional Markdown source are the only editable configuration fields; YAML steps/policies remain untouched. These selections produce canonical validated YAML before saving/creating. Preview writes nothing; create rereads and freezes the actual checklist, never starts execution. Source imports and configuration changes are shown explicitly; original project files are not rewritten.
+The browser API is a separate strict allowlist: session inspection/logout, saved revisions, run list, source loading, configured task preview, save immutable revision and create ready run, extended by 8.2's read-only draft validation/serialization below. It delegates preview/import and creation to the existing management facade and shares its validator. There are no start/resume/control/recovery/log endpoints, arbitrary filesystem browsing/reading, commands or new migrations. Files are uploaded as text with their absolute original directory or selected from saved revisions; the editor can also create a new draft. Project/input selections and stage/policy controls update that draft before saving/creating. Preview writes nothing; create rereads and freezes the actual checklist, never starts execution. Original project files are not rewritten.
 
-Phase 8.2 owns stage/transition/policy/YAML editing, 8.3 owns dashboard/control/streaming, and 8.4 owns paused-run editing. These and the full Phase 8 gate are not implemented by this shell.
+Stage/transition/policy/YAML editing is implemented in Phase 8.2 below. Dashboard/control/streaming (8.3), paused-run editing (8.4), later browser automation (8.5) and the full Phase 8 gate remain open.
+
+### 8.3 Draft editor integration (Phase 8.2; not execution dashboard)
+
+The native editor keeps exact YAML text as draft authority. A read-only browser `draft` operation
+parses, compiles and checks referenced paths with the existing application validator, returning
+the canonical typed document and router-resolved normal/system transitions with provenance.
+Visual mutations serialize that same document on the daemon; they never write source files.
+Text edits immediately invalidate the prior visual snapshot. Explicit validation adopts only a
+response for the current draft; parse/schema errors retain text and disable visual mutations,
+while semantic/path errors retain a shape-valid model for correction. Save/create require
+current successful validation and revalidate both source and configured input before writing.
+Visual/input edits may normalize formatting, comments and canonical schema defaults; untouched
+text preserves revision identity. Form groups apply explicitly; unapplied fields are discarded
+when selecting another stage or validating text. Stable IDs and start/goto define execution,
+never display order. The shared check result retains a shape-valid document through semantic
+failure, and application inspection shares one parse/compile/path pass with summary validation.
+No browser-specific policy resolver, database, execution endpoint or migration is added.
 
 ## 9. Testing strategy
 

@@ -184,8 +184,46 @@ td {
 [hidden] {
   display: none;
 }
+.editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.editor-grid > div {
+  min-width: 0;
+}
+.stage-row,
+.transition-row {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 0;
+  overflow-wrap: anywhere;
+}
+.stage-row button {
+  margin-right: 6px;
+}
+details {
+  border-top: 1px solid var(--border);
+  padding: 16px 0;
+}
+summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+#yaml {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  tab-size: 2;
+}
+#draft-diagnostics {
+  color: light-dark(#8d1b22, #ffb1b1);
+}
+table.effective {
+  min-width: 520px;
+}
 @media (max-width: 800px) {
-  .columns {
+  .columns,
+  .editor-grid {
     grid-template-columns: 1fr;
   }
   header,
