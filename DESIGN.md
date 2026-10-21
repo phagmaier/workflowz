@@ -6,9 +6,10 @@ Make Workflowz understandable through its interface. The owner should be able to
 workflow, understand what it will do, start it and inspect its results without being coached
 through internal field names and scattered controls.
 
-**Current status:** All four slices of the selected React + TypeScript direction are complete
-at `/ui/` and accepted by the owner (see Decisions). The existing engine remains the baseline. The
-[user guide](USER_GUIDE.md) describes the finished interface.
+**Current status:** All four slices of the selected React + TypeScript direction are implemented
+at `/ui/`. A subsequent live test drive exposed substantial usability and appearance problems;
+the owner no longer considers the interface satisfactory. The existing engine remains the
+baseline. The [user guide](USER_GUIDE.md) describes the implemented interface.
 
 ## What the walkthrough established
 
@@ -90,6 +91,68 @@ Use this with the repository context and current screenshots when available:
 ## Decisions
 
 The owner chose **UI overhaul before further tutorial work**.
+
+**Desktop direction (2026-10-21):** The owner selected a desktop application as
+the intended product form. Electron with the existing React + TypeScript frontend
+and daemon is the proposed integration, not a completed or final technical choice.
+Opening the application should manage connection/startup without routine terminal
+commands or manual pairing-code entry, and make background service versus active
+workflow status clear. Native folder selection should accompany pasted paths.
+Preserve explicit Start/Resume, safe process settlement, recovery and authority
+boundaries when designing the integration.
+
+The owner explicitly deferred desktop implementation: **do not build it now**.
+Next work remains comparing visual and interaction proposals for the desktop
+experience. No desktop shell, packaging or daemon lifecycle changes have been made.
+
+**Live test drive feedback (2026-10-21):** The command and two-agent demos worked,
+but the owner rejected the interface's appearance and usability after using it.
+The earlier acceptance below is historical, not current design acceptance.
+See [demo feedback](DEMO_FEEDBACK.md) for observed interaction problems.
+
+The next proposals should feel like a polished application: restrained, modern
+styling, clear visual separation, less information competing on each screen,
+and focused editing. Command entry requiring one argument per line was a major
+problem. Labels such as “Ask an agent” were rejected; use clear step-type names
+and make creation versus configuration apparent.
+
+Project selection should support pasting a path and browsing the daemon machine's
+filesystem. The exact picker interaction and any required API are not decided;
+do not imply that an ordinary browser file picker supplies absolute server paths.
+
+Compare a visual graph workspace with selectable, connected Agent and Command
+nodes and a focused step editor, against sequential authoring with focused
+navigation into branches. The owner wants the graph available during authoring
+or easy to inspect while checking work, with substantially better presentation.
+Expandable children, failure routes and optional review steps are exploratory
+ideas, not approved schema changes or mandatory stages. “New window” expresses
+the desire to leave the cluttered form for focused branch editing; the specific
+navigation mechanism remains to be tested. No new direction has been selected.
+
+Additional test-drive requirements and future ideas:
+
+- Harness configuration should offer supported effort presets and/or remember
+  user-entered effort values per harness. Persistence, scope and capability
+  validation still need design; this is not permission to change global harness
+  configuration.
+- Missing agent output makes execution opaque. Make useful execution evidence
+  discoverable; showing agents actively working is a later exploration, dependent
+  on each adapter's actual output capabilities.
+- Pairing codes and manual daemon startup/shutdown felt unacceptable for ordinary
+  use. The user could not tell whether work remained active. Explore an integrated
+  application lifecycle with clear service and run status; preserve local browser
+  authority protections and explicit execution. Clarify whether “thread” means
+  the daemon, workflow run or harness conversation before changing behavior.
+- Concurrent agents are a future wishlist item only, explicitly not for current
+  implementation. No change to sequential execution or coordinator ownership is
+  authorized by recording it.
+
+For the next design comparison, settle visual direction with realistic populated
+screens before implementing another full interface. Evaluate clickable authoring
+and run-inspection journeys, including launching/opening the app, selecting a
+folder, configuring harness/model/effort, adding a branch, and finding execution
+output. Review the same content across alternatives, then implement one complete
+slice and test it with the owner before expanding.
 
 **Owner acceptance (2026-10-21):** The owner accepted the completed developer workspace interface.
 All four frontend slices and follow-up regression fixes are complete.
