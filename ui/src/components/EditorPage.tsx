@@ -17,15 +17,19 @@ import { type EditorTab, type EditorTarget, editorHref, runHref, sessionKey } fr
 import { graphOf } from "../run-data.ts";
 import { useRuns } from "../runs-data.tsx";
 import type { BrowserRunEdit, BrowserRunStatus, TaskImportPreview } from "../types.ts";
+import { focusField } from "./editor-fields.tsx";
+import { RevisionChanges } from "./RevisionChanges.tsx";
+import { RulesTab } from "./RulesTab.tsx";
 import { RunMap } from "./RunMap.tsx";
 import { Shell } from "./Shell.tsx";
-import { focusField } from "./StepForm.tsx";
 import { StepsTab } from "./StepsTab.tsx";
-import { Feedback, type FeedbackState, forgetDraft, useDraft } from "./ui.tsx";
+import { Feedback, type FeedbackState, forgetDraft, rememberDraft, useDraft } from "./ui.tsx";
+import { YamlTab } from "./YamlTab.tsx";
 
 const TABS: { id: EditorTab; label: string }[] = [
   { id: "steps", label: "Steps" },
   { id: "project", label: "Project" },
+  { id: "rules", label: "Rules & limits" },
   { id: "yaml", label: "YAML" },
   { id: "map", label: "Map" },
 ];
@@ -124,6 +128,8 @@ function SaveState({ session, state }: { session: Session; state: SessionState }
     if (state.kind === "new") {
       dropSession(session.key);
       window.location.hash = "#/workflows";
+    } else if (state.kind === "run") {
+      dropSession(session.key);
     } else if (state.savedText !== null) {
       session.set({ model: null });
       void session.open(state.savedText);
@@ -133,7 +139,7 @@ function SaveState({ session, state }: { session: Session; state: SessionState }
     <div className="status-line">
       {pill}
       {detail ? <span className="muted">{detail}</span> : null}
-      {dirty && state.model ? (
+      {dirty && (state.model || state.mode === "text") ? (
         confirm ? (
           <span className="row confirm-inline">
             <span>{state.kind === "new" ? "Throw this draft away?" : "Discard your changes?"}</span>
@@ -160,8 +166,9 @@ function SaveState({ session, state }: { session: Session; state: SessionState }
 
 /** Why Save/Create/Apply is unavailable right now, or null when it is available. */
 function blocker(session: Session, state: SessionState, list: readonly Problem[]): string | null {
-  if (state.checking || state.checked !== state.generation) return "Checking the latest change…";
+  if (state.checking) return "Checking the latest change…";
   if (state.checkError) return "Not checked yet.";
+  if (state.checked !== state.generation) return "Checking the latest change…";
   const errors = list.filter((p) => p.severity === "error").length;
   if (errors) return `Fix ${plural(errors, "problem")} first.`;
   return session.valid ? null : "Not checked yet.";
@@ -183,7 +190,7 @@ function CreateRunPanel({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const heading = useRef<HTMLHeadingElement>(null);
-  const doc = state.model as Doc;
+  const doc = state.model;
   const valid = session.valid;
   const selection =
     valid && state.draft
@@ -231,11 +238,14 @@ function CreateRunPanel({
         setFlash(
           runId,
           `Run created from revision ${status.run.revisionId}. Nothing has started — check what will run, then choose Start.`,
+          "ready",
+          status.run.revisionId,
         );
       } catch {
         setFlash(
           runId,
           "Run created. Nothing has started — check what will run, then choose Start.",
+          "ready",
         );
       }
       runs.refresh();
@@ -259,7 +269,7 @@ function CreateRunPanel({
         Create a run
       </h2>
       <p>
-        Prepares a run of <strong>{doc.name}</strong> from{" "}
+        Prepares a run of <strong>{doc?.name ?? "this workflow"}</strong> from{" "}
         {session.dirty
           ? "this draft as shown, including unsaved changes (they are kept as a new revision with the run)"
           : `revision ${state.basedOn}`}
@@ -292,6 +302,25 @@ function CreateRunPanel({
                 {tasks.length > 8 ? <li className="muted">and {tasks.length - 8} more</li> : null}
               </ol>
             ) : null}
+            <details className="disclosure">
+              <summary>All checklist items</summary>
+              <ol className="task-list">
+                {preview.tasks.map((task) => (
+                  <li key={task.sourceOrder}>
+                    <strong>{task.title}</strong>
+                    <p className="hint">
+                      {tasks.some((t) => t.sourceOrder === task.sourceOrder)
+                        ? "Queued"
+                        : "Excluded"}{" "}
+                      · line {task.sourceLine}
+                      {task.sourceChecked ? " · checked in the file" : ""}
+                      {task.headingPath.length ? ` · ${task.headingPath.join(" / ")}` : ""}
+                    </p>
+                    {task.body ? <p className="prose">{task.body}</p> : null}
+                  </li>
+                ))}
+              </ol>
+            </details>
             {preview.prechecked ? (
               <label className="check">
                 <input
@@ -342,24 +371,28 @@ function RunEditBar({
   const { read, mutate, busy, online } = useConnection();
   const runs = useRuns();
   const run = state.run as BrowserRunEdit;
-  const doc = state.model as Doc;
+  const doc = state.model;
   const [reason, setReason] = useDraft(`${run.runId}:reason:revise`);
   const [cursor, setCursor] = useDraft(`${run.runId}:revise-cursor`);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [recheck, setRecheck] = useState<FeedbackState>(null);
   const previous = run.steps.find((s) => s.stepId === run.cursorStepId);
-  const here = doc.steps[run.cursorStepId];
-  const stays = here !== undefined && here.kind === previous?.kind;
-  const allowed = Object.entries(doc.steps).filter(
-    ([, step]) =>
-      !(step.kind === "task.next" && run.activeTaskId !== null) &&
-      !(step.kind === "task.complete" && run.activeTaskId === null),
-  );
-  const chosen = allowed.some(([id]) => id === cursor) ? cursor : "";
+  const here = doc?.steps[run.cursorStepId];
+  const preflight = session.current ? state.draft?.revision : undefined;
+  const stays = preflight?.keepCursor === true;
+  const targets = preflight?.steps ?? [];
+  const chosen = targets.some((s) => s.stepId === cursor && s.compatible) ? cursor : "";
   const reasonOk = reason.trim().length > 0;
   const why = blocker(session, state, list);
   const can =
-    !why && !state.stale && session.dirty && busy === null && online && (stays || chosen !== "");
+    !why &&
+    !!preflight &&
+    !preflight.constraints.length &&
+    !state.stale &&
+    session.dirty &&
+    busy === null &&
+    online &&
+    (stays || chosen !== "");
 
   // Notice when the run moves on, so a stale Apply is explained before it is refused.
   usePolling(async () => {
@@ -425,7 +458,10 @@ function RunEditBar({
       setFlash(
         run.runId,
         `Workflow changed for this run (now revision ${result.revisionId}). Still paused — resume when you're ready.`,
+        "paused",
+        result.revisionId,
       );
+      rememberDraft(`${run.runId}:choice`, "resume");
       dropSession(session.key);
       runs.refresh();
       window.location.hash = runHref(run.runId);
@@ -463,6 +499,18 @@ function RunEditBar({
           <Feedback value={recheck} />
         </p>
       ) : null}
+      <RevisionChanges state={state} />
+      <p className="hint">
+        {run.activeTaskId
+          ? `Current task: ${run.tasks.find((t) => t.taskId === run.activeTaskId)?.title ?? "active"}. Finish or explicitly complete it before picking another task.`
+          : "There is no active task. Steps that need task values or mark a task done are unavailable until a task is picked."}{" "}
+        Agent sessions from the previous revision cannot be resumed.
+      </p>
+      {preflight?.constraints.map((text) => (
+        <p key={text} className="inline-alert" role="alert">
+          {text}
+        </p>
+      ))}
       <div className="grid2">
         <div className="block">
           <label htmlFor="revise-cursor">Continue at</label>
@@ -478,23 +526,29 @@ function RunEditBar({
                 Choose a step…
               </option>
             )}
-            {allowed
-              .filter(([id]) => id !== run.cursorStepId || !stays)
-              .map(([id]) => (
-                <option key={id} value={id}>
-                  {humanize(id)}
+            {targets
+              .filter((s) => s.stepId !== run.cursorStepId || !stays)
+              .map((s) => (
+                <option key={s.stepId} value={s.stepId} disabled={!s.compatible}>
+                  {humanize(s.stepId)}
+                  {!s.compatible ? " — unavailable" : ""}
                 </option>
               ))}
           </select>
-          {!stays ? (
+          {!stays && preflight && !chosen ? (
             <span className="field-err">
               {humanize(run.cursorStepId)}, where the run is paused,{" "}
-              {here ? "is a different kind of step now" : "is no longer in the workflow"}. Choose
-              where it continues.
+              {!here
+                ? "is no longer in the workflow"
+                : here.kind !== previous?.kind
+                  ? "is a different kind of step now"
+                  : "cannot continue with the current task state"}
+              . Choose where it continues.
             </span>
           ) : (
             <span className="hint">
-              Nothing runs when you apply. Resume afterwards to continue.
+              {chosen ? `On Resume, ${humanize(chosen)} runs from the beginning. ` : ""}Nothing runs
+              when you apply. Resume afterwards to continue.
             </span>
           )}
         </div>
@@ -512,6 +566,23 @@ function RunEditBar({
           />
         </div>
       </div>
+      {targets.some((s) => !s.compatible) ? (
+        <details className="disclosure">
+          <summary>Why some steps are unavailable</summary>
+          <ul>
+            {targets
+              .filter((s) => !s.compatible)
+              .map((s) => (
+                <li key={s.stepId}>
+                  <strong>{humanize(s.stepId)}</strong>:{" "}
+                  {doc?.steps[s.stepId]?.kind === "task.next"
+                    ? "A task is still active. Finish it before picking another."
+                    : "Needs an active task. Pick a task first."}
+                </li>
+              ))}
+          </ul>
+        </details>
+      ) : null}
       <div className="row">
         <button type="submit" className="btn btn-primary" disabled={!can}>
           Apply to this run
@@ -679,48 +750,6 @@ function ProjectTab({
   );
 }
 
-function YamlTab({ state, list }: { state: SessionState; list: readonly Problem[] }) {
-  const pending = state.checking || state.checked !== state.generation;
-  const located = (state.draft?.diagnostics ?? []).filter((d) => d.location);
-  return (
-    <div className="narrow wide">
-      <section className="pane">
-        <div className="pane-head">
-          <h2>YAML</h2>
-          <span className="muted small" role="status">
-            {pending ? "Updating…" : "Up to date"}
-          </span>
-        </div>
-        <p className="muted">
-          This is exactly what Save sends. Editing the text directly comes in a later update; change
-          the workflow on the Steps and Project tabs.
-        </p>
-        {list.some((p) => p.place === "yaml") ? (
-          <ul className="problems">
-            {list
-              .filter((p) => p.place === "yaml")
-              .map((p) => (
-                <li key={p.text} className={`problem ${p.severity}`}>
-                  {p.text}
-                </li>
-              ))}
-          </ul>
-        ) : null}
-        {located.length ? (
-          <ul className="small">
-            {located.map((d) => (
-              <li key={`${d.code}${d.location?.line}`}>
-                Line {d.location?.line}: {d.message}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <pre className="yaml">{state.text}</pre>
-      </section>
-    </div>
-  );
-}
-
 export function EditorPage({ target, tab }: { target: EditorTarget; tab: EditorTab }) {
   const opened = useOpen(target);
   const { session } = opened;
@@ -741,7 +770,7 @@ export function EditorPage({ target, tab }: { target: EditorTarget; tab: EditorT
     : [{ label: "Workflows", href: "#/workflows" }, { label: name }];
   const pageKey = `editor:${state?.uid ?? sessionKey(target)}`;
 
-  if (!session || !state?.model) {
+  if (!session || !state || (!state.model && state.mode !== "text")) {
     const gone = target.kind === "draft" && !session;
     const error =
       opened.error ??
@@ -936,12 +965,25 @@ export function EditorPage({ target, tab }: { target: EditorTarget; tab: EditorT
           );
         })}
       </nav>
-      {tab === "steps" ? (
+      {state.mode === "text" && tab !== "yaml" ? (
+        <section className="pane">
+          <h2>Visual editing is paused</h2>
+          <p>
+            Your YAML text is the source of truth. Check it and return to visual editing on the YAML
+            tab.
+          </p>
+          <a className="btn" href={href("yaml")}>
+            Continue editing YAML
+          </a>
+        </section>
+      ) : tab === "steps" ? (
         <StepsTab key={state.opened} session={session} state={state} problems={list} />
       ) : tab === "project" ? (
         <ProjectTab key={state.opened} session={session} state={state} list={list} />
+      ) : tab === "rules" ? (
+        <RulesTab key={state.opened} session={session} state={state} list={list} />
       ) : tab === "yaml" ? (
-        <YamlTab state={state} list={list} />
+        <YamlTab session={session} state={state} />
       ) : (
         <EditorMap session={session} state={state} target={target} />
       )}

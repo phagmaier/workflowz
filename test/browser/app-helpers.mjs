@@ -1,4 +1,4 @@
-// Shared helpers for the new React app specs (/ui/app/).
+// Shared helpers for the new React app specs (/ui/).
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { expect } from "./fixture.mjs";
@@ -64,7 +64,7 @@ export async function watchPolicy(page) {
 
 export async function pairApp(page, app, hash = "") {
   const issued = await app.request({ op: "browser-access" });
-  await page.goto(`${app.url}/ui/app/${hash}`);
+  await page.goto(`${app.url}/ui/${hash}`);
   await expect(page.getByRole("heading", { level: 1, name: "Connect this browser" })).toBeVisible();
   await page.getByLabel("Pairing code").fill(issued.code);
   await page.getByRole("button", { name: "Connect", exact: true }).click();

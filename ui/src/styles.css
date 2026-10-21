@@ -748,11 +748,13 @@ select:focus-visible {
 }
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   border-bottom: 1px solid var(--line);
   margin-bottom: 14px;
 }
 .tabs a {
+  white-space: nowrap;
   padding: 8px 14px;
   color: var(--muted);
   border-bottom: 2px solid transparent;
@@ -1749,5 +1751,85 @@ button.problem:hover {
   }
   .top-actions {
     justify-content: flex-start;
+  }
+}
+
+/* Advanced authoring keeps rules readable and limits close to their warnings. */
+.rules-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
+  max-width: 1280px;
+}
+.rules-main {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.rules-side {
+  min-width: 0;
+}
+.policy-card {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+.shared-routes {
+  list-style: none;
+  padding: 0;
+}
+.shared-route-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  margin: 12px 0;
+}
+.shared-routes .btn-icon {
+  margin-top: 24px;
+}
+.step-choices {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin: 12px 0;
+  padding: 8px 12px;
+}
+.step-choices .check {
+  font-weight: normal;
+}
+.yaml-editor {
+  width: 100%;
+  min-height: 480px;
+  font-size: 13px;
+  line-height: 20px;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+}
+.source-compare {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.source-compare section {
+  min-width: 0;
+}
+.source-compare .yaml {
+  max-height: 300px;
+  overflow: auto;
+}
+.revision-changes {
+  margin-bottom: 12px;
+}
+@media (max-width: 1000px) {
+  .rules-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .source-compare {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

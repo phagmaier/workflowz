@@ -1,4 +1,6 @@
-import { type KeyboardEvent, useState } from "react";
+import { type KeyboardEvent, useEffect, useState } from "react";
+import { describeReadFailure } from "../api.ts";
+import { useConnection } from "../connection.tsx";
 import {
   between,
   clock,
@@ -11,7 +13,7 @@ import {
 } from "../lib/format.ts";
 import { groupHistory, type HistoryItem, redact, type StepItem } from "../lib/history.ts";
 import type { RunGraph } from "../run-data.ts";
-import type { TaskRow } from "../types.ts";
+import type { BrowserDraft, TaskRow } from "../types.ts";
 
 const WARN = /^(blocked|failed|revise|needs_|error|reject)/;
 
@@ -184,13 +186,15 @@ function RawEvents({ item }: { item: HistoryItem }) {
         </span>
       </button>
       {open ? (
-        <pre className="raw">
-          {JSON.stringify(
-            item.events.map((event) => ({ ...event, data: redact(event.data) })),
-            null,
-            2,
-          )}
-        </pre>
+        <section aria-label="Event evidence">
+          <pre className="raw">
+            {JSON.stringify(
+              item.events.map((event) => ({ ...event, data: redact(event.data) })),
+              null,
+              2,
+            )}
+          </pre>
+        </section>
       ) : null}
     </div>
   );
@@ -200,11 +204,48 @@ export function StepDetail({
   item,
   tasks,
   graph,
+  currentRevisionId,
 }: {
   item: HistoryItem | undefined;
   tasks: readonly TaskRow[];
   graph: RunGraph | null;
+  currentRevisionId: number;
 }) {
+  const { read } = useConnection();
+  const revisionId = item?.events[0]?.revisionId ?? currentRevisionId;
+  const historical = revisionId !== currentRevisionId;
+  const [definitions, setDefinitions] = useState<Record<number, RunGraph["specs"]>>({});
+  const [failure, setFailure] = useState<{ revisionId: number; text: string } | null>(null);
+  const [retry, setRetry] = useState(0);
+  const saved = definitions[revisionId];
+  // biome-ignore lint/correctness/useExhaustiveDependencies: retry deliberately repeats a failed definition read.
+  useEffect(() => {
+    if (!historical || saved || item?.type !== "step") return;
+    let alive = true;
+    (async () => {
+      const source = await read<{ workflowText: string; workflowDir: string }>({
+        op: "load",
+        source: { revisionId },
+      });
+      const draft = await read<BrowserDraft>({
+        op: "draft",
+        workflowText: source.workflowText,
+        workflowDir: source.workflowDir,
+      });
+      if (!draft.document) throw new Error("The historical definition could not be read.");
+      if (alive) {
+        const specs = draft.document.steps;
+        setDefinitions((previous) => ({ ...previous, [revisionId]: specs }));
+        setFailure(null);
+      }
+    })().catch((error: unknown) => {
+      if (alive) setFailure({ revisionId, text: describeReadFailure(error) });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [historical, revisionId, saved, item?.type, read, retry]);
+
   if (!item)
     return (
       <section className="pane detail-pane" aria-label="Step details">
@@ -237,7 +278,7 @@ export function StepDetail({
       </section>
     );
 
-  const spec = graph?.specs[item.stepId];
+  const spec = (historical ? saved : graph?.specs)?.[item.stepId];
   const who =
     spec?.kind === "agent"
       ? `${harnessLabel(spec.harness)}${spec.model ? ` · ${spec.model}` : " · default model"}`
@@ -253,6 +294,21 @@ export function StepDetail({
       <div className="kind-label">{context}</div>
       <h2 id="detail-title">{humanize(item.stepId)}</h2>
       {who ? <div className="muted mono who">{who}</div> : null}
+      <p className="hint">Definition from revision {revisionId}.</p>
+      {historical && !saved ? (
+        failure?.revisionId === revisionId ? (
+          <p className="inline-alert">
+            {failure.text}{" "}
+            <button type="button" className="link" onClick={() => setRetry(retry + 1)}>
+              Try again
+            </button>
+          </p>
+        ) : (
+          <p className="hint" role="status">
+            Loading this step’s historical definition…
+          </p>
+        )
+      ) : null}
       {task ? <p className="muted small">{task.title}</p> : null}
       {item.state === "running" ? (
         <div className="callout">
@@ -269,7 +325,7 @@ export function StepDetail({
           Stopped before it finished. The process was ended and cleaned up; file changes were kept.
         </div>
       ) : null}
-      {item.outcome || item.state === "done" || item.state === "skipped" ? (
+      {report || item.outcome || item.state === "done" || item.state === "skipped" ? (
         <dl className="kv">
           {item.outcome ? (
             <>
@@ -342,6 +398,17 @@ export function StepDetail({
             </>
           ) : null}
         </dl>
+      ) : null}
+      {report ? (
+        <details className="disclosure">
+          <summary>Accepted report</summary>
+          <p className="hint">
+            Acceptance doesn't finish the step; its process and streams must settle first.
+          </p>
+          <section aria-label="Accepted report JSON">
+            <pre className="raw">{JSON.stringify(redact(report), null, 2)}</pre>
+          </section>
+        </details>
       ) : null}
       {spec && (spec.kind === "agent" || spec.kind === "command") ? (
         <details className="disclosure">

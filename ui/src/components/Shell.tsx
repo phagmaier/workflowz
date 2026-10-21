@@ -106,9 +106,6 @@ export function Shell({
             {online ? "Daemon connected" : "Disconnected"}
             <small>{online ? "This browser is paired" : "Runs keep going in the daemon"}</small>
           </p>
-          <a className="side-link" href="/ui/">
-            Classic interface
-          </a>
           <button
             type="button"
             className="side-link"

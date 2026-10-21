@@ -839,6 +839,101 @@ steps:
     assert.deepEqual(c.taskOverrides(f.runId, pendingTask.taskId), settings);
   });
 
+  it("preflights revised cursors and locked run inputs without changing state", async (t) => {
+    const f = await editableTaskRun(t);
+    await f.start();
+    const paused = await f.until((state) => state.run.status === "paused");
+    const c = f.owner.management.service.coordinator;
+    const before = c.inspect(f.runId);
+    const revisions = f.owner.management.store.listRevisions();
+    const check = async (workflowText: string, expectedEventId = paused.expectedEventId) => {
+      const response = await f.post("/ui/api", {
+        op: "draft",
+        workflowText,
+        workflowDir: f.root,
+        run: { runId: f.runId, expectedEventId },
+      });
+      assert.equal(response.status, 200);
+      return (await response.json()) as BrowserDraft;
+    };
+    const initial = await check(TASK_EDIT_FLOW);
+    assert.equal(initial.revision?.keepCursor, true);
+    assert.equal(initial.revision.steps.find((s) => s.stepId === "pick")?.compatible, false);
+    assert.match(
+      initial.revision.steps.find((s) => s.stepId === "pick")?.reason ?? "",
+      /active task/,
+    );
+    assert.equal(initial.revision.steps.find((s) => s.stepId === "finish")?.compatible, true);
+    const renamed = await check(TASK_EDIT_FLOW.replaceAll("work", "implement"));
+    assert.equal(renamed.revision?.keepCursor, false);
+    assert.equal(renamed.revision.steps.find((s) => s.stepId === "implement")?.compatible, true);
+    const locked = await check(
+      TASK_EDIT_FLOW.replace("root: .", "root: ..").replace("path: tasks.md", "path: elsewhere.md"),
+    );
+    assert.equal(locked.revision?.constraints.length, 2);
+    const bad = await check("version: [");
+    assert.equal(bad.document, null);
+    assert.equal(bad.revision, undefined);
+    assert.deepEqual(c.inspect(f.runId), before);
+    assert.deepEqual(f.owner.management.store.listRevisions(), revisions);
+
+    const complete = await f.post("/ui/api", {
+      op: "override",
+      runId: f.runId,
+      expectedEventId: paused.expectedEventId,
+      edit: {
+        action: "mark-task-complete",
+        taskId: paused.run.activeTaskId,
+        reason: "Check no-active-task choices",
+      },
+    });
+    assert.equal(complete.status, 200);
+    const fresh = await f.status();
+    const noTaskBefore = c.inspect(f.runId);
+    const noTask = await check(TASK_EDIT_FLOW, fresh.expectedEventId);
+    assert.equal(noTask.revision?.keepCursor, false);
+    for (const stepId of ["work", "finish"])
+      assert.equal(noTask.revision?.steps.find((s) => s.stepId === stepId)?.compatible, false);
+    assert.equal(noTask.revision?.steps.find((s) => s.stepId === "pick")?.compatible, true);
+    const model = parseWorkflowText(TASK_EDIT_FLOW).document;
+    assert.ok(model);
+    const command = {
+      ...model,
+      steps: {
+        ...model.steps,
+        work: {
+          kind: "command",
+          argv: ["echo"],
+          env: { TASK: "{{task.text}}" },
+          on: { complete: { goto: "finish" }, failed: { pause: true } },
+        },
+      },
+    };
+    const response = await f.post("/ui/api", {
+      op: "draft",
+      workflowText: "",
+      model: command,
+      workflowDir: f.root,
+      run: { runId: f.runId, expectedEventId: fresh.expectedEventId },
+    });
+    const commandDraft = (await response.json()) as BrowserDraft;
+    assert.equal(commandDraft.valid, true);
+    assert.equal(commandDraft.revision?.steps.find((s) => s.stepId === "work")?.compatible, false);
+    assert.deepEqual(c.inspect(f.runId), noTaskBefore);
+    assert.deepEqual(f.owner.management.store.listRevisions(), revisions);
+    assert.equal(
+      (
+        await f.post("/ui/api", {
+          op: "draft",
+          workflowText: TASK_EDIT_FLOW,
+          workflowDir: f.root,
+          run: { runId: f.runId, expectedEventId: paused.expectedEventId },
+        })
+      ).status,
+      409,
+    );
+  });
+
   it("rejects invalid revisions atomically and requires a compatible explicit replacement cursor", async (t) => {
     const f = await editableTaskRun(t);
     await f.start();

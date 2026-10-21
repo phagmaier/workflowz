@@ -7,15 +7,7 @@ import { BrowserService } from "./browser-service.js";
 import { HttpRequestError, readJsonBody } from "./http-body.js";
 import type { ManagementService } from "./management-service.js";
 
-const assets: Record<string, { type: string; file: string }> = {
-  "/ui/": { type: "text/html; charset=utf-8", file: "shell.html" },
-  "/ui/shell.js": { type: "text/javascript; charset=utf-8", file: "shell.js" },
-  "/ui/editor.js": { type: "text/javascript; charset=utf-8", file: "editor.js" },
-  "/ui/dashboard.js": { type: "text/javascript; charset=utf-8", file: "dashboard.js" },
-  "/ui/intervention.js": { type: "text/javascript; charset=utf-8", file: "intervention.js" },
-  "/ui/shell.css": { type: "text/css; charset=utf-8", file: "shell.css" },
-};
-const APP_PREFIX = "/ui/app/";
+const APP_PREFIX = "/ui/";
 const APP_TYPES = new Set([
   "text/html; charset=utf-8",
   "text/javascript; charset=utf-8",
@@ -88,13 +80,13 @@ export class BrowserTransport {
     const host = `127.0.0.1:${req.socket.localPort}`;
     if (req.headers.host !== host)
       throw new HttpRequestError(403, "browser requires exact loopback Host");
-    const asset = Object.hasOwn(assets, req.url) ? assets[req.url] : undefined;
-    if (req.method === "GET" && asset) {
-      res.writeHead(200, { "content-type": asset.type });
-      res.end(readFileSync(new URL(`../web/${asset.file}`, import.meta.url)));
+    // A relative Location without a fragment preserves existing hash bookmarks in browsers.
+    if (req.method === "GET" && (req.url === "/ui/app/" || req.url === "/ui/app")) {
+      res.writeHead(308, { location: "/ui/" });
+      res.end();
       return true;
     }
-    if (req.method === "GET" && req.url.startsWith(APP_PREFIX)) {
+    if (req.method === "GET") {
       builtApp ??= loadAppAssets(new URL("../ui-app/", import.meta.url));
       const file = builtApp.get(req.url);
       if (!file) throw new HttpRequestError(404, "unknown browser route");

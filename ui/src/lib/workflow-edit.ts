@@ -1,3 +1,4 @@
+import { SYSTEM_OUTCOMES } from "../../../src/contracts/identifiers.ts";
 /**
  * Visual workflow editing. Every function is pure and returns a new document; the daemon's
  * `draft` operation serializes, validates and routes it. Nothing here decides what is valid.
@@ -58,14 +59,9 @@ export function outcomesOf(step: WorkflowStep): string[] {
   }
 }
 
-/** The technical failures shown for a step; others stay available in the YAML. */
+/** All declared engine failures remain routable on any nonterminal step. */
 export function failuresOf(step: WorkflowStep): string[] {
-  if (step.kind !== "agent" && step.kind !== "command") return [];
-  const shown = ["system.error", "system.timeout"];
-  if (step.kind === "agent") shown.push("system.report_error");
-  for (const key of Object.keys(step.on ?? {}))
-    if (key.startsWith("system.") && !shown.includes(key)) shown.push(key);
-  return shown;
+  return step.kind === "end" ? [] : [...SYSTEM_OUTCOMES];
 }
 
 const clip = (text: string, max: number) =>
@@ -537,7 +533,7 @@ export function exampleDoc(
 
 // ---------- checks ----------
 
-export type ProblemPlace = "steps" | "project" | "yaml" | "name" | "start";
+export type ProblemPlace = "steps" | "project" | "yaml" | "rules" | "name" | "start";
 export interface Problem {
   severity: "error" | "warning";
   text: string;
@@ -642,9 +638,9 @@ export function problems(diagnostics: readonly Diagnostic[], doc: Doc | null): P
             : null;
     return {
       ...base,
-      text: where ? `${where}: ${d.message} (see the YAML tab)` : capitalize(d.message),
+      text: where ? `${where}: ${d.message}` : capitalize(d.message),
       stepId: null,
-      place: "yaml" as const,
+      place: where ? ("rules" as const) : ("yaml" as const),
     };
   });
 }

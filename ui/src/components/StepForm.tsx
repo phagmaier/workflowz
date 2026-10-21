@@ -1,399 +1,29 @@
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
-import type { Session, SessionState } from "../editor-session.ts";
-import { harnessLabel, humanize, KIND_LABEL, outcomeLabel } from "../lib/format.ts";
+import { type FormEvent, type ReactNode, useState } from "react";
+import { harnessLabel, humanize, KIND_LABEL } from "../lib/format.ts";
 import {
-  addOutcome,
-  addStep,
-  type Doc,
   describeAction,
-  destinationOptions,
-  destKey,
   HARNESSES,
-  hasSharedRule,
   KIND_HINT,
   moveStep,
-  OUTCOME_HELP,
-  type OutcomeRow,
   outcomeRows,
-  type Problem,
-  type Rule,
-  removeOutcome,
   removeStep,
   renameStep,
   replaceStep,
   ruleToAction,
-  type StepKind,
-  setRule,
-  sourceLabel,
   stepSummary,
 } from "../lib/workflow-edit.ts";
 import type { WorkflowStep } from "../types.ts";
-import { Feedback, type FeedbackState } from "./ui.tsx";
-
-const TYPING = 400;
-const fieldId = (stepId: string, field: string) => `f-${stepId}-${field}`;
-
-/** Moves focus to a field once the selected step's form has rendered. */
-export function focusField(id: string) {
-  requestAnimationFrame(() => {
-    const element = document.getElementById(id);
-    element?.focus();
-    element?.scrollIntoView({ block: "nearest" });
-  });
-}
-
-const lines = (text: string) => {
-  const list = text.split("\n");
-  while (list.length && list.at(-1)?.trim() === "") list.pop();
-  return list;
-};
-
-/** Focuses the element when it first appears (an inline form that just opened). */
-export function useFocusOnMount<T extends HTMLElement>() {
-  const ref = useRef<T>(null);
-  useEffect(() => ref.current?.focus(), []);
-  return ref;
-}
-
-/** Text whose model value is derived (lists, numbers). Local text keeps the caret while typing. */
-function useLocalText(initial: string): [string, (value: string) => void] {
-  const [text, setText] = useState(initial);
-  return [text, setText];
-}
-
-export interface Ctx {
-  session: Session;
-  doc: Doc;
-  state: SessionState;
-  problems: readonly Problem[];
-}
-
-function FieldProblems({ ctx, stepId, field }: { ctx: Ctx; stepId: string; field: string }) {
-  const found = ctx.problems.filter((p) => p.stepId === stepId && p.field === field);
-  if (!found.length) return null;
-  return (
-    <span className="field-err" id={`${fieldId(stepId, field)}-err`}>
-      {found.map((p) => p.text.replace(/^[^:]+: /, "")).join(" ")}
-    </span>
-  );
-}
-
-function errAttrs(ctx: Ctx, stepId: string, field: string) {
-  const bad = ctx.problems.some(
-    (p) => p.stepId === stepId && p.field === field && p.severity === "error",
-  );
-  return bad
-    ? {
-        "aria-invalid": true as const,
-        "aria-describedby": `${fieldId(stepId, field)}-err`,
-        className: "invalid",
-      }
-    : {};
-}
-
-// ---------- destination rows ----------
-
-function NewStepForm({
-  ctx,
-  stepId,
-  outcome,
-  onDone,
-}: {
-  ctx: Ctx;
-  stepId: string;
-  outcome: string;
-  onDone: (created: string | null) => void;
-}) {
-  const [name, setName] = useState("");
-  const input = useRef<HTMLInputElement>(null);
-  useEffect(() => input.current?.focus(), []);
-  const create = (kind: StepKind) => {
-    const added = addStep(ctx.doc, kind, name.trim() || KIND_LABEL[kind] || kind, stepId);
-    ctx.session.edit(() => setRule(added.doc, stepId, outcome, { goto: added.id }));
-    onDone(added.id);
-  };
-  return (
-    <fieldset className="newstep">
-      <legend>
-        New step for <strong>{humanize(stepId)}</strong> → <code>{outcome}</code>
-      </legend>
-      <div className="block">
-        <label htmlFor={`${fieldId(stepId, outcome)}-new`}>Name</label>
-        <input
-          id={`${fieldId(stepId, outcome)}-new`}
-          ref={input}
-          value={name}
-          placeholder="e.g. Write tests"
-          onChange={(event) => setName(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") onDone(null);
-          }}
-        />
-      </div>
-      <div className="row">
-        <span className="muted small">Add as:</span>
-        {(["agent", "command", "task.complete", "end"] as const).map((kind) => (
-          <button key={kind} type="button" className="btn btn-sm" onClick={() => create(kind)}>
-            {KIND_LABEL[kind]}
-          </button>
-        ))}
-        <button type="button" className="btn btn-sm btn-quiet" onClick={() => onDone(null)}>
-          Cancel
-        </button>
-      </div>
-    </fieldset>
-  );
-}
-
-function RetryFields({
-  ctx,
-  stepId,
-  outcome,
-  rule,
-}: {
-  ctx: Ctx;
-  stepId: string;
-  outcome: string;
-  rule: Extract<Rule, { retry: unknown }>;
-}) {
-  const [max, setMax] = useLocalText(String(rule.retry.max_attempts));
-  const [wait, setWait] = useLocalText(String(rule.retry.backoff_seconds ?? 0));
-  const commit = (nextMax: string, nextWait: string) => {
-    if (!/^\d+$/.test(nextMax) || !/^\d+$/.test(nextWait)) return;
-    ctx.session.edit(
-      (doc) =>
-        setRule(doc, stepId, outcome, {
-          retry: { max_attempts: Number(nextMax), backoff_seconds: Number(nextWait) },
-        }),
-      TYPING,
-    );
-  };
-  const id = fieldId(stepId, outcome);
-  return (
-    <div className="retry-fields">
-      <div className="block">
-        <label htmlFor={`${id}-max`}>Runs in total (2–100)</label>
-        <input
-          id={`${id}-max`}
-          inputMode="numeric"
-          value={max}
-          onChange={(event) => {
-            setMax(event.target.value);
-            commit(event.target.value, wait);
-          }}
-        />
-      </div>
-      <div className="block">
-        <label htmlFor={`${id}-wait`}>Wait between runs (seconds)</label>
-        <input
-          id={`${id}-wait`}
-          inputMode="numeric"
-          value={wait}
-          onChange={(event) => {
-            setWait(event.target.value);
-            commit(max, event.target.value);
-          }}
-        />
-      </div>
-      {!/^\d+$/.test(max) || !/^\d+$/.test(wait) ? (
-        <span className="field-err">Enter whole numbers.</span>
-      ) : null}
-      <span className="hint">After the last run, the run pauses for you.</span>
-    </div>
-  );
-}
-
-function RuleRow({
-  ctx,
-  stepId,
-  row,
-  failure,
-  onNewStep,
-}: {
-  ctx: Ctx;
-  stepId: string;
-  row: OutcomeRow;
-  failure: boolean;
-  onNewStep: (id: string) => void;
-}) {
-  const { doc, session } = ctx;
-  const step = doc.steps[stepId] as Exclude<WorkflowStep, { kind: "end" }>;
-  const [newFor, setNewFor] = useState(false);
-  const shared = hasSharedRule(doc, row.outcome);
-  const inherited =
-    !row.own && row.effective
-      ? `Use ${row.effective.source.level === "built_in_pause" ? "the built-in rule" : "the shared rule"}: ${describeAction(doc, row.effective.action)}`
-      : row.own
-        ? shared
-          ? "Use the shared rule instead"
-          : null
-        : shared && !row.missing
-          ? "Use the shared rule"
-          : failure
-            ? "Use the default"
-            : null;
-  const options = destinationOptions(doc, stepId, inherited, failure);
-  const value = row.own ? destKey(row.own) : inherited ? "inherit" : "";
-  const id = fieldId(stepId, row.outcome);
-  const change = (key: string) => {
-    if (key === "new") return setNewFor(true);
-    setNewFor(false);
-    if (key === "inherit") session.edit((d) => setRule(d, stepId, row.outcome, null));
-    else if (key === "pause") session.edit((d) => setRule(d, stepId, row.outcome, { pause: true }));
-    else if (key === "retry")
-      session.edit((d) =>
-        setRule(
-          d,
-          stepId,
-          row.outcome,
-          row.own && "retry" in row.own
-            ? row.own
-            : { retry: { max_attempts: 2, backoff_seconds: 0 } },
-        ),
-      );
-    else if (key === "finish-new")
-      session.edit((d) => {
-        const added = addStep(d, "end", "Done", Object.keys(d.steps).at(-1) ?? null);
-        return setRule(added.doc, stepId, row.outcome, { goto: added.id });
-      });
-    else if (key.startsWith("goto:"))
-      session.edit((d) => setRule(d, stepId, row.outcome, { goto: key.slice(5) }));
-  };
-  const groups = ["Continue", "Finish", "Other"] as const;
-  const help = failure ? null : step.kind === "agent" ? null : OUTCOME_HELP[row.outcome];
-  return (
-    <li className={`rule-row ${row.missing ? "missing" : ""}`}>
-      <div className="rule-when">
-        {failure ? (
-          <span>{outcomeLabel(row.outcome).replace(/^./, (c) => c.toUpperCase())}</span>
-        ) : (
-          <code>{row.outcome}</code>
-        )}
-        {help ? <span className="muted small">{help}</span> : null}
-      </div>
-      <span className="rule-arrow" aria-hidden="true">
-        →
-      </span>
-      <div className="rule-then">
-        <label className="sr-only" htmlFor={id}>
-          {failure ? `If ${outcomeLabel(row.outcome)}` : `When the result is ${row.outcome}`}, then
-        </label>
-        <select
-          id={id}
-          value={newFor ? "new" : value}
-          className={row.missing ? "invalid" : ""}
-          aria-invalid={row.missing || undefined}
-          aria-describedby={row.missing ? `${id}-why` : undefined}
-          onChange={(event) => change(event.target.value)}
-        >
-          {value === "" ? (
-            <option value="" disabled>
-              Choose what happens…
-            </option>
-          ) : null}
-          {options
-            .filter((o) => o.group === null)
-            .map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          {groups.map((group) => (
-            <optgroup key={group} label={group}>
-              {options
-                .filter((o) => o.group === group)
-                .map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-            </optgroup>
-          ))}
-        </select>
-        {row.missing ? (
-          <span className="field-err" id={`${id}-why`}>
-            Not connected yet: when {humanize(stepId)} finishes with “{row.outcome}”, the run has
-            nowhere to go. Choose a destination.
-          </span>
-        ) : !row.own && row.effective && row.effective.source.level !== "step" ? (
-          <span className="hint rule-source">
-            {sourceLabel(doc, row.effective.source)}
-            {row.effective.viaSystemError ? " · via “any technical failure”" : ""}
-          </span>
-        ) : null}
-        {row.own && "retry" in row.own ? (
-          <RetryFields ctx={ctx} stepId={stepId} outcome={row.outcome} rule={row.own} />
-        ) : null}
-        {newFor ? (
-          <NewStepForm
-            ctx={ctx}
-            stepId={stepId}
-            outcome={row.outcome}
-            onDone={(created) => {
-              setNewFor(false);
-              if (created) onNewStep(created);
-              else focusField(id);
-            }}
-          />
-        ) : null}
-      </div>
-      {step.kind === "agent" && !failure ? (
-        <button
-          type="button"
-          className="btn-icon"
-          aria-label={`Remove result ${row.outcome}`}
-          title={`Remove result ${row.outcome}`}
-          disabled={step.outcomes.length <= 1}
-          onClick={() => session.edit((d) => removeOutcome(d, stepId, row.outcome))}
-        >
-          ✕
-        </button>
-      ) : (
-        <span />
-      )}
-    </li>
-  );
-}
-
-function AddResult({ ctx, stepId }: { ctx: Ctx; stepId: string }) {
-  const [name, setName] = useState("");
-  const [feedback, setFeedback] = useState<FeedbackState>(null);
-  const id = fieldId(stepId, "new-outcome");
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const result = addOutcome(ctx.doc, stepId, name);
-    if (typeof result === "string") return setFeedback({ kind: "error", text: result });
-    ctx.session.edit(() => result);
-    const added = name
-      .trim()
-      .toLowerCase()
-      .replace(/[\s-]+/g, "_");
-    setName("");
-    setFeedback({ kind: "ok", text: `Added “${added}”. Choose what happens after it.` });
-    focusField(fieldId(stepId, added));
-  };
-  return (
-    <form className="row add-result" onSubmit={submit}>
-      <label className="sr-only" htmlFor={id}>
-        New result name
-      </label>
-      <input
-        id={id}
-        value={name}
-        placeholder="New result, e.g. needs_info"
-        onChange={(event) => {
-          setName(event.target.value);
-          setFeedback(null);
-        }}
-      />
-      <button type="submit" className="btn btn-sm">
-        Add result
-      </button>
-      <Feedback value={feedback} />
-      <span className="hint full">The agent is told these names and must report one of them.</span>
-    </form>
-  );
-}
+import {
+  type Ctx,
+  errAttrs,
+  FieldProblems,
+  fieldId,
+  lines,
+  TYPING,
+  useFocusOnMount,
+  useLocalText,
+} from "./editor-fields.tsx";
+import { AddResult, RuleRow } from "./StepRules.tsx";
 
 // ---------- step fields ----------
 
@@ -515,7 +145,7 @@ function withField<T extends WorkflowStep>(step: T, key: string, value: unknown)
   return next as T;
 }
 const seconds = (text: string) =>
-  text.trim() === "" ? undefined : /^\d+$/.test(text.trim()) ? Number(text) : null;
+  text.trim() === "" ? undefined : /^\d+$/.test(text.trim()) ? Number(text) : text;
 
 function AgentFields({
   ctx,
@@ -735,10 +365,7 @@ function Advanced({
             value={step.timeout_seconds?.toString() ?? ""}
             placeholder="No limit"
             numeric
-            onValue={(value) => {
-              const n = seconds(value);
-              return n === null ? null : withField(step, "timeout_seconds", n);
-            }}
+            onValue={(value) => withField(step, "timeout_seconds", seconds(value))}
           />
         </div>
       ) : null}
@@ -794,8 +421,16 @@ function Advanced({
           stepId={stepId}
           field="env"
           label="Environment variables — NAME=value, one per line"
-          value={Object.entries(step.env ?? {}).map(([k, v]) => `${k}=${v}`)}
+          value={
+            typeof step.env === "string"
+              ? String(step.env).split("\n")
+              : Object.entries(step.env ?? {}).map(([k, v]) => `${k}=${v}`)
+          }
           commit={(list) => {
+            // Keep incomplete input in the draft and let the daemon reject its shape. Silently
+            // dropping a line without '=' would enable Save for a different environment.
+            if (list.some((line) => line.trim() && line.indexOf("=") <= 0))
+              return withField(step, "env", list.join("\n"));
             const env: Record<string, string> = {};
             for (const line of list) {
               const at = line.indexOf("=");
@@ -1071,8 +706,9 @@ export function StepForm({
               </summary>
               <p className="hint">
                 Technical failures are crashes, time limits or missing reports — not results the{" "}
-                {step.kind === "agent" ? "agent" : "command"} chose. More kinds can be routed in the
-                YAML.
+                {step.kind === "agent" ? "agent" : "command"} chose. Specific failure rules take
+                priority over “any technical failure” at every level. If no exact or fallback rule
+                applies, the run pauses.
               </p>
               <ul className="rules-edit">
                 {failures.map((row) => (

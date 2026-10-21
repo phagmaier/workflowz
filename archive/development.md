@@ -5,7 +5,7 @@
 This contains development setup and verification commands. The [active plan](../DESIGN.md)
 controls current work. The [UI design brief](../DESIGN.md) describes the active redesign. The
 [interrupted walkthrough](history/usability-walkthrough.md) and [previous guide](history/user-guide.md)
-remain historical operating references; a new guide will follow the improved UI.
+remain historical operating references. The current [user guide](../USER_GUIDE.md) covers the finished interface.
 
 ## Setup and commands
 
@@ -13,7 +13,7 @@ Requirements: Linux with `/proc`, Node.js 26 or newer (verified with v26.8.2) an
 
 ```bash
 npm ci                       # install the exact versions in package-lock.json
-npm run build                # compile TypeScript, copy legacy browser assets, build the React app (ui/)
+npm run build                # compile TypeScript and build the React app (ui/)
 bin/wf --help                # project-local CLI, after building
 npm run check                # typecheck + Biome lint + tests (offline core gate)
 npm run test:browser         # separate offline Chromium smoke; provision browser first, below
@@ -78,9 +78,9 @@ artifact is retained.
 
 After building, `bin/wf daemon start` starts the explicit foreground owner. A separate terminal
 using the same state directory can run `bin/wf ui` to obtain the local address and one-use pairing
-code. The same code pairs the new interface at `/ui/app/` (Runs and Run details during the
-migration); the legacy interface stays at `/ui/`. `WF_SHOTS=DIR npm run test:browser` saves
-screenshots of the new app for visual review. `bin/wf daemon stop` requests graceful shutdown after the current step; the owner may still
+code. The React interface is served at `/ui/`; old `/ui/app/` hash bookmarks redirect there.
+See the [user guide](../USER_GUIDE.md). `WF_SHOTS=DIR npm run test:browser` saves
+credential-free screenshots for visual review. `bin/wf daemon stop` requests graceful shutdown after the current step; the owner may still
 be draining when that client returns. `bin/wf --help` lists management commands.
 
 State selection is `--state-dir DIR` > `WF_STATE_DIR` >
@@ -115,7 +115,7 @@ redaction cannot identify every secret loaded by harnesses or tools.
 | `src/adapters/` | Harness integration, process supervision, probes and environment/log boundaries |
 | `src/runner/` | Sequential execution, preparation, reporting, task import and recovery |
 | `src/app/` | CLI entry points, daemon and management/browser application services |
-| `src/web/` | Local browser UI, HTML/CSS and browser TypeScript |
+| `ui/` | React + TypeScript browser UI, built into `dist/ui-app/` by Vite |
 | `src/test-support/`, `test/fixtures/` | Offline fake adapters and process/workflow fixtures |
 | `test/browser/` | Disposable daemon/Chromium scenarios |
 | `examples/` | Valid sample definitions and illustrative task inputs |

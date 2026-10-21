@@ -34,7 +34,20 @@ test("disconnection, an ended session and closing the page leave the run going",
   const pause = page.getByRole("button", { name: "Pause after this step", exact: true });
   await expect(pause).toBeEnabled();
   await expect(page.getByRole("region", { name: "Work", exact: true })).toContainText("Running.");
-  const running = await app.until(runId, (s) => s.activeAttempt?.pid);
+  const running = await app.until(runId, (s) => s.activeAttempt?.pid && s.latestReport);
+  const attemptId = running.activeAttempt.attemptId;
+  process.kill(running.activeAttempt.pid, 0);
+  await page.getByText("Accepted report", { exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Work", exact: true }).locator("pre.raw"),
+  ).toContainText(attemptId);
+  // Reload keeps the hash and cookie while the already-reported child is still settling.
+  await page.reload();
+  await expect(heading).toContainText("Running — Work");
+  const afterReload = await app.status(runId);
+  expect(afterReload.activeAttempt.attemptId).toBe(attemptId);
+  expect(afterReload.activeAttempt.pid).toBe(running.activeAttempt.pid);
+  process.kill(afterReload.activeAttempt.pid, 0);
 
   // Lost connection: reads fail, actions are disabled, and the page recovers by itself.
   await page.route("**/ui/api", (route) => route.abort());
@@ -63,6 +76,7 @@ test("disconnection, an ended session and closing the page leave the run going",
 
   await page.close();
   const unattended = await app.status(runId);
+  expect(context.pages()).toEqual([]);
   expect(unattended.run.status).toBe("running");
   expect(unattended.activeAttempt.attemptId).toBe(running.activeAttempt.attemptId);
   await app.release();
@@ -71,6 +85,17 @@ test("disconnection, an ended session and closing the page leave the run going",
   const again = await context.newPage();
   await pairApp(again, app, `#/runs/${runId}`);
   await expect(again.getByRole("heading", { level: 1 })).toContainText("Completed");
+  const reports = await app.request({ op: "reports", runId });
+  expect(reports.map((r) => r.attemptId)).toEqual([attemptId]);
+  app.audit((store) => {
+    const attempts = store.listAttempts(runId);
+    expect(attempts.map((a) => a.attemptId)).toEqual([attemptId]);
+    expect(attempts[0].status).toBe("succeeded");
+    expect(store.getReport(attemptId)).toEqual(reports[0]);
+    expect(store.getRun(runId).status).toBe("completed");
+    expect(store.listEvents(runId).filter((e) => e.type === "attempt_started")).toHaveLength(1);
+    expect(store.listTransitions(runId).filter((t) => t.attemptId === attemptId)).toHaveLength(1);
+  });
 });
 
 // Interrupted and pausing runs cannot be produced offline on demand. Only the status *read* is
@@ -120,7 +145,7 @@ test("interrupted, pausing and load-error states explain what is known and what 
       },
     ],
   });
-  await page.goto(`${app.url}/ui/app/#/runs/${runId}`);
+  await page.goto(`${app.url}/ui/#/runs/${runId}`);
   const heading = page.getByRole("heading", { level: 1 });
   await expect(heading).toContainText("Interrupted — needs a recovery decision");
   const recovery = page.getByRole("region", { name: "Recovery" });

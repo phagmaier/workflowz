@@ -1,4 +1,4 @@
-// New app (/ui/app/): Workflows, creating and editing a draft, Save and Create run. No run starts.
+// New app (/ui/): Workflows, creating and editing a draft, Save and Create run. No run starts.
 import { noSideScroll, pairApp, shot, watchPolicy } from "./app-helpers.mjs";
 import { expect, test } from "./fixture.mjs";
 

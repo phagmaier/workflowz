@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { clearFlash, peekFlash } from "../flash.ts";
 import { clock, duration, humanize, KIND_LABEL } from "../lib/format.ts";
-import { buildHistory, type HistoryItem } from "../lib/history.ts";
+import { buildHistory, type HistoryItem, redact } from "../lib/history.ts";
 import { describeRun } from "../lib/run-copy.ts";
 import { runHref } from "../route.ts";
 import { type RunData, useRunData } from "../run-data.ts";
@@ -129,6 +129,16 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
   useEffect(() => {
     clearFlash(runId);
   }, [runId]);
+  useEffect(() => {
+    if (
+      flash &&
+      status &&
+      (status.run.status !== flash.status ||
+        (flash.revisionId !== undefined && status.run.revisionId !== flash.revisionId) ||
+        control.result.value !== null)
+    )
+      setFlash(null);
+  }, [flash, status, control.result.value]);
   // Follow the newest step until the user picks something to read.
   const latest = [...items].reverse().find((item) => item.type === "step") ?? items.at(-1);
   const selected = items.find((item) => item.id === picked) ?? latest;
@@ -170,7 +180,7 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
     <Shell section="runs" crumbs={crumbs} pageKey={`run:${runId}`}>
       {flash ? (
         <div className="result-line flash" role="status">
-          <span className="fb fb-ok">{flash}</span>
+          <span className="fb fb-ok">{flash.text}</span>
           <button type="button" className="link" onClick={() => setFlash(null)}>
             Dismiss
           </button>
@@ -196,6 +206,44 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
       </section>
 
       <RunControls data={data} control={control} items={items} />
+
+      <details className="disclosure pane">
+        <summary>Run information</summary>
+        <dl className="kv">
+          <dt>Project folder</dt>
+          <dd className="mono">{status.run.projectRoot}</dd>
+          <dt>Created</dt>
+          <dd>{status.run.createdAt}</dd>
+        </dl>
+        {status.tasks.length ? (
+          <section aria-label="Imported tasks">
+            <h2 className="h3">Imported tasks</h2>
+            {status.tasks.map((task) => (
+              <details className="disclosure" key={task.taskId}>
+                <summary>
+                  {task.title} · {task.state}
+                  {task.taskId === status.run.activeTaskId ? " · current" : ""}
+                </summary>
+                <p className="muted">{task.headingPath.join(" / ")}</p>
+                <p className="prose">{task.body}</p>
+                <p className="hint mono">{task.taskId}</p>
+              </details>
+            ))}
+          </section>
+        ) : null}
+        <section aria-label="Attention records">
+          <h2 className="h3">Attention records</h2>
+          <p className="hint">
+            Historical notices stay here after a decision. The current status tells you whether the
+            run needs attention now.
+          </p>
+          {status.attention.length ? (
+            <pre className="raw">{JSON.stringify(redact(status.attention), null, 2)}</pre>
+          ) : (
+            <p className="muted">No attention records.</p>
+          )}
+        </section>
+      </details>
 
       <nav className="tabs" aria-label="Run views">
         <a
@@ -232,7 +280,12 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
             onSelect={setPicked}
             caughtUp={data.caughtUp}
           />
-          <StepDetail item={selected} tasks={status.tasks} graph={data.graph} />
+          <StepDetail
+            item={selected}
+            tasks={status.tasks}
+            graph={data.graph}
+            currentRevisionId={status.run.revisionId}
+          />
         </div>
       )}
     </Shell>

@@ -23,6 +23,12 @@ export interface BrowserDraft {
   projectRoot: string | null;
   transitions: Record<string, readonly ResolvedTransition[]>;
   systemOutcomes: readonly string[];
+  /** Read-only preflight for a pinned paused-run draft; absent for ordinary drafts. */
+  revision?: {
+    steps: { stepId: string; compatible: boolean; reason: string | null }[];
+    keepCursor: boolean;
+    constraints: string[];
+  };
 }
 export interface BrowserRunEdit {
   runId: string;
@@ -130,6 +136,36 @@ export class BrowserService {
       );
       const transitions: BrowserDraft["transitions"] = Object.create(null);
       const compiled = checked.compiled;
+      let revision: BrowserDraft["revision"];
+      if (request.run && compiled) {
+        const run = this.paused(request.run.runId, request.run.expectedEventId);
+        const saved = this.management.store.getRevision(run.revisionId);
+        const previous = checkWorkflowText(saved.definitionYaml, {
+          workflowDir: saved.sourceDir,
+        }).compiled;
+        if (!previous) throw new Error("The run's saved workflow could not be read");
+        const compatible = (explicit?: string): string | null => {
+          try {
+            revisionCursor(previous, compiled, run.cursorStepId, run.activeTaskId, explicit);
+            return null;
+          } catch (error) {
+            return error instanceof Error ? error.message : "Step is unavailable";
+          }
+        };
+        const constraints: string[] = [];
+        if (compiled.projectRoot !== previous.projectRoot)
+          constraints.push("A run keeps its project folder. Restore it or create a new run.");
+        if (compiled.tasksSourcePath !== previous.tasksSourcePath)
+          constraints.push("A run keeps its task list. Restore it or create a new run.");
+        revision = {
+          steps: [...compiled.steps.keys()].map((stepId) => {
+            const reason = compatible(stepId);
+            return { stepId, compatible: reason === null, reason };
+          }),
+          keepCursor: compatible() === null,
+          constraints,
+        };
+      }
       if (compiled) {
         for (const step of compiled.steps.values()) {
           const declared = new Set(step.outcomes);
@@ -149,6 +185,7 @@ export class BrowserService {
         projectRoot: checked.compiled?.projectRoot ?? null,
         transitions,
         systemOutcomes: SYSTEM_OUTCOMES,
+        ...(revision ? { revision } : {}),
       } satisfies BrowserDraft;
     }
     if (request.op === "session") return this.management.handle({ op: "ping" });

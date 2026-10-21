@@ -306,14 +306,6 @@ export const test = base.extend({
           writeFileSync(gate, "release\n");
         },
         close: stopAndClose,
-        pair: async (page) => {
-          const issued = await request({ op: "browser-access" });
-          await page.goto(`${url}/ui/`);
-          await page.getByLabel("Pairing code").fill(issued.code);
-          await page.getByRole("button", { name: "Connect", exact: true }).click();
-          await expect(page.locator("#connection")).toHaveText("Connected / localhost");
-          await expect(page.locator("#workspace")).toBeVisible();
-        },
         seed: async ({ workflowText }) => {
           const created = await request({ op: "create", workflowText, workflowDir: root });
           const state = await status(created.runId);

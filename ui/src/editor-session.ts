@@ -18,6 +18,8 @@ export interface SessionState {
   kind: SessionKind;
   /** Null until the first check returns a readable document. */
   model: Doc | null;
+  mode: "visual" | "text";
+  originalModel: Doc | null;
   /** YAML for the newest checked edit. This is what Save, Create and Apply send. */
   text: string;
   workflowDir: string;
@@ -42,6 +44,7 @@ export interface SessionState {
 
 export class Session {
   private listeners = new Set<() => void>();
+  private checkSequence = 0;
   private timer: number | undefined;
   read: Read | null = null;
   state: SessionState;
@@ -55,6 +58,8 @@ export class Session {
       uid: ++uids,
       kind,
       model: null,
+      mode: "visual",
+      originalModel: null,
       text: "",
       workflowDir,
       draft: null,
@@ -96,7 +101,14 @@ export class Session {
 
   /** First check of loaded text: keeps the exact text so an unchanged save keeps its revision. */
   async open(text: string) {
-    this.set({ text, generation: this.state.generation + 1, opened: this.state.opened + 1 });
+    window.clearTimeout(this.timer);
+    this.set({
+      text,
+      mode: "visual",
+      model: null,
+      generation: this.state.generation + 1,
+      opened: this.state.opened + 1,
+    });
     await this.check(null);
   }
 
@@ -109,16 +121,42 @@ export class Session {
   /** Applies a visual change now and checks it after `delay` ms (typing waits for a pause). */
   edit(change: (model: Doc) => Doc, delay = 0) {
     const model = this.state.model;
-    if (!model) return;
+    if (!model || this.state.mode === "text") return;
     this.set({ model: change(model), generation: this.state.generation + 1 });
     window.clearTimeout(this.timer);
     this.timer = window.setTimeout(() => void this.check(this.state.model), delay);
   }
 
+  /** Text remains exact, including comments and invalid partial edits. */
+  editText(text: string, delay = 400) {
+    if (this.state.mode !== "text") return;
+    this.set({ text, generation: this.state.generation + 1 });
+    window.clearTimeout(this.timer);
+    this.timer = window.setTimeout(() => void this.check(null), delay);
+  }
+
+  enterText() {
+    if (!this.current) return;
+    this.set({ mode: "text" });
+  }
+
+  leaveText() {
+    if (!this.valid || !this.state.draft?.document) return;
+    this.set({
+      mode: "visual",
+      model: this.state.draft.document as Doc,
+      opened: this.state.opened + 1,
+    });
+  }
+
   /** Checks the newest model again, e.g. after a failed check or a re-pinned run. */
   recheck() {
     window.clearTimeout(this.timer);
-    void this.check(this.state.model);
+    void this.check(
+      this.state.mode === "text" || this.state.checked === this.state.generation
+        ? null
+        : this.state.model,
+    );
   }
 
   private async check(model: Doc | null) {
@@ -126,6 +164,7 @@ export class Session {
     if (!read) return;
     const s = this.state;
     const generation = s.generation;
+    const sequence = ++this.checkSequence;
     this.set({ checking: true, checkError: null });
     try {
       const draft = await read<BrowserDraft>({
@@ -135,21 +174,27 @@ export class Session {
         ...(model ? { model } : {}),
         ...(s.run ? { run: { runId: s.run.runId, expectedEventId: s.run.expectedEventId } } : {}),
       });
-      if (generation !== this.state.generation) return;
+      if (generation !== this.state.generation || sequence !== this.checkSequence) return;
       this.set({
         draft,
-        text: draft.workflowText,
+        originalModel:
+          this.state.originalModel ??
+          (s.savedText === s.text ? (draft.document as Doc | null) : null),
+        text: model ? draft.workflowText : this.state.text,
         checked: generation,
         checking: false,
         // A document the daemon couldn't read keeps the form's own model, so typing continues.
-        model: this.state.model ?? (draft.document as Doc | null),
+        model:
+          this.state.mode === "text"
+            ? ((draft.document as Doc | null) ?? this.state.model)
+            : (this.state.model ?? (draft.document as Doc | null)),
         loadError:
           this.state.model || draft.document
             ? null
             : "This workflow's YAML couldn't be read, so it can't be edited visually.",
       });
     } catch (error) {
-      if (generation !== this.state.generation) return;
+      if (generation !== this.state.generation || sequence !== this.checkSequence) return;
       const stale =
         error instanceof ApiError && (error.kind === "stale" || error.kind === "conflict");
       this.set({
@@ -194,15 +239,33 @@ export function newDraftKey() {
   return `draft:${++drafts}`;
 }
 /**
- * Moves a session to another key (a new draft saved as a revision). The old key stays an alias,
- * so the page showing it never sees a gap between the save and the new address.
+ * Moves a saved draft to its revision address. Keep the old key only until navigation settles,
+ * so the editor and feedback survive the save without making older revisions permanent aliases.
  */
 export function rekey(session: Session, key: string) {
   const replaced = sessions.get(key);
-  if (replaced && replaced !== session) replaced.dispose();
+  if (replaced && replaced !== session) {
+    for (const [alias, value] of sessions) if (value === replaced) sessions.delete(alias);
+    if (replaced.dirty) {
+      // Identical saves can reuse a revision whose editor has unrelated unsaved changes.
+      replaced.key = newDraftKey();
+      sessions.set(replaced.key, replaced);
+    } else replaced.dispose();
+  }
   session.key = key;
   sessions.set(key, session);
   changed();
+}
+/** Retire save-time aliases once the router no longer displays them. */
+export function releaseSessionAliases(activeKey: string | null) {
+  let removed = false;
+  for (const [key, session] of sessions) {
+    if (key !== session.key && key !== activeKey) {
+      sessions.delete(key);
+      removed = true;
+    }
+  }
+  if (removed) changed();
 }
 export function dropSession(key: string) {
   const session = sessions.get(key);
@@ -213,11 +276,11 @@ export function dropSession(key: string) {
 /** Unsaved workflow drafts (not paused-run edits), for the Workflows page. */
 export function unsavedDrafts(): Session[] {
   return [...new Set(sessions.values())].filter(
-    (s) => s.state.kind !== "run" && s.state.model && s.dirty,
+    (s) => s.state.kind !== "run" && (s.state.model || s.state.mode === "text") && s.dirty,
   );
 }
 export function anyUnsaved() {
-  return [...sessions.values()].some((s) => s.state.model && s.dirty);
+  return [...sessions.values()].some((s) => (s.state.model || s.state.mode === "text") && s.dirty);
 }
 
 export function useSessionRegistry() {

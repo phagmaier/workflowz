@@ -1,4 +1,4 @@
-// New React app (/ui/app/): pairing, Runs, Run details and Map against the offline fake daemon.
+// New React app (/ui/): pairing, Runs, Run details and Map against the offline fake daemon.
 
 import { shot, WORKFLOW, watchPolicy } from "./app-helpers.mjs";
 import { expect, test } from "./fixture.mjs";
@@ -20,7 +20,7 @@ test("pair, follow a run from ready to completed, read history and the map", asy
   // Pairing: malformed and superseded codes are refused at the form and never kept in it.
   const first = await app.request({ op: "browser-access" });
   const second = await app.request({ op: "browser-access" });
-  await page.goto(`${app.url}/ui/app/`);
+  await page.goto(`${app.url}/ui/`);
   const code = page.getByLabel("Pairing code");
   await expect(code).toBeFocused();
   await shot(page, "01-pairing");
@@ -88,7 +88,7 @@ test("pair, follow a run from ready to completed, read history and the map", asy
 
   // Raw events open on demand, without private runtime paths.
   await detail.getByRole("button", { name: /Technical details/ }).click();
-  const raw = detail.locator("pre.raw");
+  const raw = detail.getByLabel("Event evidence");
   await expect(raw).toContainText("invocation_started");
   await expect(raw).toContainText("(private path, not shown)");
   await expect(raw).not.toContainText("/logs/");

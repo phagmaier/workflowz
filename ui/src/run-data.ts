@@ -110,7 +110,10 @@ export function useRunData(runId: string): RunData {
     }
     setEvents(memo.events);
     setCaughtUp(memo.cursor >= next.expectedEventId);
-    if (fresh || !memo.reportsLoaded) {
+    // Acceptance invalidates the report snapshot before reading it. A failed read must still
+    // be retried next poll even though the event cursor has already advanced.
+    if (fresh) memo.reportsLoaded = false;
+    if (!memo.reportsLoaded) {
       setReports(await read<ReportRow[]>({ op: "reports", runId }));
       memo.reportsLoaded = true;
     }

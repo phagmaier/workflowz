@@ -101,7 +101,7 @@ test("edit a saved workflow through slow checks, failures, navigation and discar
   expect(saves).toHaveLength(1);
 
   // A new draft lives only in this tab: reloading loses it, and the page says so.
-  await page.goto(`${app.url}/ui/app/#/workflows/new/commands`);
+  await page.goto(`${app.url}/ui/#/workflows/new/commands`);
   await page.getByLabel("Name", { exact: true }).fill("Build");
   await page.getByLabel("Project folder").fill(app.root);
   await page.getByRole("button", { name: "Create draft" }).click();

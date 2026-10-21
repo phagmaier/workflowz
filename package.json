@@ -8,7 +8,7 @@
     "node": ">=26.0.0"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-web.mjs && node scripts/build-ui.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/build-ui.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ui/tsconfig.json",
     "lint": "biome check .",
     "format": "biome check --write .",

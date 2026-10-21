@@ -65,9 +65,14 @@ export function WorkflowsPage() {
       crumbs={[{ label: "Workflows" }]}
       pageKey="workflows"
       actions={
-        <a className="btn btn-primary" href="#/workflows/new">
-          ＋ Create workflow
-        </a>
+        <>
+          <a className="btn" href="#/workflows/import">
+            Import YAML…
+          </a>
+          <a className="btn btn-primary" href="#/workflows/new">
+            ＋ Create workflow
+          </a>
+        </>
       }
     >
       <h1 tabIndex={-1}>Workflows</h1>

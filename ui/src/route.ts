@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import type { ExampleId } from "./lib/workflow-edit.ts";
 
-export type EditorTab = "steps" | "project" | "yaml" | "map";
+export type EditorTab = "steps" | "project" | "rules" | "yaml" | "map";
 /** Which draft an editor route shows: a new unsaved one, a saved revision, or a paused run's. */
 export type EditorTarget =
   | { kind: "draft"; key: string }
@@ -14,10 +14,11 @@ export type Route =
   | { view: "run"; runId: string; tab: "details" | "map" }
   | { view: "workflows" }
   | { view: "new-workflow"; example: ExampleId | null }
+  | { view: "import-workflow" }
   | { view: "editor"; target: EditorTarget; tab: EditorTab }
   | { view: "missing"; hash: string };
 
-const EDITOR_TABS = new Set(["project", "yaml", "map"]);
+const EDITOR_TABS = new Set(["project", "rules", "yaml", "map"]);
 const EXAMPLES = new Set(["single", "loop", "commands"]);
 const tabOf = (part: string | undefined): EditorTab | null =>
   part === undefined ? "steps" : EDITOR_TABS.has(part) ? (part as EditorTab) : null;
@@ -50,6 +51,7 @@ export function parseRoute(hash: string): Route {
   }
   if (section !== "workflows") return missing;
   if (!id) return { view: "workflows" };
+  if (id === "import" && !tab) return { view: "import-workflow" };
   if (id === "new")
     return !extra && (tab === undefined || EXAMPLES.has(tab))
       ? { view: "new-workflow", example: (tab as ExampleId | undefined) ?? null }

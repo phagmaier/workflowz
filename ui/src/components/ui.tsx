@@ -28,6 +28,7 @@ export function Feedback({ value, id }: { value: FeedbackState; id?: string }) {
 
 // Typed text and choices outlive refreshes, status changes and tab switches for this page load.
 const drafts = new Map<string, string>();
+export const rememberDraft = (key: string, value: string) => drafts.set(key, value);
 export const forgetDraft = (key: string) => drafts.delete(key);
 export function useDraft(key: string, initial = ""): [string, (value: string) => void] {
   const [value, setValue] = useState(() => drafts.get(key) ?? initial);

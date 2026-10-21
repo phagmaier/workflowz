@@ -5,13 +5,15 @@ import {
   addStep,
   type Doc,
   KINDS,
+  moveStep,
   type Problem,
   routeLines,
   type StepKind,
   stepMeta,
 } from "../lib/workflow-edit.ts";
 import type { WorkflowStep } from "../types.ts";
-import { type Ctx, focusField, type Origin, StepForm, useFocusOnMount } from "./StepForm.tsx";
+import { type Ctx, focusField, useFocusOnMount } from "./editor-fields.tsx";
+import { type Origin, StepForm } from "./StepForm.tsx";
 import { Feedback, type FeedbackState } from "./ui.tsx";
 
 const ICON: Record<string, string> = {
@@ -137,6 +139,7 @@ export function StepsTab({
     state.selected && Object.hasOwn(doc.steps, state.selected)
       ? state.selected
       : ((doc.start && Object.hasOwn(doc.steps, doc.start) ? doc.start : ids[0]) ?? null);
+  const [moved, setMoved] = useState("");
   const [origin, setOrigin] = useState<Origin | null>(null);
   const [added, setAdded] = useState<FeedbackState>(null);
   const ctx: Ctx = { session, doc, state, problems };
@@ -157,6 +160,12 @@ export function StepsTab({
           <h2 id="steps-title">Steps</h2>
           <span className="muted">{ids.length}</span>
         </div>
+        <p className="hint" id="reorder-help">
+          Alt + ↑ / ↓ on a step moves it in the list. This does not change execution order.
+        </p>
+        <span className="sr-only" role="status">
+          {moved}
+        </span>
         <ol className="step-list">
           {ids.map((id, index) => {
             const step = doc.steps[id] as WorkflowStep;
@@ -167,6 +176,17 @@ export function StepsTab({
                   type="button"
                   className={`step-item ${id === selected ? "current" : ""}`}
                   aria-current={id === selected ? "true" : undefined}
+                  aria-describedby="reorder-help"
+                  aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+                  onKeyDown={(event) => {
+                    if (!event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+                    event.preventDefault();
+                    const delta = event.key === "ArrowUp" ? -1 : 1;
+                    const to = index + delta;
+                    if (to < 0 || to >= ids.length) return;
+                    session.edit((d) => moveStep(d, id, delta));
+                    setMoved(`${humanize(id)} moved to position ${to + 1} of ${ids.length}.`);
+                  }}
                   onClick={() => select(id)}
                 >
                   <span className="num">{index + 1}</span>
@@ -266,7 +286,13 @@ function Checks({ ctx, onSelect }: { ctx: Ctx; onSelect: (id: string, focus?: bo
   const pending = state.checking || state.checked !== state.generation;
   const errors = problems.filter((p) => p.severity === "error").length;
   const open = (p: Problem) => {
-    if (p.stepId) {
+    if (p.code === "unbounded_cycle" || p.place === "rules") {
+      window.location.hash = window.location.hash.replace(
+        /(\/(project|rules|yaml|map))?$/,
+        "/rules",
+      );
+      window.setTimeout(() => focusField("limits-title"), 0);
+    } else if (p.stepId) {
       onSelect(p.stepId);
       const field = p.outcome
         ? `f-${p.stepId}-${p.outcome}`
@@ -276,8 +302,15 @@ function Checks({ ctx, onSelect }: { ctx: Ctx; onSelect: (id: string, focus?: bo
       focusField(field);
     } else if (p.place === "start") focusField("start-step");
     else if (p.place === "project" || p.place === "name")
-      window.location.hash = window.location.hash.replace(/(\/(project|yaml|map))?$/, "/project");
-    else window.location.hash = window.location.hash.replace(/(\/(project|yaml|map))?$/, "/yaml");
+      window.location.hash = window.location.hash.replace(
+        /(\/(project|rules|yaml|map))?$/,
+        "/project",
+      );
+    else
+      window.location.hash = window.location.hash.replace(
+        /(\/(project|rules|yaml|map))?$/,
+        "/yaml",
+      );
   };
   return (
     <>

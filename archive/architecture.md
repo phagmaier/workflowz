@@ -2,7 +2,7 @@
 
 > Archived for the UI-focused reset on 2026-10-20. This is reference/history, not the current work plan or agent instructions. Use [DESIGN.md](../DESIGN.md) and [AGENTS.md](../AGENTS.md) for active direction.
 
-**Status:** Implemented beta contracts; current usability work follows [todo.md](refinement-plan.md).
+**Status:** Implemented beta contracts; current frontend decisions are in [DESIGN.md](../DESIGN.md).
 
 **Read first:** [Product specification](spec.md)
 
@@ -36,7 +36,7 @@ A **single local daemon process** owns orchestration and event storage. The brow
 
 ### 1.1 Packages / modules
 
-The repository uses one TypeScript project, with these source directories:
+The repository has TypeScript backend and frontend projects, with these source directories:
 
 - `src/contracts/`: strict schema/types, validation and shared control/report contracts.
 - `src/engine/`: compilation, policy routing, pure reducer and transactional run coordinator.
@@ -44,7 +44,7 @@ The repository uses one TypeScript project, with these source directories:
 - `src/adapters/`: process supervision, harness/command adapters, registry and offline probes.
 - `src/runner/`: run service, attempt preparation, reporting, task import and recovery orchestration.
 - `src/app/`: daemon, CLI entry points and management/browser application services.
-- `src/web/`: local HTML/CSS and browser TypeScript.
+- `ui/`: React + TypeScript browser app, built by project-local Vite.
 
 See [development](development.md#repository-layout) for tests and fixtures. There are no
 separate monorepo packages or distributed services. The canonical [deferred-feature list](spec.md#deferred-features-and-permanent-non-goals)
@@ -448,7 +448,7 @@ Rationale: foreground ownership plus private loopback RPC is the smallest proces
 
 ### 8.2 Browser shell integration (Phase 8.1)
 
-The same foreground daemon serves dependency-free HTML/CSS and compiled browser TypeScript at `/ui/`. There is no frontend server, database connection, second runner or new dependency. Build copies static assets alongside the compiled modules. Browser reload/disconnect has no lifecycle effect.
+The same foreground daemon serves the React + TypeScript app at `/ui/`; build and exact asset routing are specified in §8.7. The former native browser shell has been removed. There is no separate frontend server, browser database connection or second runner. Browser reload/disconnect has no lifecycle effect.
 
 `wf ui` uses private CLI management authority to request a fresh, single-use, random browser pairing code (five-minute expiry). It prints the non-secret loopback address and code for deliberate entry into the page; neither daemon nor report credentials enter the browser. Codes are never URLs, bundles or daemon logs. Issuing a new code invalidates the previous unconsumed code. Pairing exchanges it for a memory-only session cookie (`HttpOnly; SameSite=Strict; Path=/ui`, 12-hour expiry); successful pairing rotates the single browser session. Restart revokes both. Loopback HTTP is not protection against malicious same-user processes.
 
@@ -460,24 +460,24 @@ Stage/transition/policy/YAML editing is implemented in Phase 8.2 below; dashboar
 
 ### 8.3 Draft editor integration (Phase 8.2; not execution dashboard)
 
-The native editor keeps exact YAML text as draft authority. A read-only browser `draft` operation
+The editor uses a visual model or explicit exact YAML text mode (§8.7). A read-only browser `draft` operation
 parses, compiles and checks referenced paths with the existing application validator, returning
 the canonical typed document and router-resolved normal/system transitions with provenance.
 Visual mutations serialize that same document on the daemon; they never write source files.
-Text edits immediately invalidate the prior visual snapshot. Explicit validation adopts only a
-response for the current draft; parse/schema errors retain text and disable visual mutations,
-while semantic/path errors retain a shape-valid model for correction. Save/create require
+Every edit invalidates prior validation. Only a check of the newest edit counts; parse/schema
+errors retain the form model or exact text, and text mode pauses visual mutations until the user
+returns after a valid current check. Semantic/path errors retain a shape-valid model for correction. Save/create require
 current successful validation and revalidate both source and configured input before writing.
 Visual/input edits may normalize formatting, comments and canonical schema defaults; untouched
-text preserves revision identity. Form groups apply explicitly; unapplied fields are discarded
-when selecting another stage or validating text. Stable IDs and start/goto define execution,
+text preserves revision identity. Form changes enter the draft immediately and checks debounce
+typing; navigation keeps draft inputs and focus is not reset by asynchronous checks. Stable IDs and start/goto define execution,
 never display order. The shared check result retains a shape-valid document through semantic
 failure, and application inspection shares one parse/compile/path pass with summary validation.
 No browser-specific policy resolver, database, execution endpoint or migration is added.
 
 ### 8.4 Run dashboard and basic execution controls (Phase 8.3)
 
-`web/dashboard.ts` inspects one selected daemon-owned run. The strict browser request allowlist
+`ui/src/components/RunPage.tsx` inspects one selected daemon-owned run. The strict browser request allowlist
 adds only `status`, `reports`, exclusive-cursor `events`, `start`, `pause`, `stop` and `resume`.
 Requests delegate directly to the existing management facade; response DTOs stay in the app layer,
 not the pure contract layer. No browser state is execution authority and authorization is unchanged.
@@ -488,17 +488,17 @@ from shared adapter registry data, even when the cursor is an engine/task/comman
 The dashboard displays this selection and host-access implications before Start/Resume;
 invocation events remain separate observed launch evidence, not a pre-run compatibility claim.
 
-The client refreshes status/reports and one 100-event page every two seconds, advancing only to
-the returned exclusive cursor and retaining at most 300 fetched event rows. More history is
-explicitly marked pending. Run-selection generations reject delayed responses from another run.
-Reports, attention and events render inert text in bounded scrolling regions.
+The client polls status and exclusive-cursor events, fetching reports when acceptance changes.
+History accumulates 1000-event pages, explicitly marking pending history (§8.7). Run selection
+and request generations reject obsolete replies. Reports, task bodies, attention and event
+evidence render inert text; technical evidence uses bounded scrolling disclosures.
 
 Each deliberate control uses the inspected `expectedEventId`, with nonblank stop/resume reasons.
 The management facade retains stale-event rechecks, single-drive admission, process settlement,
 global process barriers and explicit interrupted-recovery decisions. No automatic mutation retry
 or recovery decision is added; Phase 8.4 extends the browser allowlist below. A control rejection or
-transport/inspection error invalidates the UI cursor and stops refresh until explicit inspection;
-successful controls refresh the resulting state. Stop response loss does not cancel daemon work.
+transport/inspection error is shown at the action; inspection polling continues, without
+automatically resending a mutation. Successful controls refresh the resulting state. Stop response loss does not cancel daemon work.
 Browser reload/logout/close/disconnect never signals or pauses the drive. Polling is intentionally
 used instead of adding SSE or a second event transport.
 
@@ -519,17 +519,16 @@ transactional audit/state writes remain authoritative. Existing revision validat
 root/task-source identity, pending task settings, compatible cursor and revision/session
 scope. No engine, persistence or recovery semantics change.
 
-`web/intervention.ts` binds a run revision draft to its inspected identity, reusing
-`WorkflowEditor` in run mode; reusable save/create/preview are disabled. Polling/selection
-never replace its text or target. Generation/exact-source checks reject delayed validation.
-Mutation attempts invalidate that decision's submission authority; failures/ambiguity require
-explicit fresh run inspection. Refreshing edit authorization retains text only for the same
-run/revision, never silently rebases it. Changed revisions require explicit discard/reopen.
-Reload discards unsaved drafts as before, without affecting execution.
+`ui/src/editor-session.ts` pins the run draft to run/revision/event identity. Polling never
+replaces its edits or silently rebases it. Generation and check-sequence guards reject delayed
+validation; stale checks or Apply require an explicit re-check of the same run/revision. A changed
+revision requires discard/reopen. Apply requires valid newest text and a reason, then returns to
+the paused run with Resume selected and a fresh reason to enter. Resume is a separate action.
+Reload loses unsaved tab-memory drafts without affecting execution.
 
 Manual jump/skip/unfinished-task completion pins a separate decision and shows exact target
 and consequences. Both revision/override paths require nonblank audit reasons and deliberate
-confirmation. They leave the run paused, never fabricate reports or perform repository
+submission. They leave the run paused, never fabricate reports or perform repository
 repairs/rollback. Skipping even a task primitive does not complete/activate tasks; a skip retry
 pauses through existing engine-only routing. Manual completion may clear the active task but
 does not repair cursor compatibility. Repeat-stage side effects are explicitly warned about.
@@ -537,7 +536,7 @@ Stop now remains the ending control; interrupted-run recovery remains CLI-only.
 
 ### 8.6 Permanent offline browser smoke boundary (Phase 8.5)
 
-`npm run test:browser` builds the real static application and runs three bounded Playwright
+`npm run test:browser` builds the real static application and runs bounded Playwright
 Chromium scenarios. Browser/package provisioning is explicit and separate; ordinary core
 checks require neither a browser nor a provider. The dependency is pinned in the lockfile.
 
@@ -563,18 +562,23 @@ retained. This is bounded Chromium/390px coverage, not cross-browser coverage or
 
 
 
-### 8.7 React app at `/ui/app/` (UI overhaul slices 1–2)
+### 8.7 React app at `/ui/` (UI overhaul slices 1–4)
 
 The redesigned interface is a React + TypeScript app in `ui/`, built by project-local Vite into
 `dist/ui-app/` (`scripts/build-ui.mjs`, run by `npm run build`). The build also writes
 `dist/ui-app/asset-list.json`, naming every emitted file and its content type; unexpected file
 types fail the build. The daemon reads that list once and serves each listed file at exactly
-`/ui/app/<path>` (`index.html` only at `/ui/app/`). Lookup is an exact map match, so paths outside
+`/ui/<path>` (`index.html` only at `/ui/`). Lookup is an exact map match, so paths outside
 the list, encoded or `..` segments, the list itself and query strings return 404. List entries
 must be plain relative segments with an allowed type, or loading fails. A missing list serves
 nothing. Responses carry the same headers and CSP as `/ui/`; the build emits no inline script,
 style or `data:` asset (`assetsInlineLimit: 0`, single CSS file). Routes are URL hashes, so no
-daemon route is added. The legacy interface at `/ui/` is unchanged during migration.
+daemon route is needed per screen. Exact GET `/ui/app` and `/ui/app/` redirect with status 308
+and Location `/ui/` (no fragment), preserving browser hash bookmarks and the existing `/ui`
+cookie scope. Host validation and security headers apply before redirects. Old app asset URLs
+and classic shell assets return 404; there is one implementation. Builds remove obsolete
+`dist/web/` outputs from earlier checkouts before generating the app. `src/web/` and
+`scripts/build-web.mjs` have been removed.
 
 The app uses the existing browser API, cookie, pairing and header contract without additions.
 Run details read `status`, cursor-paged `events` (1000 per page), `reports` when a report is
@@ -583,7 +587,7 @@ paused. Polling is every 2 s while running/pausing and 5 s otherwise, skipped in
 Controls send the inspected `expectedEventId`; paused-run overrides send the `run-edit`
 snapshot's event and are disabled until it matches current status. One mutation runs at a time
 app-wide, with inspection still available. A rejected or unanswered control is never resent;
-unlike §8.4's dashboard, polling continues so the page shows the current state, and the user
+polling continues so the page shows the current state, and the user
 must act again. Raw event JSON hides `logPath` and absolute paths under a `logs/` directory.
 
 Workflows and the editor (slice 2) read `workflows` and `load`, and check every visual edit with
@@ -593,7 +597,37 @@ enables `save`, `create` or `revise`. Selections send the checked text with the 
 `preview` is read when the create panel opens. Paused-run editing pins the `run-edit` snapshot:
 `draft` carries `run` and `revise` carries its `expectedEventId`; a stale result keeps the draft
 and requires an explicit re-check. Save, create and revise use the 120 s mutation timeout and are
-never resent. Unsaved drafts are browser memory only.
+never resent. Unsaved drafts are browser memory only. Local YAML import reads up to 1 MiB with
+an explicit absolute workflow directory, then opens an exact-text draft through the same `draft`
+operation, even if validation fails. It adds no filesystem or mutation API. Full task preview,
+accepted report JSON, imported task bodies and historical attention remain available in
+contextual disclosures; private log paths stay hidden. The current guide is [USER_GUIDE.md](../USER_GUIDE.md).
+
+Save-time route aliases expire when navigation settles, so an earlier revision address loads
+its own immutable text. If an identical save reuses a revision with another dirty editor, that
+editor remains available as a separate tab-local draft. Invalid time-limit text and incomplete
+environment assignments remain in the working model and fail daemon validation. A failed report
+read leaves its snapshot invalidated and retries at the next inspection poll, even after the
+acceptance event has been consumed; this never retries a mutation.
+Historical step details load the event's immutable revision via the existing `load`/`draft`
+reads instead of describing old executions with the run's latest step definition.
+
+Slice 3 adds the Rules & limits view and explicit YAML text mode. Text-mode checks omit `model`;
+exact text stays authoritative, and visual edits are blocked until the user returns after a
+valid current check. Request generations and check sequence numbers reject late replies,
+including repeated checks of the same generation. Returning to forms does not serialize the text;
+a subsequent visual edit does. No mutations are retried.
+
+For a pinned run draft with a compiled document, `BrowserDraft.revision` is an additive read-only
+reply: `steps` contains `{stepId, compatible, reason}` for each proposed step; `keepCursor` checks
+the implicit cursor; `constraints` explains resolved project-root or task-source changes. These
+checks call the existing `revisionCursor` against the original and proposed compiled revisions,
+with the current active task. Ordinary drafts and uncompiled documents omit `revision`. The
+request allowlist, event pinning and execution authority are unchanged. This is preflight,
+not mutation admission: `reviseWorkflow` still validates and commits transactionally, including
+remaining task overrides. Apply opens the paused run with the Resume form selected; Resume
+requires its own explicit submission and current event.
+
 
 ## 9. Testing strategy
 
@@ -616,6 +650,6 @@ never resent. Unsaved drafts are browser memory only.
 ## 10. Current development direction
 
 The original implementation order is complete and retained in the [archived MVP plan](history/mvp-plan.md).
-Follow [todo.md](refinement-plan.md) for cleanup, the owner-led walkthrough/new guide, and subsequent UI design
-and implementation. Keep these runtime contracts stable unless a concrete user problem requires
+Follow [DESIGN.md](../DESIGN.md) for current interface decisions and the
+[user guide](../USER_GUIDE.md) for usage. Historical plans and walkthrough approvals are reference only. Keep these runtime contracts stable unless a concrete user problem requires
 an explicitly documented behavior adjustment. Historical verification is in the [archive](history/README.md).

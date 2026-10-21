@@ -1,11 +1,13 @@
-// Builds the React app and records the exact files the daemon may serve under /ui/app/.
-import { readdirSync, writeFileSync } from "node:fs";
+// Builds the browser app and records the exact files the daemon may serve under /ui/.
+import { readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "vite";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const out = path.join(root, "dist/ui-app");
+// TypeScript doesn't remove outputs of deleted sources from an existing checkout.
+rmSync(path.join(root, "dist/web"), { recursive: true, force: true });
 const TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",

@@ -6,9 +6,9 @@ Make Workflowz understandable through its interface. The owner should be able to
 workflow, understand what it will do, start it and inspect its results without being coached
 through internal field names and scattered controls.
 
-**Current task:** Implement the selected direction in slices (see Decisions).
-The existing engine is the baseline. React + TypeScript is the proposed frontend direction;
-the selected interaction design comes first. Slices 1 and 2 are implemented at `/ui/app/`.
+**Current status:** All four slices of the selected React + TypeScript direction are implemented
+at `/ui/` and ready for migration review (see Decisions). The existing engine remains the baseline. The
+[user guide](USER_GUIDE.md) describes the finished interface.
 
 ## What the walkthrough established
 
@@ -152,8 +152,7 @@ contract is in [architecture §8.7](archive/architecture.md).
 - The map is SVG, so it needs no inline styles. Nodes are focusable (arrow keys), and the side
   panel lists each result's destination and how often the step ran. Unrouted technical failures
   are summarized in the legend rather than drawn.
-- Raw events hide `logPath` and absolute paths under a `logs/` directory. The classic interface
-  still shows them.
+- Raw events hide `logPath` and absolute paths under a `logs/` directory.
 - Light theme only for now. Times use a 24-hour clock. Below 760px the sidebar becomes a top bar,
   tables become cards, and panes stack.
 
@@ -193,6 +192,71 @@ contract is in [architecture §8.7](archive/architecture.md).
   task list are read-only there.
 - YAML is read-only in this slice. The Map tab reuses the run map without a run overlay and
   offers "Edit <step>".
+
+**Slice 3 (2026-10-20): rules, limits, YAML and revision review.** The editor adds a
+`/rules` route for saved workflows, drafts and paused runs.
+
+- Rules & limits edits shared rules for named steps, any matching tag, or all steps; workflow
+  default destinations; report correction (default on); and all three limits. Policies and step
+  results use the same destination control, including retry fields and creating a destination
+  step. Exact-result precedence and equal-level conflicts remain daemon decisions. The loop
+  warning in Checks opens this tab and focuses Safety limits.
+- “Edit as text” explicitly pauses visual editing. Exact YAML, including comments and invalid
+  partial text, stays in the tab’s draft through navigation, late replies and failed checks.
+  Checks link to line/column positions. Only the newest valid check enables Save/Create/Apply or
+  “Return to visual editor”. Returning preserves the text; subsequent form edits regenerate it
+  and remove comments. Discard returns to the saved text (or reloads a run’s current revision).
+- Every nonterminal step exposes all ten technical failure routes in its disclosure. “Any
+  technical failure” is labeled as a fallback; exact rules take precedence, and inherited rows
+  show both the source and fallback provenance. Own technical rules can be removed to inherit.
+- Paused-run draft checks add read-only continuation eligibility from `revisionCursor`, plus
+  project/task-source constraints. Unavailable steps remain visible but disabled, with an
+  explanation. Apply needs an explicit compatible replacement if the paused step was removed,
+  changed kind or no longer fits the active task. The comparison shows changed workflow fields
+  and steps, with both exact YAML texts available. Remaining task-specific settings still receive
+  the engine’s transactional validation at Apply.
+- Apply returns to the paused run with Resume selected, its consequence and permissions visible,
+  and a fresh reason to enter. Resume remains a separate explicit action. Agent sessions from
+  the previous revision cannot be resumed.
+- Alt + ↑/↓ on a step reorders the reading list, keeps focus and announces its position. The
+  selected-step form, result rows, destination control and common fields are separate components.
+  Rules, YAML and comparison panes stack on small screens. Drafts remain tab memory; light theme.
+
+**Slice 4 (2026-10-20): one interface and the guide.** `/ui/` now serves the developer workspace.
+Exact `/ui/app` and `/ui/app/` GETs redirect permanently to `/ui/`, retaining URL fragments;
+old app asset paths and classic assets return 404. The classic source, build-copy script and
+classic-only browser selectors/fixture helper are removed. Builds also remove stale `dist/web/`
+output from existing checkouts. The browser API, pairing, CSP and execution contracts stay intact.
+
+Parity was checked against the classic shell/editor/dashboard/intervention source and its tests,
+including source loading, every step field, rules/defaults/limits, task preview, immutable saves,
+preparation, controls, reports/events/attention, overrides and pinned revisions. This found and
+closed the remaining gaps:
+
+- **Import YAML…** on Workflows takes a local file and absolute original workflow folder. It opens
+  an exact-text draft on YAML, including invalid text or failed initial checks. Check again remains
+  available after a failed initial check; unreadable drafts can be discarded. No source file changes.
+- **All checklist items** in Create run exposes every queued/excluded item, body and source line;
+  the ordinary preview stays short. Including prechecked items remains explicit.
+- **Run information** holds project location, full imported task bodies and historical attention
+  records. **Accepted report** shows all report fields and identity, even before process settlement.
+  Technical details keep their private-path filtering. Editor tab labels/counts stay together on phones.
+
+The [migration browser checks](test/browser/app-migration.spec.mjs) cover redirect/hash/session
+continuity, exact imports (including arbitrary command arguments/environment), invalid text,
+failed checks, task preview and distinct manual task decisions. Classic end-to-end revision/resume,
+frozen-input/report history, and reload/last-tab no-replay assertions now run against React, using
+the same fake adapters and durable reopen checks. [USER_GUIDE.md](USER_GUIDE.md) is the current guide;
+the stopped historical walkthrough stays archived. Draft memory, YAML comment regeneration,
+prompt-placeholder renames, Apply-time task-override validation and CLI recovery remain as above.
+
+Migration review keeps saved revision addresses distinct after Save and preserves any other
+unsaved draft when identical YAML reuses its revision. Incomplete step time limits and command
+environment lines remain invalid draft input rather than silently retaining or omitting values.
+Accepted-report reads retry after a transient read failure, independently of the event cursor;
+mutations still require deliberate submission and never retry automatically.
+Historical step details read their own saved definition revision, including after Apply.
+Creation and Apply confirmations expire when the run advances, so they cannot contradict its status.
 
 React can be integrated into an existing application without replacing its backend; see the
 [official integration guidance](https://react.dev/learn/add-react-to-an-existing-project).

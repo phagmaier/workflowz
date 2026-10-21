@@ -4,17 +4,16 @@ A local runner for user-defined coding-agent and command workflows. You choose t
 outcome rules; the runner executes them sequentially and saves progress/history in SQLite.
 A local browser interface and the `wf` CLI control the same daemon.
 
-## Current work: UI overhaul
+## Browser interface
 
-The engine is working. The existing single-page interface made even guided use too difficult.
-The walkthrough is stopped. We are exploring a professional interface with clear navigation,
-focused screens, understandable authoring, visible feedback and readable results.
+The developer workspace provides Workflows, a visual/YAML editor, Runs and focused run details.
+The [user guide](USER_GUIDE.md) covers creation, rules, results, paused decisions and recovery.
 
 - [DESIGN.md](DESIGN.md): the design brief, design-selection process and reusable prompt.
 - [AGENTS.md](AGENTS.md): focused instructions for contributing to the UI overhaul.
 - [archive/](archive/README.md): previous specs, guides, plans and compatibility evidence.
 
-The tutorial will be written after the improved UI works. The selected direction is recorded in
+The selected direction and implementation decisions are recorded in
 [DESIGN.md](DESIGN.md#decisions); the [design-direction prototypes](prototypes/design-directions/index.html) remain for reference.
 
 ## Development
@@ -40,9 +39,8 @@ bin/wf --state-dir "$HOME/.local/state/workflowz" ui
 ```
 
 Open the printed address and enter the one-use pairing code. Leave the daemon terminal open.
-The redesigned interface is being built at `/ui/app/` on the same address (Workflows, the
-workflow editor, Runs and Run details); the classic interface at `/ui/` remains until the
-redesign replaces it.
+The interface opens at `/ui/`. Previous `/ui/app/` bookmarks redirect there, preserving hash
+navigation. The classic interface has been removed.
 An existing state directory must belong to you and have private permissions (`0700`).
 Core tests use offline fixtures; browser checks are separate (`npm run test:browser`). See the
 [archived development reference](archive/development.md) for provisioning and additional commands.

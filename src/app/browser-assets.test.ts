@@ -53,8 +53,8 @@ describe("built browser app assets", () => {
         { path: "assets/a.js", type: JS },
       ]),
     );
-    assert.deepEqual([...ok.keys()], ["/ui/app/", "/ui/app/assets/a.js"]);
-    assert.equal(ok.get("/ui/app/assets/a.js")?.type, JS);
+    assert.deepEqual([...ok.keys()], ["/ui/", "/ui/assets/a.js"]);
+    assert.equal(ok.get("/ui/assets/a.js")?.type, JS);
     assert.equal(loadAppAssets(directory(t, undefined)).size, 0, "an unbuilt app serves nothing");
     for (const entry of [
       { path: "../secret.txt", type: JS },
@@ -86,7 +86,7 @@ describe("built browser app assets", () => {
     assert.throws(() => loadAppAssets(directory(t, { path: "index.html" })), /array/);
   });
 
-  it("serves the real build at /ui/app/ with exact types, the unchanged CSP and no traversal", async (t) => {
+  it("serves the real build at /ui/ with exact types, the unchanged CSP and no traversal", async (t) => {
     const root = mkdtempSync(path.join(os.tmpdir(), "wf-app-serve-"));
     const owner = await startDaemon(path.join(root, "state"));
     t.after(async () => {
@@ -100,7 +100,7 @@ describe("built browser app assets", () => {
     assert.ok(listed.some((entry) => entry.path.endsWith(".js")));
     assert.ok(listed.some((entry) => entry.path.endsWith(".css")));
 
-    const page = await get(port, "/ui/app/");
+    const page = await get(port, "/ui/");
     assert.equal(page.status, 200);
     assert.equal(page.headers["content-type"], "text/html; charset=utf-8");
     assert.equal(page.headers["content-security-policy"], CSP);
@@ -110,28 +110,44 @@ describe("built browser app assets", () => {
     assert.doesNotMatch(page.body, /<script(?![^>]*\bsrc=)[^>]*>/i);
     assert.doesNotMatch(page.body, /<style|\sstyle=|\son[a-z]+=|javascript:|data:/i);
     for (const entry of listed.filter((e) => e.path !== "index.html")) {
-      const asset = await get(port, `/ui/app/${entry.path}`);
+      const asset = await get(port, `/ui/${entry.path}`);
       assert.equal(asset.status, 200, entry.path);
       assert.equal(asset.headers["content-type"], entry.type, entry.path);
       assert.equal(asset.headers["content-security-policy"], CSP);
-      assert.ok(page.body.includes(`/ui/app/${entry.path}`), `${entry.path} is referenced`);
+      assert.ok(page.body.includes(`/ui/${entry.path}`), `${entry.path} is referenced`);
     }
     for (const route of [
-      "/ui/app",
-      "/ui/app/index.html",
-      "/ui/app/asset-list.json",
-      "/ui/app/assets/",
-      "/ui/app/?v=1",
-      "/ui/app/../web/shell.ts",
-      "/ui/app/%2e%2e/web/shell.html",
-      "/ui/app/assets/../index.html",
-      "/ui/app/assets/%2Fetc%2Fpasswd",
-      "/ui/app//etc/passwd",
-      "/ui/app/../../app/daemon.js",
+      "/ui/index.html",
+      "/ui/asset-list.json",
+      "/ui/assets/",
+      "/ui/?v=1",
+      "/ui/../web/shell.ts",
+      "/ui/%2e%2e/web/shell.html",
+      "/ui/assets/../index.html",
+      "/ui/assets/%2Fetc%2Fpasswd",
+      "/ui//etc/passwd",
+      "/ui/../../app/daemon.js",
     ])
       assert.equal((await get(port, route)).status, 404, route);
-    assert.equal((await get(port, "/ui/app/", "localhost:1")).status, 403, "exact Host");
-    // The legacy interface keeps working beside the new app.
-    assert.equal((await get(port, "/ui/")).status, 200);
+    assert.equal((await get(port, "/ui/", "localhost:1")).status, 403, "exact Host");
+    for (const route of ["/ui/app", "/ui/app/"]) {
+      const redirect = await get(port, route);
+      assert.equal(redirect.status, 308);
+      assert.equal(redirect.headers.location, "/ui/");
+      assert.equal(redirect.headers["content-security-policy"], CSP);
+      assert.equal((await get(port, route, "localhost:1")).status, 403);
+    }
+    for (const route of [
+      "/ui/shell.js",
+      "/ui/shell.css",
+      "/ui/editor.js",
+      "/ui/dashboard.js",
+      "/ui/intervention.js",
+      "/ui/app/assets/a.js",
+      "/ui/app/index.html",
+      "/ui/app/?v=1",
+      "/ui/app/%2e%2e/index.html",
+    ])
+      assert.equal((await get(port, route)).status, 404, route);
   });
 });

@@ -5,7 +5,7 @@ import { defineConfig } from "vite";
 // The daemon serves only the files named in dist/ui-app/asset-list.json (scripts/build-ui.mjs).
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
-  base: "/ui/app/",
+  base: "/ui/",
   plugins: [react()],
   build: {
     outDir: fileURLToPath(new URL("../dist/ui-app", import.meta.url)),
