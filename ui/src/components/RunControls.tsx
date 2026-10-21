@@ -3,6 +3,7 @@ import { ApiError, describeFailure } from "../api.ts";
 import { useConnection } from "../connection.tsx";
 import { harnessLabel, humanize } from "../lib/format.ts";
 import type { HistoryItem } from "../lib/history.ts";
+import { runHref } from "../route.ts";
 import type { RunData } from "../run-data.ts";
 import { useRuns } from "../runs-data.tsx";
 import type { BrowserRequest, BrowserRunStatus } from "../types.ts";
@@ -369,12 +370,11 @@ function Decision({
               option.key === "edit" ? (
                 <div className="decision-form">
                   <p className="hint">
-                    The workflow editor moves into this interface in the next update. For now, open
-                    the classic interface, find this run under Runs, choose Inspect, then Edit
-                    paused revision.
+                    Opens this run's workflow in the editor. Changes apply only to this run's
+                    remaining steps; you give a reason there, and the run stays paused.
                   </p>
-                  <a className="btn btn-primary" href="/ui/">
-                    Open the classic interface
+                  <a className="btn btn-primary" href={`${runHref(runId)}/edit`}>
+                    Edit the workflow for this run
                   </a>
                 </div>
               ) : (

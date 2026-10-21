@@ -90,10 +90,9 @@ export function RunsPage() {
         <div className="state-panel">
           <h2>No runs yet</h2>
           <p>
-            A run is created from a saved workflow and waits until you press Start. Creating runs
-            moves into this interface with the workflow editor; until then use the{" "}
-            <a href="/ui/">classic interface</a> or <code>wf run create</code> in a terminal. New
-            runs appear here automatically.
+            A run is prepared from a workflow and waits until you press Start. Open a workflow on
+            the <a href="#/workflows">Workflows</a> page and choose Create run, or use{" "}
+            <code>wf run create</code> in a terminal. New runs appear here automatically.
           </p>
         </div>
       ) : (

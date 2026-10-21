@@ -40,8 +40,9 @@ bin/wf --state-dir "$HOME/.local/state/workflowz" ui
 ```
 
 Open the printed address and enter the one-use pairing code. Leave the daemon terminal open.
-The redesigned interface is being built at `/ui/app/` on the same address (currently Runs and
-Run details); the classic interface at `/ui/` remains until the redesign replaces it.
+The redesigned interface is being built at `/ui/app/` on the same address (Workflows, the
+workflow editor, Runs and Run details); the classic interface at `/ui/` remains until the
+redesign replaces it.
 An existing state directory must belong to you and have private permissions (`0700`).
 Core tests use offline fixtures; browser checks are separate (`npm run test:browser`). See the
 [archived development reference](archive/development.md) for provisioning and additional commands.

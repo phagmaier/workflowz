@@ -1,19 +1,32 @@
+import { EditorPage } from "./components/EditorPage.tsx";
+import { NewWorkflowPage } from "./components/NewWorkflowPage.tsx";
 import { Pairing } from "./components/Pairing.tsx";
 import { RunPage } from "./components/RunPage.tsx";
 import { RunsPage } from "./components/RunsPage.tsx";
 import { Shell } from "./components/Shell.tsx";
 import { WorkflowsPage } from "./components/WorkflowsPage.tsx";
 import { ConnectionProvider, useConnection } from "./connection.tsx";
-import { useRoute } from "./route.ts";
+import { sessionFor, useSessionRegistry } from "./editor-session.ts";
+import { sessionKey, useRoute } from "./route.ts";
 import { RunsProvider } from "./runs-data.tsx";
 
 function Screens() {
   const route = useRoute();
+  useSessionRegistry();
   switch (route.view) {
     case "runs":
       return <RunsPage />;
     case "workflows":
       return <WorkflowsPage />;
+    case "new-workflow":
+      return <NewWorkflowPage example={route.example} />;
+    case "editor": {
+      // Keyed by draft, so saving a new draft as a revision keeps the page and its feedback.
+      const key = sessionKey(route.target);
+      return (
+        <EditorPage key={sessionFor(key)?.state.uid ?? key} target={route.target} tab={route.tab} />
+      );
+    }
     case "run":
       // Keyed so another run never shows this run's state, inputs or polling.
       return <RunPage key={route.runId} runId={route.runId} tab={route.tab} />;

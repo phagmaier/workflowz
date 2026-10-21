@@ -77,7 +77,17 @@ async function send<T>(route: string, body: unknown, timeout: number): Promise<T
   throw new ApiError("rejected", detail, response.status);
 }
 
-const MUTATIONS = new Set(["start", "pause", "stop", "resume", "override", "logout"]);
+const MUTATIONS = new Set([
+  "start",
+  "pause",
+  "stop",
+  "resume",
+  "override",
+  "revise",
+  "save",
+  "create",
+  "logout",
+]);
 
 export function api<T>(request: BrowserRequest): Promise<T> {
   return send<T>("/ui/api", request, MUTATIONS.has(request.op) ? CONTROL_TIMEOUT : READ_TIMEOUT);

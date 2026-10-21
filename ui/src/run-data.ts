@@ -15,9 +15,25 @@ import type {
 
 type WorkflowStep = NonNullable<BrowserDraft["document"]>["steps"][string];
 export interface RunGraph extends MapGraph {
-  revisionId: number;
   name: string;
   specs: Readonly<Record<string, WorkflowStep>>;
+}
+
+/** Map input from a checked draft, or null while it doesn't compile (no resolved routes yet). */
+export function graphOf(draft: BrowserDraft): RunGraph | null {
+  if (!draft.document || draft.projectRoot === null) return null;
+  const specs = draft.document.steps;
+  return {
+    name: draft.document.name,
+    start: draft.document.start,
+    steps: Object.entries(specs).map(([id, spec]) => ({
+      id,
+      kind: spec.kind,
+      detail: stepDetail(spec),
+    })),
+    transitions: draft.transitions,
+    specs,
+  };
 }
 
 export interface RunData {
@@ -110,20 +126,9 @@ export function useRunData(runId: string): RunData {
           workflowText: source.workflowText,
           workflowDir: source.workflowDir,
         });
-        if (!draft.document) throw new Error("the saved definition could not be read");
-        const specs = draft.document.steps;
-        setGraph({
-          revisionId: next.run.revisionId,
-          name: source.name,
-          start: draft.document.start,
-          steps: Object.entries(specs).map(([id, spec]) => ({
-            id,
-            kind: spec.kind,
-            detail: stepDetail(spec),
-          })),
-          transitions: draft.transitions,
-          specs,
-        });
+        const built = graphOf(draft);
+        if (!built) throw new Error("the saved definition could not be read");
+        setGraph({ ...built, name: source.name });
         memo.revisionId = next.run.revisionId;
         setGraphError(null);
       } catch (failure) {

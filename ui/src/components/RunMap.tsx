@@ -23,21 +23,31 @@ function describeAction(action: { kind: string; target?: string }): string {
   return "retry this step";
 }
 
-/** Read-only map: the authored steps in order, with the path this run has taken so far. */
-export function RunMap({
-  graph,
-  graphError,
-  status,
-  items,
-  onShowInHistory,
-}: {
-  graph: RunGraph | null;
-  graphError: string | null;
+export interface RunOverlay {
   status: BrowserRunStatus;
   items: readonly HistoryItem[];
   onShowInHistory: (stepId: string) => void;
+}
+
+/**
+ * Read-only map: the authored steps in order. On a run it shows the path taken so far; in the
+ * editor it offers to open a step's form instead.
+ */
+export function RunMap({
+  graph,
+  graphError,
+  run,
+  caption,
+  onEdit,
+}: {
+  graph: RunGraph | null;
+  graphError: string | null;
+  run?: RunOverlay;
+  caption: string;
+  onEdit?: (stepId: string) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const items = run?.items ?? [];
   if (!graph)
     return (
       <section className="pane" aria-label="Map">
@@ -52,8 +62,8 @@ export function RunMap({
     );
   const layout = layoutMap(graph);
   const { counts, edges } = walked(items);
-  const finished = status.run.status === "completed" || status.run.status === "stopped";
-  const current = finished ? null : status.run.cursorStepId;
+  const finished = run?.status.run.status === "completed" || run?.status.run.status === "stopped";
+  const current = !run || finished ? null : run.status.run.cursorStepId;
   const focus = selected ?? current ?? graph.start;
   const focusSpec = graph.specs[focus];
   const order = graph.steps.map((step) => step.id);
@@ -83,7 +93,7 @@ export function RunMap({
       <section className="pane map-pane" aria-label="Workflow map">
         <div className="pane-head">
           <h2>Map</h2>
-          <span className="muted small">Read-only. Revision {graph.revisionId}.</span>
+          <span className="muted small">{caption}</span>
         </div>
         <div className="map-scroll">
           {/* biome-ignore lint/a11y/useSemanticElements: an SVG drawing groups its focusable nodes. */}
@@ -192,12 +202,16 @@ export function RunMap({
           </svg>
         </div>
         <p className="legend muted small">
-          <span>
-            <i className="lg walked" /> taken in this run
-          </span>
-          <span>
-            <i className="lg" /> not taken
-          </span>
+          {run ? (
+            <>
+              <span>
+                <i className="lg walked" /> taken in this run
+              </span>
+              <span>
+                <i className="lg" /> not taken
+              </span>
+            </>
+          ) : null}
           <span>
             <i className="lg shared" /> shared rule
           </span>
@@ -218,11 +232,13 @@ export function RunMap({
         ) : focusSpec?.kind === "command" ? (
           <p className="muted mono">$ {focusSpec.argv.join(" ")}</p>
         ) : null}
-        <p>
-          {counts.get(focus)
-            ? `Ran ${counts.get(focus)} time${counts.get(focus) === 1 ? "" : "s"} in this run.`
-            : "Has not run in this run yet."}
-        </p>
+        {run ? (
+          <p>
+            {counts.get(focus)
+              ? `Ran ${counts.get(focus)} time${counts.get(focus) === 1 ? "" : "s"} in this run.`
+              : "Has not run in this run yet."}
+          </p>
+        ) : null}
         {(graph.transitions[focus] ?? []).filter((t) => !t.outcome.startsWith("system.")).length ? (
           <>
             <h3 className="h3">What happens after each result</h3>
@@ -240,9 +256,14 @@ export function RunMap({
             </ul>
           </>
         ) : null}
-        {counts.get(focus) ? (
-          <button type="button" className="btn btn-sm" onClick={() => onShowInHistory(focus)}>
+        {run && counts.get(focus) ? (
+          <button type="button" className="btn btn-sm" onClick={() => run.onShowInHistory(focus)}>
             Show latest result in history
+          </button>
+        ) : null}
+        {onEdit ? (
+          <button type="button" className="btn btn-sm" onClick={() => onEdit(focus)}>
+            Edit {humanize(focus)}
           </button>
         ) : null}
       </section>

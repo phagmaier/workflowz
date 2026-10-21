@@ -19,3 +19,7 @@ export interface SavedWorkflow {
   sourceDir: string;
   sha256: string;
 }
+export type { Diagnostic } from "../../src/contracts/diagnostics.ts";
+export type { TaskImportPreview } from "../../src/contracts/task-import.ts";
+export type { WorkflowDocument, WorkflowStep } from "../../src/contracts/workflow-schema.ts";
+export type { RuleSource } from "../../src/engine/model.ts";

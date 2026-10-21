@@ -8,7 +8,7 @@ through internal field names and scattered controls.
 
 **Current task:** Implement the selected direction in slices (see Decisions).
 The existing engine is the baseline. React + TypeScript is the proposed frontend direction;
-the selected interaction design comes first. Slice 1 is implemented at `/ui/app/`.
+the selected interaction design comes first. Slices 1 and 2 are implemented at `/ui/app/`.
 
 ## What the walkthrough established
 
@@ -156,6 +156,43 @@ contract is in [architecture §8.7](archive/architecture.md).
   still shows them.
 - Light theme only for now. Times use a 24-hour clock. Below 760px the sidebar becomes a top bar,
   tables become cards, and panes stack.
+
+**Slice 2 (2026-10-20): Workflows and the editor.** Routes: `#/workflows`, `#/workflows/new[/<example>]`,
+`#/workflows/<revision>[/project|yaml|map]`, `#/workflows/draft/<n>[/…]` and `#/runs/<id>/edit[/…]`.
+
+- Workflows groups immutable revisions by name (newest first, earlier revisions in a disclosure,
+  run counts) and lists unsaved drafts in this tab. Examples (single agent, task loop, commands)
+  open the New workflow form, which asks only for a name, an absolute project folder and the
+  example (plus the checklist for the task loop). The project folder is also the workflow folder.
+- The form edits a working model in the browser; every edit is sent as `draft` `model`, and the
+  daemon's YAML and diagnostics are the authority. Typing is checked after a 400 ms pause, other
+  edits at once. A check only counts if it answers the newest edit; Save, Create run and Apply
+  need that check to be valid. If the daemon can't read the document (e.g. an empty prompt), the
+  form keeps its model and shows the shape error; other checks follow once it is fixed.
+- The header always shows the draft's state: New draft · not saved yet / Unsaved changes · based
+  on revision N / Saved · revision N, with Discard. Drafts live in memory per tab, survive
+  navigation, and are lost on reload (the browser asks first; a lost draft's address says so).
+  Saving unchanged YAML reports the existing revision rather than a new one.
+- Results are rows: result → destination select (Go to…, Finish, Pause and wait for me, Retry
+  this step with runs/wait fields, ＋ New step…, or "Use the shared rule" when one applies).
+  "Finish" adds a Finish step when none exists; "New step" creates, connects and opens the step,
+  which shows where it came from. Unconnected results are marked in the row and in Checks;
+  inherited rules show their source. Technical failures and advanced fields are disclosures.
+- Deleting a step leaves references for the checks to explain; renaming updates structural
+  references (first step, destinations, shared-rule step lists, report context) but not
+  `{{reports.<id>…}}` text. The workflow name is edited on the Project tab; the page heading
+  shows it.
+- Create run opens a panel with the task preview (and an option to include checked tasks), then
+  opens the new run's page with a confirmation. Start stays on that page. Creating from unsaved
+  changes stores them as a revision with the run, and the panel says so.
+- Paused runs: "Change the workflow for this run" opens the editor in run mode, pinned to the
+  `run-edit` snapshot. Every check and Apply send its event; the page notices when the run moves
+  on, keeps edits, and offers "Check the run again" (refused if the revision changed elsewhere).
+  Apply needs a reason and a valid draft, offers "Continue at" (required when the paused step was
+  removed or changed kind), then returns to the run page with a confirmation. Project folder and
+  task list are read-only there.
+- YAML is read-only in this slice. The Map tab reuses the run map without a run overlay and
+  offers "Edit <step>".
 
 React can be integrated into an existing application without replacing its backend; see the
 [official integration guidance](https://react.dev/learn/add-react-to-an-existing-project).

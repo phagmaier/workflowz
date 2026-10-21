@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { clearFlash, peekFlash } from "../flash.ts";
 import { clock, duration, humanize, KIND_LABEL } from "../lib/format.ts";
 import { buildHistory, type HistoryItem } from "../lib/history.ts";
 import { describeRun } from "../lib/run-copy.ts";
@@ -123,6 +124,11 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
   const { status, events, reports } = data;
   const items = useMemo<HistoryItem[]>(() => buildHistory(events, reports), [events, reports]);
   const [picked, setPicked] = useState<string | null>(null);
+  // A confirmation from the page that sent us here (a created run, an applied change).
+  const [flash, setFlash] = useState(() => peekFlash(runId));
+  useEffect(() => {
+    clearFlash(runId);
+  }, [runId]);
   // Follow the newest step until the user picks something to read.
   const latest = [...items].reverse().find((item) => item.type === "step") ?? items.at(-1);
   const selected = items.find((item) => item.id === picked) ?? latest;
@@ -162,6 +168,14 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
 
   return (
     <Shell section="runs" crumbs={crumbs} pageKey={`run:${runId}`}>
+      {flash ? (
+        <div className="result-line flash" role="status">
+          <span className="fb fb-ok">{flash}</span>
+          <button type="button" className="link" onClick={() => setFlash(null)}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       <section className="run-head">
         <div className="run-title">
           <div className="kind-label">
@@ -204,9 +218,8 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
         <RunMap
           graph={data.graph}
           graphError={data.graphError}
-          status={status}
-          items={items}
-          onShowInHistory={showInHistory}
+          run={{ status, items, onShowInHistory: showInHistory }}
+          caption={`Read-only. Revision ${status.run.revisionId}.`}
         />
       ) : status.run.status === "ready" && items.every((i) => i.type === "note") ? (
         <ReadyPlan data={data} />

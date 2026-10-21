@@ -563,7 +563,7 @@ retained. This is bounded Chromium/390px coverage, not cross-browser coverage or
 
 
 
-### 8.7 React app at `/ui/app/` (UI overhaul slice 1)
+### 8.7 React app at `/ui/app/` (UI overhaul slices 1–2)
 
 The redesigned interface is a React + TypeScript app in `ui/`, built by project-local Vite into
 `dist/ui-app/` (`scripts/build-ui.mjs`, run by `npm run build`). The build also writes
@@ -585,6 +585,15 @@ snapshot's event and are disabled until it matches current status. One mutation 
 app-wide, with inspection still available. A rejected or unanswered control is never resent;
 unlike §8.4's dashboard, polling continues so the page shows the current state, and the user
 must act again. Raw event JSON hides `logPath` and absolute paths under a `logs/` directory.
+
+Workflows and the editor (slice 2) read `workflows` and `load`, and check every visual edit with
+read-only `draft` and a `model`; the daemon serializes it, and only a check of the newest edit
+enables `save`, `create` or `revise`. Selections send the checked text with the draft's resolved
+`projectRoot`, instructions and task path, so an unchanged source keeps its revision identity.
+`preview` is read when the create panel opens. Paused-run editing pins the `run-edit` snapshot:
+`draft` carries `run` and `revise` carries its `expectedEventId`; a stale result keeps the draft
+and requires an explicit re-check. Save, create and revise use the 120 s mutation timeout and are
+never resent. Unsaved drafts are browser memory only.
 
 ## 9. Testing strategy
 
