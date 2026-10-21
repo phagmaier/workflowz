@@ -64,7 +64,8 @@ are copied from Markdown when a run is created. Later checklist edits do not cha
 runs, and Workflowz does not tick the source file's boxes.
 
 Choose a destination directly for each result: **Go to …**, **Finish**, **Pause and wait for me**,
-**Retry this step**, or **＋ New step…**. A new destination step opens immediately for editing.
+**Retry this step**, or **＋ New step…**. In the step form, a new destination step opens
+immediately for editing; shared-rule editing keeps you on Rules & limits.
 Retry specifies total runs (including the first, 2–100) and a wait in seconds; exhaustion pauses.
 Engine task steps cannot execute retries. There are no mandatory review or approval stages.
 
@@ -92,8 +93,9 @@ failures bypass correction. This is separate from a configured step retry.
 Safety limits are optional:
 
 - **Maximum step executions:** counts committed transitions, including retries.
-- **Maximum run time:** wall time since Start, including pauses; checked between operations,
-  so it does not cut an active step short.
+- **Maximum run time:** wall time since Start, including pauses. The remaining budget caps
+  active commands, agent invocations and report correction. Expiry requests supervised
+  termination and pauses the run after settlement; cleanup can extend beyond the deadline.
 - **Agent silence timeout:** ends an agent invocation after this long without stdout/stderr;
   routes as a technical timeout. Commands are unaffected.
 

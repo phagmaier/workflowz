@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useConnection } from "../connection.tsx";
 import { createSession, newDraftKey } from "../editor-session.ts";
 import { editorHref } from "../route.ts";
@@ -10,8 +10,17 @@ export function ImportWorkflowPage() {
   const { read, online } = useConnection();
   const [folder, setFolder] = useDraft("import:folder");
   const [feedback, setFeedback] = useState<FeedbackState>(null);
+  const mounted = useRef(false);
+  const pending = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (pending.current) return;
     const form = event.currentTarget;
     const input = form.elements.namedItem("file") as HTMLInputElement;
     const file = input.files?.[0];
@@ -27,12 +36,15 @@ export function ImportWorkflowPage() {
       input.focus();
       return;
     }
+    pending.current = true;
     setFeedback({ kind: "pending", text: "Reading and checking the YAML…" });
     let text: string;
     try {
       text = await file.text();
     } catch {
-      setFeedback({ kind: "error", text: "The file couldn't be read. Choose it again." });
+      pending.current = false;
+      if (mounted.current)
+        setFeedback({ kind: "error", text: "The file couldn't be read. Choose it again." });
       return;
     }
     const key = newDraftKey();
@@ -41,7 +53,8 @@ export function ImportWorkflowPage() {
     await session.open(text);
     // Even unreadable YAML or an unavailable daemon must leave the imported text editable.
     session.set({ mode: "text" });
-    window.location.hash = editorHref({ kind: "draft", key }, "yaml");
+    pending.current = false;
+    if (mounted.current) window.location.hash = editorHref({ kind: "draft", key }, "yaml");
   };
   return (
     <Shell

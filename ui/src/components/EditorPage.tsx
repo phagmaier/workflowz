@@ -34,6 +34,18 @@ const TABS: { id: EditorTab; label: string }[] = [
   { id: "map", label: "Map" },
 ];
 
+/** A completed request still updates saved state, but cannot redirect a screen already left. */
+function useActivePage() {
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  return active;
+}
+
 /** Opens the session for a route the first time it is visited in this tab. */
 function useOpen(target: EditorTarget): {
   session: Session | null;
@@ -188,7 +200,9 @@ function CreateRunPanel({
   const [includeCompleted, setInclude] = useState(false);
   const [preview, setPreview] = useState<TaskImportPreview | null | undefined>(undefined);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
+  const active = useActivePage();
   const heading = useRef<HTMLHeadingElement>(null);
   const doc = state.model;
   const valid = session.valid;
@@ -213,6 +227,7 @@ function CreateRunPanel({
     }
     let alive = true;
     setPreview(undefined);
+    setPreviewError(null);
     read<TaskImportPreview | null>({ op: "preview", ...selection }).then(
       (result) => {
         if (!alive) return;
@@ -224,7 +239,7 @@ function CreateRunPanel({
     return () => {
       alive = false;
     };
-  }, [selectionKey, read]);
+  }, [selectionKey, read, previewAttempt]);
 
   const create = async () => {
     if (!selection) return;
@@ -249,7 +264,7 @@ function CreateRunPanel({
         );
       }
       runs.refresh();
-      window.location.hash = runHref(runId);
+      if (active.current) window.location.hash = runHref(runId);
     } catch (error) {
       const unknown = error instanceof ApiError && error.kind === "unreachable";
       setFeedback({
@@ -282,7 +297,17 @@ function CreateRunPanel({
         </p>
       ) : selection?.taskPath ? (
         previewError ? (
-          <p className="inline-alert">The task list couldn't be read: {previewError}</p>
+          <p className="inline-alert" role="alert">
+            The task list couldn't be read: {previewError}{" "}
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={!online}
+              onClick={() => setPreviewAttempt((attempt) => attempt + 1)}
+            >
+              Try again
+            </button>
+          </p>
         ) : preview === undefined ? (
           <p className="muted" role="status">
             <span className="spinner" aria-hidden="true" /> Reading {selection.taskPath}…
@@ -376,6 +401,7 @@ function RunEditBar({
   const [cursor, setCursor] = useDraft(`${run.runId}:revise-cursor`);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [recheck, setRecheck] = useState<FeedbackState>(null);
+  const active = useActivePage();
   const previous = run.steps.find((s) => s.stepId === run.cursorStepId);
   const here = doc?.steps[run.cursorStepId];
   const preflight = session.current ? state.draft?.revision : undefined;
@@ -464,7 +490,7 @@ function RunEditBar({
       rememberDraft(`${run.runId}:choice`, "resume");
       dropSession(session.key);
       runs.refresh();
-      window.location.hash = runHref(run.runId);
+      if (active.current) window.location.hash = runHref(run.runId);
     } catch (error) {
       if (error instanceof ApiError && error.kind === "stale") session.set({ stale: true });
       setFeedback({
@@ -758,6 +784,17 @@ export function EditorPage({ target, tab }: { target: EditorTarget; tab: EditorT
   const runs = useRuns();
   const [saveFb, setSaveFb] = useState<FeedbackState>(null);
   const [creating, setCreating] = useState(false);
+  const routeKey = sessionKey(target);
+  const savedKey = session?.key;
+  // The currently visible editor owns navigation after a save. It may be a new mount of the
+  // same draft while an older screen's request is still pending; its address must match the
+  // saved revision without redirecting unrelated screens or changing the current editor tab.
+  useEffect(() => {
+    if (savedKey?.startsWith("rev:") && savedKey !== routeKey)
+      window.location.replace(
+        editorHref({ kind: "revision", revisionId: Number(savedKey.slice(4)) }, tab),
+      );
+  }, [savedKey, routeKey, tab]);
   const createButton = useRef<HTMLButtonElement>(null);
   const runMode = target.kind === "run";
   const name = state?.model?.name || (runMode ? "Workflow" : "Untitled workflow");
@@ -862,12 +899,7 @@ export function EditorPage({ target, tab }: { target: EditorTarget; tab: EditorT
           : `Saved as revision ${result.revisionId}. No run was created.`,
       });
       const key = `rev:${result.revisionId}`;
-      if (session.key !== key) {
-        rekey(session, key);
-        window.location.replace(
-          editorHref({ kind: "revision", revisionId: result.revisionId }, tab),
-        );
-      }
+      if (session.key !== key) rekey(session, key);
       runs.refresh();
     } catch (error) {
       const unknown = error instanceof ApiError && error.kind === "unreachable";

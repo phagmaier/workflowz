@@ -42,6 +42,7 @@ export interface RunData {
   events: readonly EventRow[];
   /** All history up to the cursor has been read. */
   caughtUp: boolean;
+  historyError: string | null;
   reports: readonly ReportRow[];
   graph: RunGraph | null;
   graphError: string | null;
@@ -65,6 +66,7 @@ export function useRunData(runId: string): RunData {
   const [error, setError] = useState<string | null>(null);
   const [events, setEvents] = useState<readonly EventRow[]>([]);
   const [caughtUp, setCaughtUp] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [reports, setReports] = useState<readonly ReportRow[]>([]);
   const [graph, setGraph] = useState<RunGraph | null>(null);
   const [graphError, setGraphError] = useState<string | null>(null);
@@ -92,31 +94,44 @@ export function useRunData(runId: string): RunData {
     setStatus(next);
     setError(null);
     setUpdatedAt(Date.now());
+    // Never label a newer revision with the previous revision's step definitions, including
+    // while other history reads are still waiting for their replies.
+    if (memo.revisionId !== next.run.revisionId) setGraph(null);
 
-    let fresh = false;
-    for (let page = 0; page < 10; page++) {
-      const result = await read<BrowserEvents>({
-        op: "events",
-        runId,
-        after: memo.cursor,
-        limit: 1000,
-      });
-      if (result.events.length) {
-        memo.events = [...memo.events, ...result.events];
-        memo.cursor = result.nextAfter;
-        fresh ||= result.events.some((event) => event.type === "report_accepted");
+    const historyFailures: string[] = [];
+    try {
+      for (let page = 0; page < 10; page++) {
+        const result = await read<BrowserEvents>({
+          op: "events",
+          runId,
+          after: memo.cursor,
+          limit: 1000,
+        });
+        if (result.events.length) {
+          memo.events = [...memo.events, ...result.events];
+          memo.cursor = result.nextAfter;
+          // Invalidate as the page is consumed: a later event-page failure must not lose this
+          // acceptance after its cursor has advanced.
+          if (result.events.some((event) => event.type === "report_accepted"))
+            memo.reportsLoaded = false;
+        }
+        if (!result.hasMore) break;
       }
-      if (!result.hasMore) break;
+      setCaughtUp(memo.cursor >= next.expectedEventId);
+    } catch (failure) {
+      setCaughtUp(false);
+      historyFailures.push(`History: ${describeReadFailure(failure)}`);
     }
     setEvents(memo.events);
-    setCaughtUp(memo.cursor >= next.expectedEventId);
-    // Acceptance invalidates the report snapshot before reading it. A failed read must still
-    // be retried next poll even though the event cursor has already advanced.
-    if (fresh) memo.reportsLoaded = false;
     if (!memo.reportsLoaded) {
-      setReports(await read<ReportRow[]>({ op: "reports", runId }));
-      memo.reportsLoaded = true;
+      try {
+        setReports(await read<ReportRow[]>({ op: "reports", runId }));
+        memo.reportsLoaded = true;
+      } catch (failure) {
+        historyFailures.push(`Reports: ${describeReadFailure(failure)}`);
+      }
     }
+    setHistoryError(historyFailures.length ? historyFailures.join(" ") : null);
 
     if (memo.revisionId !== next.run.revisionId) {
       try {
@@ -166,6 +181,7 @@ export function useRunData(runId: string): RunData {
     error,
     events,
     caughtUp,
+    historyError,
     reports,
     graph,
     graphError,

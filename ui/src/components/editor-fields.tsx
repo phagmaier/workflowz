@@ -9,6 +9,9 @@ export const fieldId = (stepId: string, field: string) => `f-${stepId}-${field}`
 export function focusField(id: string) {
   requestAnimationFrame(() => {
     const element = document.getElementById(id);
+    // Diagnostics can target fields inside Advanced or technical-failure disclosures.
+    for (let parent = element?.parentElement; parent; parent = parent.parentElement)
+      if (parent instanceof HTMLDetailsElement) parent.open = true;
     element?.focus();
     element?.scrollIntoView({ block: "nearest" });
   });

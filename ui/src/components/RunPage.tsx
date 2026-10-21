@@ -262,6 +262,15 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
         </a>
       </nav>
 
+      {data.historyError ? (
+        <p className="inline-alert" role="alert">
+          {data.historyError} Showing the history read so far.{" "}
+          <button type="button" className="link" onClick={data.refresh}>
+            Try loading history again
+          </button>
+        </p>
+      ) : null}
+
       {tab === "map" ? (
         <RunMap
           graph={data.graph}

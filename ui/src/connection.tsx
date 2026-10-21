@@ -54,12 +54,17 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState<string | null>(null);
   const busyRef = useRef<string | null>(null);
   const wasReady = useRef(false);
+  // Replies belong to the session that sent them, even if another pairing finishes first.
+  const sessionEpoch = useRef(0);
+  const checkSequence = useRef(0);
 
-  const observe = useCallback((error: unknown) => {
+  const observe = useCallback((error: unknown, epoch: number) => {
+    if (epoch !== sessionEpoch.current) return;
     if (!(error instanceof ApiError)) return;
     if (error.kind === "unreachable") setOnline(false);
     else setOnline(true);
     if (error.kind === "unauthorized") {
+      sessionEpoch.current++;
       setPairingReason(wasReady.current ? "expired" : "new");
       wasReady.current = false;
       setPhase("pairing");
@@ -68,13 +73,16 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
   const read = useCallback(
     async <T,>(request: BrowserRequest): Promise<T> => {
+      const epoch = sessionEpoch.current;
       try {
         const result = await api<T>(request);
-        setOnline(true);
-        if (request.op === "session") setPing(result as Ping);
+        if (epoch === sessionEpoch.current) {
+          setOnline(true);
+          if (request.op === "session") setPing(result as Ping);
+        }
         return result;
       } catch (error) {
-        observe(error);
+        observe(error, epoch);
         throw error;
       }
     },
@@ -87,12 +95,13 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       if (busyRef.current) throw new Error("Another action is still finishing.");
       busyRef.current = key;
       setBusy(key);
+      const epoch = sessionEpoch.current;
       try {
         const result = await api<T>(request);
-        setOnline(true);
+        if (epoch === sessionEpoch.current) setOnline(true);
         return result;
       } catch (error) {
-        observe(error);
+        observe(error, epoch);
         throw error;
       } finally {
         busyRef.current = null;
@@ -103,15 +112,19 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   );
 
   const recheck = useCallback(() => {
+    const epoch = sessionEpoch.current;
+    const sequence = ++checkSequence.current;
     setPhase((current) => (current === "ready" ? current : "checking"));
     api<Ping>({ op: "session" }).then(
       (result) => {
+        if (epoch !== sessionEpoch.current || sequence !== checkSequence.current) return;
         setPing(result);
         setOnline(true);
         wasReady.current = true;
         setPhase("ready");
       },
       (error: unknown) => {
+        if (epoch !== sessionEpoch.current || sequence !== checkSequence.current) return;
         if (error instanceof ApiError && error.kind === "unreachable") {
           setOnline(false);
           setPairingReason(wasReady.current ? "expired" : "unreachable");
@@ -135,11 +148,13 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       read,
       mutate,
       paired: () => {
+        sessionEpoch.current++;
         wasReady.current = true;
         setOnline(true);
         setPhase("ready");
       },
       loggedOut: () => {
+        sessionEpoch.current++;
         wasReady.current = false;
         setPairingReason("logged-out");
         setPhase("pairing");

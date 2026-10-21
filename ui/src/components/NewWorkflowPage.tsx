@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useConnection } from "../connection.tsx";
 import { createSession, dropSession, newDraftKey } from "../editor-session.ts";
 import { EXAMPLES, type ExampleId, exampleDoc } from "../lib/workflow-edit.ts";
@@ -14,10 +14,24 @@ export function NewWorkflowPage({ example }: { example: ExampleId | null }) {
   const [chosen, setChosen] = useDraft("new:example", example ?? "single");
   const [tasks, setTasks] = useDraft("new:tasks", "todo.md");
   const [feedback, setFeedback] = useState<FeedbackState>(null);
+  const mounted = useRef(false);
+  const pending = useRef(false);
+  const setup = useRef({ name, folder, chosen, tasks });
+  setup.current = { name, folder, chosen, tasks };
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (example) setChosen(example);
+  }, [example, setChosen]);
   const pick = (EXAMPLES.some((e) => e.id === chosen) ? chosen : "single") as ExampleId;
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (pending.current) return;
     const form = event.currentTarget;
     const fail = (field: string, text: string) => {
       const input = form.elements.namedItem(field);
@@ -35,18 +49,29 @@ export function NewWorkflowPage({ example }: { example: ExampleId | null }) {
     if (pick === "loop" && !tasks.trim()) return fail("tasks", "Enter the checklist file.");
     const key = newDraftKey();
     const session = createSession(key, "new", root);
+    const submitted = setup.current;
+    pending.current = true;
     session.read = read;
     setFeedback({ kind: "pending", text: "Creating the draft…" });
     await session.begin(exampleDoc(pick, name.trim(), root, tasks.trim()));
+    pending.current = false;
     if (!session.state.draft) {
       dropSession(key);
+      if (!mounted.current) return;
       setFeedback({
         kind: "error",
         text: `The draft couldn't be checked: ${session.state.checkError ?? "unknown error"} Nothing was created.`,
       });
       return;
     }
-    for (const field of ["name", "folder", "example", "tasks"]) forgetDraft(`new:${field}`);
+    if (!mounted.current) return;
+    if (
+      Object.entries(submitted).every(
+        ([field, value]) => setup.current[field as keyof typeof submitted] === value,
+      )
+    ) {
+      for (const field of ["name", "folder", "example", "tasks"]) forgetDraft(`new:${field}`);
+    }
     window.location.hash = editorHref({ kind: "draft", key });
   };
 

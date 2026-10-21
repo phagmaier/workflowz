@@ -150,7 +150,7 @@ export function RulesTab({
             [
               "max_wall_time_seconds",
               "Maximum run time (seconds)",
-              "Elapsed time since Start, including time paused. Checked between operations; does not cut a running step short.",
+              "Elapsed time since Start, including pauses and daemon downtime. Caps a running agent or command at the remaining time; no further steps start after the limit.",
             ],
             [
               "agent_idle_timeout_seconds",

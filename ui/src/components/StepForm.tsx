@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, type ReactNode, useRef, useState } from "react";
 import { harnessLabel, humanize, KIND_LABEL } from "../lib/format.ts";
 import {
   describeAction,
@@ -18,9 +18,9 @@ import {
   errAttrs,
   FieldProblems,
   fieldId,
+  focusField,
   lines,
   TYPING,
-  useFocusOnMount,
   useLocalText,
 } from "./editor-fields.tsx";
 import { AddResult, RuleRow } from "./StepRules.tsx";
@@ -477,7 +477,7 @@ function StepHead({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [name, setName] = useState(humanize(stepId));
   const [error, setError] = useState<string | null>(null);
-  const renameInput = useFocusOnMount<HTMLInputElement>();
+  const renameButton = useRef<HTMLButtonElement>(null);
   const references = Object.entries(ctx.doc.steps).filter(
     ([id, s]) =>
       id !== stepId &&
@@ -494,6 +494,7 @@ function StepHead({
       ctx.session.edit(() => result.doc);
       onRenamed(result.id);
     }
+    focusField("step-title");
   };
   return (
     <div className="form-head">
@@ -506,7 +507,6 @@ function StepHead({
             </label>
             <input
               id="rename-step"
-              ref={renameInput}
               value={name}
               onChange={(event) => setName(event.target.value)}
             />
@@ -516,7 +516,10 @@ function StepHead({
             <button
               type="button"
               className="btn btn-sm btn-quiet"
-              onClick={() => setRenaming(false)}
+              onClick={() => {
+                setRenaming(false);
+                renameButton.current?.focus();
+              }}
             >
               Cancel
             </button>
@@ -556,9 +559,11 @@ function StepHead({
         <button
           type="button"
           className="btn btn-sm btn-quiet"
+          ref={renameButton}
           onClick={() => {
             setName(humanize(stepId));
             setRenaming(true);
+            focusField("rename-step");
           }}
         >
           Rename

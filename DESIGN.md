@@ -6,8 +6,8 @@ Make Workflowz understandable through its interface. The owner should be able to
 workflow, understand what it will do, start it and inspect its results without being coached
 through internal field names and scattered controls.
 
-**Current status:** All four slices of the selected React + TypeScript direction are implemented
-at `/ui/` and ready for migration review (see Decisions). The existing engine remains the baseline. The
+**Current status:** All four slices of the selected React + TypeScript direction are complete
+at `/ui/` and accepted by the owner (see Decisions). The existing engine remains the baseline. The
 [user guide](USER_GUIDE.md) describes the finished interface.
 
 ## What the walkthrough established
@@ -90,6 +90,9 @@ Use this with the repository context and current screenshots when available:
 ## Decisions
 
 The owner chose **UI overhaul before further tutorial work**.
+
+**Owner acceptance (2026-10-21):** The owner accepted the completed developer workspace interface.
+All four frontend slices and follow-up regression fixes are complete.
 
 **Selected direction (2026-10-20):** Direction A, the developer workspace, is the base. It
 borrows two elements from B and one from C. The three prototypes remain in

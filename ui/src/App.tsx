@@ -14,9 +14,10 @@ import { RunsProvider } from "./runs-data.tsx";
 
 function Screens() {
   const route = useRoute();
-  useSessionRegistry();
+  const registryVersion = useSessionRegistry();
   const activeKey = route.view === "editor" ? sessionKey(route.target) : null;
-  useEffect(() => releaseSessionAliases(activeKey), [activeKey]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: late saves can add aliases after navigation has already settled.
+  useEffect(() => releaseSessionAliases(activeKey), [activeKey, registryVersion]);
   switch (route.view) {
     case "runs":
       return <RunsPage />;

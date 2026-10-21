@@ -64,7 +64,13 @@ export function RunMap({
   const { counts, edges } = walked(items);
   const finished = run?.status.run.status === "completed" || run?.status.run.status === "stopped";
   const current = !run || finished ? null : run.status.run.cursorStepId;
-  const focus = selected ?? current ?? graph.start;
+  // A live revision can remove the selected step. Keep a real node in the tab order.
+  const focus =
+    selected && Object.hasOwn(graph.specs, selected)
+      ? selected
+      : current && Object.hasOwn(graph.specs, current)
+        ? current
+        : graph.start;
   const focusSpec = graph.specs[focus];
   const order = graph.steps.map((step) => step.id);
 
