@@ -563,6 +563,29 @@ retained. This is bounded Chromium/390px coverage, not cross-browser coverage or
 
 
 
+### 8.7 React app at `/ui/app/` (UI overhaul slice 1)
+
+The redesigned interface is a React + TypeScript app in `ui/`, built by project-local Vite into
+`dist/ui-app/` (`scripts/build-ui.mjs`, run by `npm run build`). The build also writes
+`dist/ui-app/asset-list.json`, naming every emitted file and its content type; unexpected file
+types fail the build. The daemon reads that list once and serves each listed file at exactly
+`/ui/app/<path>` (`index.html` only at `/ui/app/`). Lookup is an exact map match, so paths outside
+the list, encoded or `..` segments, the list itself and query strings return 404. List entries
+must be plain relative segments with an allowed type, or loading fails. A missing list serves
+nothing. Responses carry the same headers and CSP as `/ui/`; the build emits no inline script,
+style or `data:` asset (`assetsInlineLimit: 0`, single CSS file). Routes are URL hashes, so no
+daemon route is added. The legacy interface at `/ui/` is unchanged during migration.
+
+The app uses the existing browser API, cookie, pairing and header contract without additions.
+Run details read `status`, cursor-paged `events` (1000 per page), `reports` when a report is
+accepted, `load` plus read-only `draft` of the run's revision for the map, and `run-edit` while
+paused. Polling is every 2 s while running/pausing and 5 s otherwise, skipped in hidden tabs.
+Controls send the inspected `expectedEventId`; paused-run overrides send the `run-edit`
+snapshot's event and are disabled until it matches current status. One mutation runs at a time
+app-wide, with inspection still available. A rejected or unanswered control is never resent;
+unlike §8.4's dashboard, polling continues so the page shows the current state, and the user
+must act again. Raw event JSON hides `logPath` and absolute paths under a `logs/` directory.
+
 ## 9. Testing strategy
 
 **FakeHarness** is essential: configurable output sequence, report submission behavior, hang, nonzero process exit, output event streaming, session resume, and correction behavior. Drive the *real runner service* through real process boundaries where possible. Tests should not need network/API keys.

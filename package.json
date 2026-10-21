@@ -8,11 +8,11 @@
     "node": ">=26.0.0"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-web.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json && node scripts/build-web.mjs && node scripts/build-ui.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ui/tsconfig.json",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "test": "npm run build && node --test \"dist/**/*.test.js\"",
+    "test": "npm run build && node --test \"dist/**/*.test.js\" \"ui/src/**/*.test.ts\"",
     "check": "npm run typecheck && npm run lint && npm test",
     "test:browser": "npm run build --silent && node scripts/smoke-browser.mjs",
     "validate": "npm run build --silent && node dist/app/validate-cli.js",
@@ -33,7 +33,13 @@
     "@biomejs/biome": "2.5.15",
     "@playwright/test": "1.64.1",
     "@types/node": "26.6.5",
-    "typescript": "7.0.2"
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.4"
   },
   "bin": {
     "wf": "bin/wf"

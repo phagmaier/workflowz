@@ -8,7 +8,7 @@ through internal field names and scattered controls.
 
 **Current task:** Implement the selected direction in slices (see Decisions).
 The existing engine is the baseline. React + TypeScript is the proposed frontend direction;
-the selected interaction design comes first. No production UI changes have been made yet.
+the selected interaction design comes first. Slice 1 is implemented at `/ui/app/`.
 
 ## What the walkthrough established
 
@@ -123,6 +123,39 @@ browser API are unchanged. Slices: (1) frame, pairing, Runs, Run details and Map
 (2) Workflows and editor; (3) advanced (shared rules, limits, YAML text, paused-run revision);
 (4) legacy removal and the user guide. Empty, loading, error and disconnected states are designed
 inside each slice rather than in a separate prototype round.
+
+**Slice 1 (2026-10-20): frame, pairing, Runs, Run details, Map.** Code lives in `ui/`; the serving
+contract is in [architecture §8.7](archive/architecture.md).
+
+- Pairing is its own screen, with distinct copy for a new browser, an ended session, a logged-out
+  browser and an unreachable daemon. The code field clears after every attempt.
+- The sidebar count is paused plus interrupted runs. Runs filter by All / Needs attention /
+  Ready & running / Finished. Arriving on Runs, and any action, refreshes the list at once.
+- Run details have History and Map tabs (`#/runs/<id>`, `#/runs/<id>/map`). A ready run shows
+  "What will run" and the tasks instead of an empty history. History follows the newest step
+  until the user selects one. Done task groups collapse.
+- Before Start, the controls list each agent harness, its permission mode and steps, and state
+  that agents and commands can change any user-accessible file and that stopping undoes nothing.
+  Resume repeats this briefly.
+- Paused choices are radio cards (arrow keys move, Tab enters the form). Choices that depend on
+  `run-edit` (result, step, task) only offer engine-valid targets and state where the run goes
+  next. "Change the workflow for this run" hands off to the classic interface until slice 2.
+- Stop is a quiet link that opens a confirmation with a required reason. Reasons are checked in
+  the browser before anything is sent.
+- Feedback sits under the control. When the control disappears because the run moved on, the
+  result moves to the top of the controls. Earlier successes are hidden once the run has finished.
+  Stale results say nothing changed. Unanswered requests say the outcome is unknown.
+- Typed reasons and choices survive refreshes, failures and tab switches. Focus moves to the page
+  heading only on navigation.
+- Interrupted runs show the step, attempt, process observation and blocking notes, then the
+  `wf run recovery` / `recovery-decide` commands.
+- The map is SVG, so it needs no inline styles. Nodes are focusable (arrow keys), and the side
+  panel lists each result's destination and how often the step ran. Unrouted technical failures
+  are summarized in the legend rather than drawn.
+- Raw events hide `logPath` and absolute paths under a `logs/` directory. The classic interface
+  still shows them.
+- Light theme only for now. Times use a 24-hour clock. Below 760px the sidebar becomes a top bar,
+  tables become cards, and panes stack.
 
 React can be integrated into an existing application without replacing its backend; see the
 [official integration guidance](https://react.dev/learn/add-react-to-an-existing-project).

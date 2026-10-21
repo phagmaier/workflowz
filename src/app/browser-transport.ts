@@ -15,6 +15,42 @@ const assets: Record<string, { type: string; file: string }> = {
   "/ui/intervention.js": { type: "text/javascript; charset=utf-8", file: "intervention.js" },
   "/ui/shell.css": { type: "text/css; charset=utf-8", file: "shell.css" },
 };
+const APP_PREFIX = "/ui/app/";
+const APP_TYPES = new Set([
+  "text/html; charset=utf-8",
+  "text/javascript; charset=utf-8",
+  "text/css; charset=utf-8",
+  "image/svg+xml",
+  "font/woff2",
+]);
+// Plain relative segments only: no leading dot, so no "..", hidden files or absolute paths.
+const APP_PATH = /^(?:[A-Za-z0-9_-][A-Za-z0-9._-]*\/)*[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
+export type AppAssets = ReadonlyMap<string, { type: string; body: Buffer }>;
+
+/** Reads the build-time allowlist once; requests can only select an exact listed URL. */
+export function loadAppAssets(directory: URL): AppAssets {
+  let listed: unknown;
+  try {
+    listed = JSON.parse(readFileSync(new URL("asset-list.json", directory), "utf8"));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return new Map();
+    throw error;
+  }
+  if (!Array.isArray(listed)) throw new Error("browser asset list must be an array");
+  const assets = new Map<string, { type: string; body: Buffer }>();
+  for (const entry of listed as unknown[]) {
+    const { path, type } = (entry ?? {}) as { path?: unknown; type?: unknown };
+    if (typeof path !== "string" || !APP_PATH.test(path) || path === "asset-list.json")
+      throw new Error(`invalid browser asset path ${JSON.stringify(path)}`);
+    if (typeof type !== "string" || !APP_TYPES.has(type))
+      throw new Error(`invalid browser asset type for ${path}`);
+    const url = path === "index.html" ? APP_PREFIX : `${APP_PREFIX}${path}`;
+    if (assets.has(url)) throw new Error(`duplicate browser asset ${path}`);
+    assets.set(url, { type, body: readFileSync(new URL(path, directory)) });
+  }
+  return assets;
+}
+let builtApp: AppAssets | undefined;
 const secret = () => randomBytes(32).toString("hex");
 function equal(actual: string, expected: string): boolean {
   const a = Buffer.from(actual);
@@ -56,6 +92,14 @@ export class BrowserTransport {
     if (req.method === "GET" && asset) {
       res.writeHead(200, { "content-type": asset.type });
       res.end(readFileSync(new URL(`../web/${asset.file}`, import.meta.url)));
+      return true;
+    }
+    if (req.method === "GET" && req.url.startsWith(APP_PREFIX)) {
+      builtApp ??= loadAppAssets(new URL("../ui-app/", import.meta.url));
+      const file = builtApp.get(req.url);
+      if (!file) throw new HttpRequestError(404, "unknown browser route");
+      res.writeHead(200, { "content-type": file.type });
+      res.end(file.body);
       return true;
     }
     if (req.method !== "POST" || (req.url !== "/ui/pair" && req.url !== "/ui/api"))

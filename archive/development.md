@@ -13,14 +13,14 @@ Requirements: Linux with `/proc`, Node.js 26 or newer (verified with v26.8.2) an
 
 ```bash
 npm ci                       # install the exact versions in package-lock.json
-npm run build                # compile TypeScript and copy browser assets
+npm run build                # compile TypeScript, copy legacy browser assets, build the React app (ui/)
 bin/wf --help                # project-local CLI, after building
 npm run check                # typecheck + Biome lint + tests (offline core gate)
 npm run test:browser         # separate offline Chromium smoke; provision browser first, below
-npm run typecheck            # tsc --noEmit, strict mode
+npm run typecheck            # tsc --noEmit for src/ and ui/, strict mode
 npm run lint                 # Biome check (lint and formatting)
 npm run format               # Biome auto-fix
-npm test                     # build to dist/, then node:test over dist/**/*.test.js
+npm test                     # build, then node:test over dist/**/*.test.js and ui/src/**/*.test.ts
 npm run validate -- examples/overnight.yaml   # strict parse, compile, and path checks
 npm run smoke:reporting      # real wf report + SQLite + fake-session correction, no model calls
 npm run smoke:tasks          # immutable Markdown import + fake task loop + persisted context
@@ -46,7 +46,8 @@ npm run test:browser
 # Optional: npm run test:browser -- --headed
 ```
 
-The command builds the real application and runs three bounded Chromium scenarios, sequentially,
+The command builds the real application and runs bounded Chromium scenarios for the legacy
+interface and the new app (`test/browser/app-*.spec.mjs`), sequentially,
 with no test retries. It never installs packages/browsers or invokes a provider. A missing browser
 fails with provisioning guidance. `npm run check` remains browser-independent and offline.
 
@@ -77,7 +78,9 @@ artifact is retained.
 
 After building, `bin/wf daemon start` starts the explicit foreground owner. A separate terminal
 using the same state directory can run `bin/wf ui` to obtain the local address and one-use pairing
-code. `bin/wf daemon stop` requests graceful shutdown after the current step; the owner may still
+code. The same code pairs the new interface at `/ui/app/` (Runs and Run details during the
+migration); the legacy interface stays at `/ui/`. `WF_SHOTS=DIR npm run test:browser` saves
+screenshots of the new app for visual review. `bin/wf daemon stop` requests graceful shutdown after the current step; the owner may still
 be draining when that client returns. `bin/wf --help` lists management commands.
 
 State selection is `--state-dir DIR` > `WF_STATE_DIR` >
