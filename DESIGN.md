@@ -6,7 +6,7 @@ Make Workflowz understandable through its interface. The owner should be able to
 workflow, understand what it will do, start it and inspect its results without being coached
 through internal field names and scattered controls.
 
-**Current task:** Compare design directions and choose a coherent navigation/interaction model.
+**Current task:** Implement the selected direction in slices (see Decisions).
 The existing engine is the baseline. React + TypeScript is the proposed frontend direction;
 the selected interaction design comes first. No production UI changes have been made yet.
 
@@ -89,9 +89,40 @@ Use this with the repository context and current screenshots when available:
 
 ## Decisions
 
-The owner chose **UI overhaul before further tutorial work**. No visual direction has been
-selected. The next deliverable is comparable design proposals, not another walkthrough or a
-large implementation checklist.
+The owner chose **UI overhaul before further tutorial work**.
+
+**Selected direction (2026-10-20):** Direction A, the developer workspace, is the base. It
+borrows two elements from B and one from C. The three prototypes remain in
+[prototypes/design-directions/](prototypes/design-directions/index.html) as reference until
+the implementation replaces them.
+
+- **Structure (A):** persistent sidebar (Workflows, Runs) with an attention count, breadcrumbs
+  and page actions in a top bar. The editor has Steps / Project / Rules & limits / YAML tabs. The
+  Steps tab has three panes: ordered step list, selected-step form, and checks with the first step.
+- **Plain language (B):** each step shows a sentence summary and "result → what happens next"
+  lines. Outcome destinations are chosen directly ("Go to …", "Finish", "Pause and wait for me",
+  "Retry this step", "＋ New step…"). Inherited rules show their source. Technical failures and
+  advanced fields sit behind disclosures.
+- **Paused runs (B):** run details ask "What should happen next?" and show the consequence of
+  each choice: Resume, set the step's result, jump, mark the task done, edit the workflow for
+  this run, or stop. Each needs a reason, and every choice except Resume leaves the run paused.
+- **Map (C):** a read-only, automatically arranged map is a tab in the editor and on run details.
+  On a run, it shows the path taken and how many times each step ran. Editing stays in the forms.
+- **Run details (A):** a status headline, a fact strip and the decision area, then history grouped
+  by task beside the selected step's result. Raw events open on demand.
+- **Feedback:** results appear beside the action that caused them. Created runs open their run page
+  with a confirmation. Stale-state and disconnected failures say that nothing changed.
+- **Unchanged contracts:** Save creates an immutable revision. Create run only prepares a run, and
+  Start is separate. Interrupted-run recovery stays in the CLI unless a browser API is separately
+  approved.
+
+**Implementation plan (2026-10-20):** React + TypeScript built by project-local Vite. During
+migration the daemon serves the new app at `/ui/app/` beside the legacy UI at `/ui/`. Then `/ui/`
+switches to the new app and the legacy UI is removed. Routes use URL hashes. The CSP and the
+browser API are unchanged. Slices: (1) frame, pairing, Runs, Run details and Map;
+(2) Workflows and editor; (3) advanced (shared rules, limits, YAML text, paused-run revision);
+(4) legacy removal and the user guide. Empty, loading, error and disconnected states are designed
+inside each slice rather than in a separate prototype round.
 
 React can be integrated into an existing application without replacing its backend; see the
 [official integration guidance](https://react.dev/learn/add-react-to-an-existing-project).

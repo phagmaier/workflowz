@@ -14,7 +14,8 @@ focused screens, understandable authoring, visible feedback and readable results
 - [AGENTS.md](AGENTS.md): focused instructions for contributing to the UI overhaul.
 - [archive/](archive/README.md): previous specs, guides, plans and compatibility evidence.
 
-The tutorial will be written after the improved UI works. No new design direction is selected yet.
+The tutorial will be written after the improved UI works. The selected direction is recorded in
+[DESIGN.md](DESIGN.md#decisions); the [design-direction prototypes](prototypes/design-directions/index.html) remain for reference.
 
 ## Development
 
