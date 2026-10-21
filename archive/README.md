@@ -18,6 +18,7 @@ or authorization. Read a specific reference when needed; there is no mandatory a
 | [Previous refinement plan](refinement-plan.md) | Retired walkthrough/design sequence; not an active checklist |
 | [Interrupted walkthrough](history/usability-walkthrough.md) | Completed command-only journey and observed UI problems; no agent run was started |
 | [MVP history](history/README.md) | Earlier guide, completed roadmap, implementation log and compatibility history |
+| [Previous design brief](history/design-brief-2026-10-21.md) | Full pre-redesign brief with slice logs and decision history |
 
 The runtime source, tests, fixtures and tooling were retained. The canonical overnight example
 now points to the archived spec so its instruction-file reference remains valid. The user guide
