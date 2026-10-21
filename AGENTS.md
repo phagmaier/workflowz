@@ -1,47 +1,55 @@
-# AGENTS.md — Development guidance for Agent Workflow Runner
+# AGENTS.md — UI overhaul
 
-You are contributing to a **new local deterministic coding-agent workflow runner**. Read the following files in order before designing or writing code:
+<!-- codebase-memory-mcp:start -->
+For structural codebase exploration, use the installed `codebase-memory` skill.
+<!-- codebase-memory-mcp:end -->
 
-1. [`README.md`](README.md): overview.
-2. [`spec.md`](spec.md): product behavior and acceptance criteria.
-3. [`architecture.md`](architecture.md): contracts, state machine, persistence, and recovery.
-4. [`todo.md`](todo.md): ordered implementation plan and completion criteria.
-5. [`examples/overnight.yaml`](examples/overnight.yaml): end-to-end scenario the engine must be capable of expressing.
+## Current assignment
 
-## Project philosophy
+Redesign Workflowz's frontend. The owner stopped the walkthrough because the interface was too
+confusing to follow even with instructions. The direction is a substantial UI overhaul with
+focused screens and clear navigation. Read `README.md`, then `DESIGN.md`.
 
-- **No supervisor LLM.** The runner follows a user-defined deterministic graph of steps, policies, and reported outcomes.
-- **User chooses trust level.** Reviews, tests, commits, worktrees, and human approvals are workflow steps only if the workflow author specifies them. Never hardcode a quality gate or force manual approval for agents.
-- **Reports are mandatory and strict.** Accept only declared step outcomes; never silently coerce an invalid outcome to success. Allow one additional correction turn after a *clean* execution without a valid report, then pause by default. Provider errors do not trigger this correction.
-- **Single owner of state.** Agents submit reports through `wf`; they never edit the SQLite current-step/task cursor.
-- **Sequential execution.** Do not start another operation until the previous operation has truly settled or its process tree has been terminated/reaped.
-- **Avoid overengineering.** This is a personal tool. No microservices, Kubernetes, parallel worker pools, job queues, enterprise permissions, or large plugin frameworks.
+There is no active `todo.md` or user-guide assignment. Old specifications, plans, walkthroughs
+and milestone approvals are archived reference, not current assignments or authorization.
+Use specific archived references only when a technical contract is relevant; do not require
+reading the historical documentation set before design work.
 
-## Engineering rules
+## Design workflow
 
-- Implement features in the order of `todo.md`; choose the smallest runnable vertical slice. Keep each milestone verifiable through automated tests.
-- Do not treat illustrative YAML or TS snippets as implemented API. First define strict typed contracts and validate the example before building runtime behavior.
-- Avoid silently adding extra workflow behavior, report fields, hidden retries, or mandatory validation not in the specifications. Propose deviations explicitly.
-- Keep workflow control logic pure/testable and isolated from subprocess/harness adapters.
-- Use stable IDs for workflow steps, imported tasks, runs, and attempts. Persist changes transactionally. State mutations and events must agree.
-- Use proper child-process supervision; timeouts/stop must account for process groups and reaping. Crash recovery must not replay uncertain side-effectful actions automatically.
-- Never log attempt-scoped report tokens, provider credentials, environment secrets, or full auth files.
-- No agent or API call is required for most tests. Build fake adapter fixtures first.
-- Use current official and installed documentation for each harness (Codex, Pi, omp, OpenCode, Claude Code) when implementing adapters. Versions change. Feature-detect and record compatibility rather than guessing flags or requiring undocumented behavior.
-- Permit the user to configure unrestricted harness permissions and arbitrary command steps; do not claim the tool provides isolation or rollback.
-- Do not alter existing globally installed harness setups or global configs as a side effect of development. Use project-local deps and explicit fixtures.
+- Start with comparable visual/interactive proposals using realistic content. The owner needs help choosing a design; do not ask them to supply a finished design specification.
+- Show distinct layouts and interaction approaches, then develop the chosen direction. Keep production implementation separate from clearly labeled prototypes.
+- Use the focused screens and design prompt in `DESIGN.md`. Develop navigation, hierarchy and authoring interactions before selecting detailed styling.
+- Preserve all existing workflow capabilities. Make ordinary tasks straightforward and keep advanced YAML, policies and diagnostic details accessible in appropriate views.
+- Keep action feedback at the action and make created/selected objects apparent. Preserve input and focus through asynchronous updates and failures.
+- Record the selected direction and material decisions in `DESIGN.md`. Keep guidance concise; avoid another large issue checklist or session transcript.
+- Write the new user guide after the redesigned interface works. Do not resume the abandoned walkthrough unless the owner requests it.
 
-## Documentation and change protocol
+## Technical boundaries
 
-- Update `todo.md` checkboxes only when milestone acceptance criteria are demonstrably satisfied; include test command/results in the commit/PR description or log.
-- Keep `spec.md` and `architecture.md` synchronized if implementing a design adjustment. Large architectural changes require a short documented rationale rather than speculative rewrite.
-- Prefer concise module-level documentation that explains invariants and why unusual edge handling exists.
-- Provide user-friendly failure messages for invalid definitions, invalid reports, unsupported adapters, and paused/uncertain runs.
+The proposed implementation direction is React + TypeScript for the frontend, served by the
+existing local daemon. Decide the exact integration and project-local tooling after reviewing
+the interaction direction. There is no authorization for an engine rewrite or speculative features.
 
-## Definition of done for an individual feature
+- Follow the authored deterministic graph. No supervisor LLM or mandatory review/test/approval stages.
+- Keep the coordinator as the sole canonical run/task state writer. State changes and their audit events remain transactional, with stable IDs and immutable historical records.
+- Wait for process/group/stream settlement before starting another operation. Stop/timeout must supervise and reap owned processes.
+- Strict reports accept only declared outcomes. At most one configured exact-session correction follows clean missing-report execution; original technical failures bypass correction.
+- Never replay uncertain operations or signals automatically after a crash. Preserve explicit recovery decisions and separate resume.
+- Keep creation, validation and saving distinct from execution. Preserve explicit Start/Resume, stale-state rejection and no automatic mutation retries.
+- Preserve pairing, loopback Host/Origin checks, separate report/management/browser authority and CSP. Browser close/reload must not stop execution.
+- User-authored arbitrary commands and unrestricted harnesses remain permitted. Make consequences understandable without inventing isolation, rollback or extra mandatory workflow gates.
+- Do not edit global harness installations/configuration. Never expose credentials, report tokens, pairing codes or private runtime artifacts.
 
-A feature is done when its observable contract is implemented, meaningful tests cover success and expected failure modes, no new nondeterministic control-flow behavior was introduced, typecheck/lint/tests pass, and pertinent documentation/example configuration is updated.
+The [archived architecture](archive/architecture.md), [schema](archive/schema-v1.md), and
+[product contract](archive/spec.md) preserve detailed runtime constraints. Verify current
+source/tests for the area being changed; those documents include implementation history.
 
-## First assignment
+## Verification and scope
 
-First establish project tooling and an executable test-driven core for contract/schema parsing and policy compilation (see [`todo.md`](todo.md) Phases 0–1). Do **not** start by building the visual editor.
+- Use existing fake adapters and disposable state. No paid provider execution is authorized for UI work. The owner's future walkthrough selection is OpenCode with `opencode/deepseek-v4.1-flash-free`; never substitute a paid model.
+- Keep dependencies project-local. Use current official docs when selecting frontend tooling or changing version-sensitive integrations.
+- Code changes require typecheck, lint and meaningful relevant tests. UI changes also require applicable offline browser checks and visual/keyboard/responsive verification. Do not weaken existing lifecycle/recovery checks to fit the UI.
+- Documentation-only work requires link/example checks. Do not run live workflows merely to verify documentation.
+- Explain any necessary behavior/API changes before implementing them, and update the relevant archived technical reference when its contract changes. Favor small complete frontend slices over a simultaneous rewrite of unrelated modules.
+- Report what changed, what was checked, and remaining limitations. Do not treat old commit/push approvals as current authorization.

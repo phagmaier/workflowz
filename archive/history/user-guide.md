@@ -1,9 +1,13 @@
 # Agent Workflow Runner — user guide
 
+> Archived for the UI-focused reset on 2026-10-20. This is reference/history, not the current work plan or agent instructions. Use [DESIGN.md](../../DESIGN.md) and [AGENTS.md](../../AGENTS.md) for active direction.
+
+> Archived on 2026-10-20 before the usability refinement phase. Historical reference only: completed assignments, pending-status notes and past execution/commit approvals are not current instructions or authorization. Use the [current plan](../../DESIGN.md), [current references](../../README.md), and [archive index](README.md). Commands and UI descriptions may become outdated.
+
 Run a local workflow, inspect its history, and recover deliberately when execution
-is interrupted. This is the operator entry point; the [schema reference](schema-v1.md),
+is interrupted. This is the operator entry point; the [schema reference](../schema-v1.md),
 [architecture](../architecture.md), [harness compatibility evidence](harness-compatibility.md)
-and [sample inventory](../examples/README.md) contain the detailed contracts.
+and [sample inventory](../../examples/README.md) contain the detailed contracts.
 
 ## Contents
 
@@ -79,7 +83,7 @@ It typechecks, lints, builds and runs the full offline test suite without callin
 providers. It neither needs nor provisions Chromium. `npm run test:browser` is a
 separate developer smoke requiring the lockfile-matched Playwright Chromium and
 Linux shared libraries/fonts. Provisioning browsers/libraries is an explicit,
-potentially online operation; see [Chromium prerequisites](../README.md#offline-chromium-smoke-prerequisites).
+potentially online operation; see [Chromium prerequisites](mvp-readme.md#offline-chromium-smoke-prerequisites).
 No browser automation is needed for ordinary UI use.
 
 Harness CLIs are **installed and authenticated separately** through their own
@@ -119,7 +123,7 @@ lease takeover. Only an explicitly started owner that acquires the database leas
 publishes fresh discovery.
 
 Workflow configuration belongs in YAML: project paths, stages, model/reasoning,
-transitions and optional limits. Use [accepted schema fields](schema-v1.md#accepted-fields),
+transitions and optional limits. Use [accepted schema fields](../schema-v1.md#accepted-fields),
 not illustrative design snippets. For example, the implemented duration field is
 `timeout_seconds`, not `timeout`, and agent steps require `session: fresh` or
 `session: resume`.
@@ -134,7 +138,7 @@ reference for each adapter's selected names. Environment selection is not isolat
 
 ## 4. Quick start without a provider
 
-This walkthrough uses [command-only.yaml](../examples/command-only.yaml):
+This walkthrough uses [command-only.yaml](../../examples/command-only.yaml):
 `node --version`, `git status --short`, then end. It has no agents or tasks and does
 not mutate the repository. Its output can reveal local filenames. **Other samples
 may launch paid providers or stage/commit changes when started.** Validation alone
@@ -207,9 +211,9 @@ use choose a persistent private state directory instead of `/tmp`.
 
 ### Validate and save a definition
 
-Start with the [sample inventory](../examples/README.md), choosing read-only or
+Start with the [sample inventory](../../examples/README.md), choosing read-only or
 mutating behavior deliberately. The full field/transition/placeholder contract is
-in [schema v1](schema-v1.md). Commands use argv arrays without an implicit shell;
+in [schema v1](../schema-v1.md). Commands use argv arrays without an implicit shell;
 shell syntax requires explicitly invoking a shell. Changing directory inside one
 command does not affect later steps.
 
@@ -271,7 +275,7 @@ tasks:
 ```
 
 Use a workflow containing `task.next` and explicit `task.complete` as in
-[task-loop.yaml](../examples/task-loop.yaml). Do not start that agent sample until
+[task-loop.yaml](../../examples/task-loop.yaml). Do not start that agent sample until
 you have reviewed its provider/mutation prerequisites.
 
 ```bash
@@ -289,7 +293,7 @@ checkboxes, keeps source order, headings and continuation text, and treats neste
 items as independent tasks, not dependencies. Prechecked items are excluded by
 default; `--include-completed` queues them as pending while retaining original
 check state. IDs are stable within that run, not a synchronization key across runs.
-See [parser limits](schema-v1.md#task-import-and-context-decisions-phase-5154).
+See [parser limits](../schema-v1.md#task-import-and-context-decisions-phase-5154).
 
 Editing the Markdown later does not change an existing run, and the runner does
 not write completion back to it. Existing runs can start/resume/revise without
@@ -423,7 +427,7 @@ Provider/process failures in the original invocation do **not** trigger correcti
 A stage retry is separate, must be explicitly authored and can repeat side effects.
 
 For exact UTF-8 bounds, JSON depth/node limits, token lifecycle and HTTP codes see
-[reporting decisions](schema-v1.md#reporting-decisions-phase-4).
+[reporting decisions](../schema-v1.md#reporting-decisions-phase-4).
 
 ### Limits and retries
 
@@ -437,7 +441,7 @@ due. Explicit pause/restart does not erase the remaining wait.
 Idle timeout is activity detection, not useful-progress detection. Any output
 resets it; silent legitimate work can time out. It applies to agents/correction,
 not commands, and OpenCode's minimal API exposes less activity. See the
-[limit/retry decisions](schema-v1.md#limit-and-retry-decisions-phase-74).
+[limit/retry decisions](../schema-v1.md#limit-and-retry-decisions-phase-74).
 
 ## 8. Intervene and recover
 
@@ -517,7 +521,7 @@ bin/wf run task-overrides RUN_ID --task TASK_ID --expected-event EVENT_ID --requ
 Use existing executable step IDs; model/prompt require agents. Selected `on`
 entries may also be replaced. `{"overrides":{"steps":{}},"reason":"Clear task settings"}`
 clears them. No per-task harness/session/outcome/graph rewrite is accepted. See
-[run-local configuration](schema-v1.md#run-local-configuration-decisions-phase-55).
+[run-local configuration](../schema-v1.md#run-local-configuration-decisions-phase-55).
 
 ### Interrupted-run operator checklist
 
@@ -690,7 +694,7 @@ Troubleshoot by inspecting the failed attempt, attention and invocation events:
   `system.timeout`. Inspect `timeoutReason`, optional idle limit and OpenCode's
   lower activity visibility; output is not proof of useful progress.
 - **Report rejected/correction failed:** inspect the acknowledgment, declared
-  outcomes and [report bounds](schema-v1.md#reporting-decisions-phase-4). Only a
+  outcomes and [report bounds](../schema-v1.md#reporting-decisions-phase-4). Only a
   clean original execution can get one same-session correction; unavailable or
   failed correction routes `system.report_error`, not a new implementation turn.
 
@@ -726,7 +730,7 @@ before deciding whether to issue a new request; never blindly repeat a control.
 | Report rejected 413 | HTTP report body exceeds 128 KiB | Measure content sizes locally without exposing secrets | Reduce summary/issue/handoff/data within exact schema bounds; the handoff CLI also rejects >64 KiB before sending |
 | Missing report / correction failed | Clean exit without accepted report, missing session, disabled/unavailable correction, failed follow-up | Inspect `correction_requested`, both invocation settlements/log references and accepted reports | Fix reporting/session prerequisites; choose a deliberate next execution. No third correction or stdout fallback exists |
 | Adapter preflight fails | Missing binary/required help feature, unsupported selector, unavailable exact session | Inspect admission error or durable failure; use offline `probe:harnesses` | Install/configure externally or revise requested settings deliberately; no global workaround/fresh fallback is automatic |
-| Chromium provisioning failure | Developer browser smoke lacks pinned browser or shared libraries | Read the smoke's provisioning guidance and [prerequisites](../README.md#offline-chromium-smoke-prerequisites) | Provision explicitly when authorized; ordinary core checks/CLI/UI do not require the smoke browser |
+| Chromium provisioning failure | Developer browser smoke lacks pinned browser or shared libraries | Read the smoke's provisioning guidance and [prerequisites](mvp-readme.md#offline-chromium-smoke-prerequisites) | Provision explicitly when authorized; ordinary core checks/CLI/UI do not require the smoke browser |
 | Port/pairing/session fails | Old ephemeral port, replaced/used/expired code, expired/revoked cookie, wrong Host/Origin | Run `wf ui` against the correct owner; use exact printed URL | Pair with a fresh code within five minutes; use `127.0.0.1`, not a proxy alias; restart requires re-pairing |
 | Logs incomplete / huge management reply | Capture/log caps, interleaved streams, unpaginated growing history | Inspect invocation log paths and truncation flags; paginate events | Use bounded local logs as diagnostics, not replayable JSONL; narrow inspection and keep raw artifacts private |
 | Shutdown acknowledged but process remains | Pause-after-current drain; step has no timeout | Inspect owner/status and current operation | Wait for settlement or deliberately stop the run before shutdown; acknowledgment is not exit |
@@ -751,7 +755,7 @@ daemon log is created.
 - Combined stream log: at most **16 MiB plus a cap marker per invocation**.
 - In-memory stdout/stderr capture heads: **64 KiB each**.
 - Durable scrubbed stderr diagnostic: **4 KiB**, with capture-truncation flags.
-- Report bounds and statuses: [reporting reference](schema-v1.md#reporting-decisions-phase-4).
+- Report bounds and statuses: [reporting reference](../schema-v1.md#reporting-decisions-phase-4).
 - Management/browser requests: **2 MiB**, five-second request-read bounds;
   workflow text **1 MiB**. The CLI management response cap is **32 MiB** and its
   request timeout is **120 seconds**; a timeout never authorizes blind replay.

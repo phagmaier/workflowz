@@ -41,7 +41,7 @@ export interface HarnessDescriptor {
 export type HarnessRegistry = ReadonlyMap<string, HarnessDescriptor>;
 
 /**
- * Static capabilities describe documented harness potential (see docs/harness-compatibility.md).
+ * Static capabilities describe documented harness potential (see archive/harness-compatibility.md).
  * `npm run probe:harnesses` uses execution factories to report the selected installed CLI and
  * implemented transport; those effective snapshots can be narrower than this static metadata.
  */

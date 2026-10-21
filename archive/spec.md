@@ -1,8 +1,16 @@
 # Product and Behavior Specification — Agent Workflow Runner
 
-**Version:** MVP design v0.1  
-**Status:** Implemented MVP; final offline gate passes (Phase 9.5 evidence in implementation log)  
-**Related:** [Architecture](architecture.md) · [Implementation checklist](todo.md) · [Example workflow](examples/overnight.yaml)
+> Archived for the UI-focused reset on 2026-10-20. This is reference/history, not the current work plan or agent instructions. Use [DESIGN.md](../DESIGN.md) and [AGENTS.md](../AGENTS.md) for active direction.
+
+**Contract:** Implemented workflow v1
+
+**Status:** Working beta; usability refinement follows the [active plan](../DESIGN.md).
+
+**Related:** [Architecture](architecture.md) · [Schema reference](schema-v1.md) · [Example workflow](../examples/overnight.yaml)
+
+This specifies current product behavior. Completed milestones, scoped compatibility results and
+verification counts are preserved in the [archive](history/README.md). Cleanup does not
+change these contracts; future UI proposals must identify any intended behavior change explicitly.
 
 ## 1. Purpose
 
@@ -64,17 +72,17 @@ A user imports 10 unchecked Markdown tasks, chooses a Codex implement stage foll
 - Progress percentages are shown only when a known task count exists, expressed as accepted `task.complete` count / imported runnable count. For graph-only workflows show stage and history, not fabricated percent complete.
 - Workflow actions and run controls must also be available through a CLI or local API for testability; the UI is not the runtime.
 
-**Phase 8.3 browser path:** selected-run inspection and explicit start/pause-after-current/stop-now/
+**Browser run controls:** selected-run inspection and explicit start/pause-after-current/stop-now/
 resume delegate to the existing daemon management facade. Task progress counts only accepted
 engine-owned completion; an accepted agent report does not advance it before settlement and
 `task.complete`. Graph-only runs show no percentage. Event refresh uses exclusive cursors, not
 a new event stream transport. Basic controls retain inspected-event, settlement and recovery
 barriers, including nonblank stop/resume reasons and no automatic mutation retries. Browser
 close/reload/logout never stops execution. Interrupted recovery stays in the existing CLI;
-paused-run browser revision/manual intervention is implemented in 8.4 below. Permanent browser
-smokes (8.5) prove the full Phase 8 gate; final Phase 9.5 verification is recorded in the implementation log.
+paused-run browser revision/manual intervention is described below. Verification evidence is
+retained in the archive.
 
-**Phase 8.4 browser path:** a paused run's exact current revision/source directory opens in
+**Paused-run editing:** a paused run's exact current revision/source directory opens in
 the existing canonical YAML/visual editor, distinct from reusable workflow preparation.
 Reasoned management `revise` creates/selects an immutable revision, preserving imported
 tasks/progress and all historical attempts/reports/frozen settings. The consumed checklist
@@ -95,15 +103,6 @@ can refresh without replacing text only for the same run/revision; changed revis
 explicit discard/reopen. Ready/active/settling/interrupted runs cannot use these paused controls.
 Interrupted recovery stays in the CLI. No new engine action or state owner is added.
 
-**Phase 8.5 acceptance:** `npm run test:browser` runs three bounded offline Chromium scenarios
-against disposable foreground daemons with explicitly injected fake adapters. The complete
-visual-authoring → ready → explicit Start → blocked attention → visual revision → separately
-explicit Resume path passes, retaining imported tasks and historical reports/attempt inputs.
-Other scenarios prove deliberate audited intervention, stale rejection/fresh inspection,
-unsaved draft pinning and active-operation reload/last-tab closure independence. No new
-production authority or engine behavior is introduced. The final Phase 9.5 gate reran this suite successfully.
-
-
 ### 2.4 Supported agent harnesses
 
 The engine is deliberately harness-agnostic: every harness is an adapter behind one interface, and the reporting contract (`wf report`) is identical for all of them. The MVP ships adapters for:
@@ -121,32 +120,15 @@ The engine is deliberately harness-agnostic: every harness is an adapter behind 
 - Each adapter reports capabilities (`supportsResume`, `supportsEventStream`, `supportsStructuredFinalOutput`, `supportsPermissionMode`, `supportsModelSelection`, `supportsReasoningEffort`). A workflow requiring an unsupported capability fails validation/preflight with a user-facing message rather than silently degrading.
 - Harness-specific launch flags, session identity, event framing, and settle boundary live only in the adapter. The engine never assumes provider-specific behavior, such as treating the first streamed agent message as the final result.
 - Adapters must not leak report tokens or credentials into logs, and must pass each child process only a deliberate environment allowlist.
-- MVP ordering: `codex` and `pi` are implemented first; `claude`, `opencode`, and `omp` follow the same interface and must pass the same conformance suite.
+- All five adapters use the same interface and offline conformance suite; harness-specific lifecycle and resume semantics remain adapter-owned.
 
-**Adapter acceptance (2026-10-19):** The Phase 6 gate passed with authorized Codex/Pi Luna/low reporting and exact-session correction. A later authorized omp/OpenCode `meta/muse-spark-1.3-contributor`/low pass also completed direct reporting and exact-session correction, with actual helper acknowledgment, sequential settlement, durable SQLite reopen and target cleanup. All registered adapters passed offline conformance in the **704-test** gate at milestone 0.5 completion. Claude's separately authorized `claude-haiku-5-5`/low exact-session correction passed after its earlier direct report: exactly two sequential invocations, one correction, matching persisted identity, real acknowledgment, durable reopen and target removal. **Milestone 0.5 is complete.** The historical omp OpenAI credential failure was not retried; the owner explicitly selected and authorized Meta Contributor and the named local secret source. omp's streamed assistant provider/model fields matched that selection; Claude's assistant and terminal model evidence matched Haiku. OpenCode's private transport does not expose independent actual-model evidence. Earlier OpenCode diagnostics exposed an unknown configured MCP credential, confirming the known-value scrubber limitation; raw artifacts remain private. These results supersede only exercised paths' live-pending statements below. See `docs/harness-compatibility.md` for evidence and limits. Phase 7.1 was subsequently authorized separately; its headless runtime contract is in §6. Headless 7.2 and management 7.3 were later authorized separately; 7.4 was subsequently authorized for offline implementation; 7.5 onward and further paid execution require new authorization.
+Recorded versions, scoped live results and remaining compatibility limits are summarized in the
+[harness reference](harness-compatibility.md), with detailed evidence in its archive. Offline
+conformance does not establish current authentication, model entitlement or every provider/tool path.
 
-The following Phase 6 notes describe evidence **at implementation time**.
-Their pending live-verification statements are superseded only by the later
-scoped acceptance above and the compatibility record, not by fresh offline tests.
+## 3. Canonical workflow schema (v1)
 
-Phase 6.1 provides an offline-conformant Codex CLI adapter through the headless service API. It uses stdin prompts, explicit persisted session UUIDs, JSONL process/session evidence and the common `wf report` channel. Version and selected unrestricted permission mode are audited. Authentication and provider-backed stream/resume compatibility remain unverified; the full Phase 6 live gate remains unfinished. See `docs/harness-compatibility.md` for evidence and limits.
-
-Phase 6.2 adds the offline-conformant Pi adapter for the installed earendil package. One-shot JSON uses LF-only streaming UTF-8 decoding and requires `agent_settled` plus process/group/pipe settlement. Low-level `agent_end` and transient retry failures cannot settle the attempt. Unrecovered final provider failures, aborts or malformed streams are technical errors, including on exit zero. Resume validates the persisted session file/header/cwd and uses its exact UUID within its dedicated storage directory, without create-if-missing or latest-session flags. Model/thinking selection, report access and default unrestricted tools use the existing contract; no workflow fields or migrations change. Live provider/session verification remains unfinished.
-
-Phase 6.3 adds the offline-conformant Claude Code print adapter: stdin prompts, bounded stream-json parsing, terminal `result` success evidence and common process/group/pipe settlement. It keeps CLI persistence enabled and resumes only the exact persisted UUID with `--resume`; unavailable sessions and mismatches fail without fresh fallback. Existing model/reasoning settings map to `--model` / `--effort`, and the selected unrestricted `bypassPermissions` mode plus CLI version are audited. Reports, correction limits, revision scope and routing remain unchanged. Authentication and provider-backed stream/session behavior remain unverified.
-
-Phase 6.4 adds the offline-conformant OpenCode v2 private API adapter. A leased, supervised server per invocation avoids CLI `run --session` create-if-missing behavior without touching OpenCode's shared service. Exact prompt acknowledgment, wait-for-idle, matching session/cwd and a fresh persisted successful outcome are required, followed by process/group/pipe settlement. Missing sessions cannot be created by resume. Existing model/reasoning fields select provider/model and named variant; explicit session-level allow-all permission rules are audited as `session-allow-all`. This minimal API path does not expose provider event streams (`supportsEventStream: false`). No workflow fields, mandatory approvals, daemon management or migrations are added. Reports and one bounded correction retain the existing contracts; authenticated/live success remains unverified.
-
-Phase 6.5 adds omp as a verified Pi-family dialect, reusing process supervision/reporting but not assuming Pi lifecycle or resume behavior. One-shot JSON requires a final successful assistant and `agent_end.isTerminal: true`, not Pi's `agent_settled`, followed by process/group/pipe settlement. Native retries and omp's `auto_compaction_*` events may recover. Exact persisted journal paths use the installed non-creating resume branch; missing, mismatched and moved-away sessions fail without fresh/latest/fork fallback. Existing model/reasoning settings select `--model` / `--thinking`, including `auto`; `--approval-mode yolo` and CLI version are audited. All shared offline conformance cases pass. Reports, correction policy, session scope, workflow fields and migrations are unchanged; live-provider verification remains open.
-
-
-Phase 6.6 connects existing offline factory probes to explicit installed-adapter capability snapshots and per-attempt service preflight. Static registry validation remains pure; installed capability checks use the selected adapter and frozen effective settings immediately before the affected invocation. Missing optional selectors preserve supported fresh work. Unsupported requested model/reasoning selection routes `system.spawn_error`; unsupported explicit resume routes `system.resume_unavailable`, with useful failure details and no provider execution/correction. Help evidence never proves runtime session availability; exact admission remains adapter-owned. Inventory uses the same factories, and structured-final-output capability is false for current transports because no stdout reporting fallback is implemented. Snapshots require adapter recreation after CLI changes; authentication/live compatibility remain unverified. No YAML fields, migrations or report/routing policy were added.
-
-Phase 6.7 closes the offline adapter environment/log boundary audit. All owned children, including OpenCode's nested private server, receive deliberate selections without changing supported authentication/configuration or unrestricted permission choices. Known injected credential representations are scrubbed across stream chunks before capture/logging; bounded scrubbed stderr diagnostics and truncation flags accompany invocation settlement. Known-credential/report-token redaction history stays in memory until channel shutdown and cannot authorize another submission. Command overrides and output behavior remain unchanged. This is neither isolation nor recognition of arbitrary unknown secrets; harness-owned files and live tool/provider behavior remain outside the verified boundary. No workflow/report fields, migrations, routing or mandatory gates change.
-
-## 3. Canonical workflow schema (v1 proposal)
-
-> Implementation decisions for this section (field names, open semantics, deviations) are recorded in [`docs/schema-v1.md`](docs/schema-v1.md).
+> Implementation decisions for this section (field names, open semantics, deviations) are recorded in [`docs/schema-v1.md`](schema-v1.md).
 
 ### 3.1 Document top level
 
@@ -194,7 +176,7 @@ on:
 ```
 
 - Exactly one action per transition.
-- `goto` is a declared step ID. `pause` stops scheduling new steps and opens an attention item. `retry` reruns this step (or the configured action target, if an explicit extension is later added), counts attempts durably, and emits `system.retry_exhausted` if the bound is reached. On `retry_exhausted`, a more specific rule can handle it, otherwise `system.error` pauses. **Retries do not imply rollback or safe idempotency.**
+- `goto` is a declared step ID. `pause` stops scheduling new steps and opens an attention item. `retry` reruns this step, counts attempts durably, and emits `system.retry_exhausted` if the bound is reached. On `retry_exhausted`, a more specific rule can handle it, otherwise `system.error` pauses. **Retries do not imply rollback or safe idempotency.**
 - `system.error` is a catch-all fallback for runtime-produced errors and **must be supported implicitly as `{pause: true}`** so an unexpected engine failure never becomes a silently accepted success.
 - Effective routing order for an exact outcome: `step.on` > policies targeting explicit step ID > policies targeting tag > policies targeting all steps > `defaults.on`. If an engine error has no exact match, resolve `system.error` through the same levels, then the built-in pause. All normal agent outcomes must resolve to an exact rule. An explicit outcome match always beats a catch-all.
 - Policy selectors accept `{tags: [...]}` (match if any listed tag), `{step_ids: [...]}`, or `{all: true}`. Two policies of equal specificity resolving the same outcome to different actions are a load-time error; do not invent ordering priority.
@@ -304,7 +286,7 @@ Commands and all agent/correction invocations record Linux boot/start identity w
 
 **Implemented headless decisions (Phase 7.2):** Inspect durable recovery evidence, explicitly terminate a verified orphan, or attest independent external cleanup for unidentified/mismatched operations. Confirmation cannot override fresh evidence of a surviving owned group and never relabels unknown evidence as observed absence. It trusts the operator's assertion, not an automatic proof that all descendants/effects are settled. Termination records intent before signalling, rechecks identity and waits boundedly for group absence; startup never replays it. Every action requires the exact inspected attempt/event cursor and a reason. State, resolution and audit events commit together.
 
-After process resolution, explicitly retry the interrupted stage, continue a committed between-step cursor, skip via a declared outcome, jump to a task-compatible step, or end as stopped. Non-ending decisions leave the run paused for separate resume/drive. No retained report routes the interrupted attempt; no recovery action declares its side effects successful. Reports, frozen inputs, sessions, correction counts and historical transitions remain intact. No daemon manager, management CLI/UI, provider usage or mandatory workflow quality gate is added.
+After process resolution, explicitly retry the interrupted stage, continue a committed between-step cursor, skip via a declared outcome, jump to a task-compatible step, or end as stopped. Non-ending decisions leave the run paused for separate resume/drive. No retained report routes the interrupted attempt; no recovery action declares its side effects successful. Reports, frozen inputs, sessions, correction counts and historical transitions remain intact. Management exposes these decisions through the CLI; browser recovery remains deferred.
 
 ### 6.1 Implemented management surface (Phase 7.3)
 
@@ -316,7 +298,7 @@ The explicit foreground `wf daemon start` owns the database and one drive at a t
 
 Existing runs start, resume and revise using their immutable task snapshot without requiring the original checklist file. Other live referenced inputs retain their path checks. Paused status applies the active task's saved model settings; an active attempt reports its frozen settings.
 
-Event listing returns increasing IDs after an exclusive cursor, with a limit of 1–1000 (CLI default 100), `nextAfter` and `hasMore`. Status includes cursor/task, active attempt, selected executor/harness/model, elapsed time, latest report, attention and accepted task progress when a task source exists. `--json` returns one JSON result or error; management exits 0/1/2 for success, validation/control/transport rejection, and CLI/input-file errors respectively. Local validation works without a daemon and uses the same validator as the API. `wf report` retains its separate attempt-scoped endpoint/options/acknowledgment and cannot authorize management. No UI/SSE, detached service, job queue, retry/backoff extension or provider execution is part of 7.3 acceptance. See [CLI usage](README.md#management-cli-and-local-daemon-phase-73).
+Event listing returns increasing IDs after an exclusive cursor, with a limit of 1–1000 (CLI default 100), `nextAfter` and `hasMore`. Status includes cursor/task, active attempt, selected executor/harness/model, elapsed time, latest report, attention and accepted task progress when a task source exists. `--json` returns one JSON result or error; management exits 0/1/2 for success, validation/control/transport rejection, and CLI/input-file errors respectively. Local validation works without a daemon and uses the same validator as the API. `wf report` retains its separate attempt-scoped endpoint/options/acknowledgment and cannot authorize management. The browser uses the same management facade with a narrower allowlist; there is no SSE, detached service or job queue. See the [development commands](development.md) and [management boundary](architecture.md#81-implemented-daemon-and-management-rpc-phase-73).
 
 ### 6.2 Run limits and bounded stage retries (Phase 7.4)
 
@@ -339,7 +321,7 @@ No global retry-budget field, provider call, automatic recovery replay or workfl
 
 The browser UI is a client; closing the tab does not terminate the runner. UI is served locally, with no required cloud account. Prefer localhost binding and no open remote administrative interface by default.
 
-**Implemented preparation/editor (Phases 8.1–8.2):** `wf ui` pairs a separate browser session with the explicit foreground daemon. Upload a workflow with its original absolute directory, select a saved revision, or create a new draft. Project/instruction/checklist selections, all five stage kinds, direct outcome actions, defaults and all/tag/explicit-step policies share the canonical YAML model. Stable IDs and start/goto define execution; reordering only changes display. Compiler/router output displays effective normal/system transitions, precedence and provenance, including catch-all/built-in fallback. YAML input invalidates prior visual state immediately; explicit validation retains invalid text and supplies parse/schema/compile/path diagnostics with available locations. Parse/schema failures disable visual mutations; shape-valid semantic/path failures remain visually correctable. Save/create require a currently valid draft and revalidate on the daemon. Visual/input edits may normalize comments/formatting/defaults, never rewrite original files. Saving creates/reuses an immutable revision; task preview creates nothing, and creation rereads/freezes actual tasks into a ready run without execution. Old revisions and runs remain unchanged. Browser reload discards unsaved inputs, not daemon state. Dashboard controls and paused-run editing are implemented separately in 8.3–8.4; the full Phase 8 gate passed permanent offline Chromium coverage in 8.5. Phase 9/MVP remain incomplete. See architecture §8 for authorization, drafts and run intervention.
+**Implemented preparation/editor (Phases 8.1–8.2):** `wf ui` pairs a separate browser session with the explicit foreground daemon. Upload a workflow with its original absolute directory, select a saved revision, or create a new draft. Project/instruction/checklist selections, all five stage kinds, direct outcome actions, defaults and all/tag/explicit-step policies share the canonical YAML model. Stable IDs and start/goto define execution; reordering only changes display. Compiler/router output displays effective normal/system transitions, precedence and provenance, including catch-all/built-in fallback. YAML input invalidates prior visual state immediately; explicit validation retains invalid text and supplies parse/schema/compile/path diagnostics with available locations. Parse/schema failures disable visual mutations; shape-valid semantic/path failures remain visually correctable. Save/create require a currently valid draft and revalidate on the daemon. Visual/input edits may normalize comments/formatting/defaults, never rewrite original files. Saving creates/reuses an immutable revision; task preview creates nothing, and creation rereads/freezes actual tasks into a ready run without execution. Old revisions and runs remain unchanged. Browser reload discards unsaved inputs, not daemon state. Dashboard controls and paused-run editing share this model. See architecture §8 for authorization, drafts and run intervention; historical acceptance evidence is archived.
 
 ## 8. MVP scope and non-goals
 
@@ -347,7 +329,7 @@ The browser UI is a client; closing the tab does not terminate the runner. UI is
 
 - Engine; schema parser/validator; persisted one-at-a-time stage execution.
 - Markdown checklist import and engine-owned task queue.
-- Harness adapters for `codex`, `pi`, `omp`, `opencode`, and `claude` (Claude Code), plus a deterministic command executor. The `codex` and `pi` adapters are implemented first; the rest follow the same interface and must pass the same conformance suite.
+- Harness adapters for `codex`, `pi`, `omp`, `opencode`, and `claude` (Claude Code), plus a deterministic command executor. All five follow the same interface and offline conformance suite.
 - `wf report` CLI and strict outcome validation with one correction turn.
 - Explicit transition graph, scoped rules, loops, error routing, run revisions.
 - Pause, stop, resume, manual override, event/report/log history.
@@ -398,4 +380,4 @@ report, CLI/RPC or recovery behavior change.
 
 ## 10. Engineering choices explicitly delegated to implementation
 
-Use boring, widely supported libraries. Keep database schema migrations modest and testable. Choose exact package versions after checking the installed Node and harness CLI versions. Favor real process-boundary tests with a fake harness over elaborate in-process mocks only. Implement core execution and CLI end-to-end before building a polished visual editor.
+Use boring, widely supported libraries. Keep database schema migrations modest and testable. Choose exact package versions after checking the installed Node and harness CLI versions. Favor real process-boundary tests with a fake harness over elaborate in-process mocks only. The implementation baseline is complete; follow the active refinement plan in `todo.md`.

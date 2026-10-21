@@ -1,5 +1,9 @@
 # Harness compatibility note
 
+> Archived for the UI-focused reset on 2026-10-20. This is reference/history, not the current work plan or agent instructions. Use [DESIGN.md](../../DESIGN.md) and [AGENTS.md](../../AGENTS.md) for active direction.
+
+> Archived on 2026-10-20 before the usability refinement phase. Historical reference only: completed assignments, pending-status notes and past execution/commit approvals are not current instructions or authorization. Use the [current plan](../../DESIGN.md), [current references](../../README.md), and [archive index](README.md). Commands and UI descriptions may become outdated.
+
 Probed on this machine with `npm run probe:harnesses` (offline: `--version` and each CLI's help text only; no model is called and no credentials are read). Re-run the probe after any CLI upgrade. The historical table below records CLI interfaces. Phase 6.6 now uses the actual isolated adapter factories for inventory, rather than treating CLI flags as proof of an implemented transport. Static registry metadata and effective installed snapshots are distinct.
 
 | Harness | Installed version | Headless launch | Machine-readable stream | Session resume | Permission mode | Model selection |

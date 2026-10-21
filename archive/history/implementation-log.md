@@ -1,5 +1,9 @@
 # Implementation verification
 
+> Archived for the UI-focused reset on 2026-10-20. This is reference/history, not the current work plan or agent instructions. Use [DESIGN.md](../../DESIGN.md) and [AGENTS.md](../../AGENTS.md) for active direction.
+
+> Archived on 2026-10-20 before the usability refinement phase. Historical reference only: completed assignments, pending-status notes and past execution/commit approvals are not current instructions or authorization. Use the [current plan](../../DESIGN.md), [current references](../../README.md), and [archive index](README.md). Commands and UI descriptions may become outdated.
+
 ## Phase 4 — mandatory reporting and bounded correction
 
 Implemented strict report v1, the private loopback endpoint, project-local `bin/wf`, transactional acceptance, invocation-scoped authorization, persisted fake sessions and correction budget, distinct invocation logs, and expanded offline adapter conformance. Stdout has no report authority. No installed harness configuration or credential files were read or changed; no model calls were made. Milestone 0.5 remains incomplete: offline version/help markers do not prove authentication, stream framing or session compatibility.

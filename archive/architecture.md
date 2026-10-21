@@ -1,6 +1,9 @@
 # Technical Architecture — Agent Workflow Runner
 
-**Status:** Implemented MVP contract; final offline gate passes (Phase 9.5 evidence in implementation log)  
+> Archived for the UI-focused reset on 2026-10-20. This is reference/history, not the current work plan or agent instructions. Use [DESIGN.md](../DESIGN.md) and [AGENTS.md](../AGENTS.md) for active direction.
+
+**Status:** Implemented beta contracts; current usability work follows [todo.md](refinement-plan.md).
+
 **Read first:** [Product specification](spec.md)
 
 ## 1. System overview
@@ -29,55 +32,56 @@
               Project working directory
 ```
 
-A **single local daemon process** owns orchestration and event storage. The browser is not required for the daemon to run. The report CLI is a thin client. One active stage attempt at a time per run, and **one active run globally in MVP** (multiple saved runs can be inspected). A global single-run limit prevents accidental repository collisions and simplifies recovery. Later, allow separate independent runs after workspace isolation is designed.
+A **single local daemon process** owns orchestration and event storage. The browser is not required for the daemon to run. The report CLI is a thin client. One active stage attempt at a time per run, and **one active run globally in MVP** (multiple saved runs can be inspected). A global single-run limit prevents accidental repository collisions and simplifies recovery. Parallel scheduling remains deferred (spec §8).
 
 ### 1.1 Packages / modules
 
-- `packages/contracts`: strict types and schema validation; no web/runtime imports.
-- `packages/engine`: graph compilation, policy resolution, task scheduler, transition reducer, state machine, persistence interfaces.
-- `packages/adapters`: process wrapper; harness adapters (Codex, Pi, omp, OpenCode, Claude Code) and the command executor, plus the harness registry.
-- `apps/runner`: daemon, run service, local HTTP API, CLI report endpoint, event publishing.
-- `apps/cli`: `wf` commands for creating/validating/starting/observing/reporting/pausing/resuming runs.
-- `apps/web`: local UI; only after headless integration works.
+The repository uses one TypeScript project, with these source directories:
 
-Monorepo packages are optional organizational boundaries; use a single repository and avoid distributed services or an internal microservices architecture.
+- `src/contracts/`: strict schema/types, validation and shared control/report contracts.
+- `src/engine/`: compilation, policy routing, pure reducer and transactional run coordinator.
+- `src/store/`: SQLite ownership, migrations, transaction wrapper and persistence.
+- `src/adapters/`: process supervision, harness/command adapters, registry and offline probes.
+- `src/runner/`: run service, attempt preparation, reporting, task import and recovery orchestration.
+- `src/app/`: daemon, CLI entry points and management/browser application services.
+- `src/web/`: local HTML/CSS and browser TypeScript.
 
-The implemented surface and canonical [deferred-feature list](spec.md#deferred-features-and-permanent-non-goals)
-take precedence over early illustrative interfaces below. MVP uses immutable
-task snapshots and workflow revisions, paginated events/polling and local log
-files; it adds no mutable workflow library, task re-import or browser recovery.
-Rationale: retain one durable state owner and the accepted narrow API rather
-than invent identity merging or transports to satisfy an earlier sketch.
+See [development](development.md#repository-layout) for tests and fixtures. There are no
+separate monorepo packages or distributed services. The canonical [deferred-feature list](spec.md#deferred-features-and-permanent-non-goals)
+records the current limits: immutable task snapshots/revisions, paginated events/polling and
+local log files; no mutable named workflow library, task re-import or browser recovery.
 
 ## 2. Durable state model
 
 SQLite is authoritative. The production default for DB and run artifacts is `${XDG_STATE_HOME:-~/.local/state}/workflowz/`, with `WF_STATE_DIR` and higher-precedence `--state-dir` overrides. The project contains user-authored workflow files and optional input docs; offline tests use explicit disposable project-local directories. File paths stored in DB are absolute or normalized at run creation.
 
-**Tables (conceptual; normalize fields sensibly):**
+**Persisted records:** The canonical tables/columns are defined by the append-only migrations in
+`src/store/migrations.ts`. This summary describes their responsibilities rather than a second SQL schema.
 
-| Table | Core columns | Invariants |
-| --- | --- | --- |
-| `workflows` | workflow_id, name, file_path, created_at | Workflow identity |
-| `workflow_revisions` | revision_id, workflow_id, definition_yaml, definition_hash, created_at | Immutable revisions; a run references one |
-| `runs` | run_id, current_revision_id, project_root, status, cursor_step_id, active_task_id, created_at, updated_at, start_time, end_time | One authoritative status and cursor per run |
-| `tasks` | task_id, run_id, source_order, source_identity, title, body, heading_path, state | Immutable imported snapshot; progress is engine-owned |
-| `attempts` | attempt_id, run_id, step_id, task_id nullable, revision_id, sequence_no, session_id nullable, pid/pgid nullable, process_identity, status, started_at, finished_at, exit_code, error_code | Exactly one active attempt globally |
-| `reports` | report_id, attempt_id UNIQUE, outcome, summary, issue, handoff, data_json, received_at | At most one **accepted** report per attempt |
-| `events` | event_id AUTOINCREMENT, run_id, attempt_id nullable, type, data_json, timestamp, revision_id | Append-only event stream; correlate transition commits |
-| `attention_items` | item_id, run_id, attempt_id nullable, category, severity, message, resolution, resolved_at | Human tasks and failures |
-| `task_overrides` | task_id, overrides_json | Current run-local parameters for an imported task; previous values in audit events |
-| `attempt_inputs` | attempt_id, input_json | Immutable prepared agent input, without report authorization |
-| `run_variables` | run_id, key, value_json, updated_at | Bounded explicit variables only, if needed |
+| Table | Responsibility / invariant |
+| --- | --- |
+| `workflow_revisions` | Immutable definition text/hash/source directory; content/source-directory deduplication |
+| `runs` | Authoritative status, selected revision, cursor, active task and retry deadline |
+| `tasks` | Imported run-local task identities/order and engine-owned progress |
+| `task_imports` | Immutable source text/hash/import options |
+| `attempts` | Execution identity, revision, task, session/process evidence, settlement and recovery state |
+| `attempt_inputs` | Immutable prepared agent input, without report authorization |
+| `reports` | At most one accepted report per attempt |
+| `transitions` | At most one committed transition per finalized attempt; engine/manual transitions may have no attempt |
+| `events` | Append-only audit history committed with state mutations |
+| `attention_items` | Blocking/informational items and their resolution |
+| `task_overrides` | Current run-local task parameters; prior values remain in audit events |
+| `recovery_resolutions` | Operator cleanup assertions kept separate from OS observations |
 
 Use foreign keys and DB constraints. Prefer WAL with bounded busy timeout. Transactions wrap transitions, completion of task state, and cursor updates. Event entries accompany state mutations within the **same transaction**, so a state advance and its log cannot disagree.
 
 ### 2.0 Phase 2 implementation notes
 
-These record the adjustments made when the store was built (todo Phase 2). The rationale is given so later changes can be judged against it.
+These describe implemented storage invariants and their rationale. Phase numbers retained in section headings refer to the archived MVP plan, not pending work.
 
 - **Storage.** `node:sqlite` (built into Node) with `PRAGMA user_version` migrations. The migration file is append-only. Each run's writes go through `WorkflowDatabase.transaction`, which uses `BEGIN IMMEDIATE`. Nested calls join the outer transaction; any inner failure makes the whole transaction rollback-only, even if its caller catches the error.
 - **Extra table: `transitions`.** Every routing decision is one row, with `revision_id`. `attempt_id` is UNIQUE, so the database itself forbids two transitions for one attempt. Engine-only steps have `attempt_id` NULL.
-- **One active run and attempt.** Transactional coordinator start/resume checks reject a second running or pausing run. A database unique index on `(status IN (active states))`, restricted to active attempts, independently allows at most one active attempt across the whole database. These guards do not replace the daemon instance lock planned in todo 7.1.
+- **One active run and attempt.** Transactional coordinator start/resume checks reject a second running or pausing run. A database unique index on `(status IN (active states))`, restricted to active attempts, independently allows at most one active attempt across the whole database. The independent database writer lease in §7.5 prevents competing owners.
 - **Single writer.** `RunCoordinator` is the only code that changes run state. For each step it reads the run, decides with the pure reducer (`engine/reducer.ts`), and writes the decision with its event in one transaction. A settlement with an undeclared outcome is refused before any write (spec §4.2). Compiled cache entries use definition hash and source directory, not revision ID alone: rolled-back SQLite revision IDs can be reused.
 - **Retries.** A `retry` action reruns the step while its attempt count within the current task is below `max_attempts`. The count includes the attempt that just settled. When the budget is spent, `system.retry_exhausted` routes and is recorded as the transition outcome; the attempt settlement event preserves the originally observed outcome. If the exhaustion route also asks for a retry, the run pauses. Phase 7.4 adds durable backoff admission as described in §7.7. Engine-only steps do not retry; a retry there pauses the run.
 - **Limits.** `max_step_executions` counts committed transitions. `max_wall_time_seconds` counts elapsed time since the run started. Reaching either pauses the run with an attention item. A separate consecutive-engine-step bound blocks only another engine primitive, not completion, external dispatch, or a pause already reached at the boundary.
@@ -123,7 +127,7 @@ Parse YAML with the core schema, reject duplicate keys, unsupported tags and sil
 
 Graph diagnostics follow effective normal and system-error routes. Terminal `end` steps have no outgoing edges, even when global policies contain transitions. Transition and step lookup uses own properties only, so names such as `constructor` cannot inherit JavaScript object members.
 
-A step attempt has an **input snapshot**: task, project root, prompt, instruction paths, variables, selected preceding reports, working directory, effective outcomes/transitions, harness, model, and timeout. Its accepted report is immutable. Run-specific task overrides are saved alongside imported run-local task IDs; reusable YAML workflows do not depend on project-specific task IDs. Its execution may produce files in the target project, which remain external side effects.
+A step attempt has an **input snapshot**: task, project root, prompt, instruction paths, selected preceding reports, working directory, effective outcomes/transitions, harness, model, and timeout. Its accepted report is immutable. Run-specific task overrides are saved alongside imported run-local task IDs; reusable YAML workflows do not depend on project-specific task IDs. Its execution may produce files in the target project, which remain external side effects.
 
 ### 3.1 Task loop semantics
 
@@ -170,28 +174,25 @@ Actual input/result signatures live in `src/adapters/agent-adapter.ts`; this ske
 
 The static **harness registry** maps `HarnessId` to descriptor/capability data. Executable adapters are supplied explicitly through `RunService` options. Workflow validation resolves `harness` against the registry and reports a clear "unknown or unsupported harness" error instead of failing an enum. The registry is a lookup table, not a plugin system; dynamic third-party plugin loading is deferred (see [spec.md](spec.md) §8).
 
-Adapter responsibilities are uniform across harnesses; only the four harness-specific behaviors below differ:
+Adapter responsibilities are uniform across harnesses; only the harness-specific behaviors below differ:
 
 | `HarnessId` | Headless launch | Event/settle source | Correction resume | Capabilities to verify |
 | --- | --- | --- | --- | --- |
 | `codex` | `codex exec` | JSONL via `--json`; final message + process exit | `codex exec resume` | resume, event stream, structured output, permission mode, model selection |
 | `pi` | `pi --print --mode json` | LF-delimited JSON; `agent_settled` | validated journal/full UUID in its exact directory; no create on resume | resume, event stream, permission mode, model selection |
-| `omp` | `omp --print --mode json` | LF JSON; final successful assistant and `agent_end.isTerminal: true` + process settlement | `--resume <exact-persisted-path>` | offline conformance passed; live provider/tool behavior unverified |
+| `omp` | `omp --print --mode json` | LF JSON; final successful assistant and `agent_end.isTerminal: true` + process settlement | `--resume <exact-persisted-path>` | terminal dialect, journal identity and exact path resume |
 | `opencode` | private `serve --stdio` child + v2 API | prompt admission, wait-for-idle, persisted terminal outcome + process settlement | exact session API, never create on resume | resume, permission mode, model/variant selection; no provider event stream in this slice |
 | `claude` | `claude -p --output-format stream-json` | stream-json lines; terminal `result` message | `--resume <session-id>` | resume, event stream, permission mode, model selection |
 
 Every adapter must pass the offline **adapter conformance suite** (see §9) before it is registered as supported. Adapters must also pass the child process only a deliberate environment allowlist, never the daemon's full environment, so nested-harness variables and credentials cannot leak between harnesses.
 
-**Adapter acceptance (2026-10-19):** Authorized Codex/Pi Luna/low reporting and exact-session correction passed the Phase 6 gate. The later explicitly authorized omp/OpenCode Meta Contributor/low pass also completed direct reporting and exact-session correction, including actual helper acknowledgment, sequential process settlement, durable SQLite reopen and target cleanup. The all-adapter offline gate at milestone 0.5 completion passed **704 tests**. Claude's separately authorized Haiku/low correction passed after its earlier direct report, closing **milestone 0.5**: one logical attempt, one exact-session correction after original settlement, one accepted report before final settlement, completed run, durable reopen and removed target. The earlier omp OpenAI credential failure remains historical evidence, not an automatic retry or provider fallback. The owner's named Meta secret source is loaded locally without sourcing shell code or persisting its value; global configuration is unchanged. omp assistant metadata matched the Contributor provider/model; Claude assistant and terminal model evidence matched Haiku. OpenCode's transport lacks independent actual-model evidence. Earlier unknown MCP credential exposure remains outside known-value scrubbing; private artifacts must not be published. These results supersede only exercised paths' historical live-pending notes below. Exact evidence and limits are in `docs/harness-compatibility.md`. The subsequently authorized Phase 7.1 lifecycle implementation and append-only migration 7 are described in §7.5; headless 7.2 and management 7.3 were later authorized separately; 7.4 was subsequently authorized for offline implementation; 7.5 onward and further paid execution still require new authorization.
-
-Phase-local notes below retain the evidence available when implemented.
-Pending live/provider claims there are superseded only by the later scoped
-acceptance above and compatibility record; the final offline gate does not
-refresh authentication or paid-provider compatibility.
+All five adapters have offline conformance coverage. Versioned sources, exercised live reporting/
+correction results and remaining limits are maintained in the [compatibility reference](harness-compatibility.md)
+and its historical record. Offline fixtures do not establish fresh provider/account compatibility.
 
 ### 4.1 Codex integration
 
-Start with the **non-interactive Codex CLI**, not direct API calls. Capture JSONL events and CLI exit status; extract/persist the session ID from documented events; support normal work and same-session follow-up for correction. Check locally installed flags/version at integration time.
+The adapter uses the **non-interactive Codex CLI**. Capture JSONL events and CLI exit status; extract/persist the session ID from documented events; support normal work and same-session follow-up for correction. Check locally installed flags/version at integration time.
 
 Codex docs describe `codex exec` headless mode, JSONL through `--json`, `--output-schema` structured final responses, and `codex exec resume` for continuing sessions. They also document permission configuration, including unrestricted modes. Structured-output reporting fallback is deferred; current adapters require `wf report`. Do **not** assume the first JSONL agent-message item is the final completion boundary.
 
@@ -209,11 +210,11 @@ Version-specific behavior is a risk. Use executable compatibility tests against 
 
 The adapter forwards model/reasoning effort, injects the existing report channel and project-local `wf` PATH, and records CLI version/unrestricted mode in invocation-start events. Only base environment plus Codex home/key and report access are selected. Per-invocation config preserves report environment for tools, excludes the API key from their inheritance, and disables shell snapshots; it does not edit global files. No schema migration or workflow control change is needed. Raw scrubbed events use the existing bounded attempt log.
 
-Codex registry status is `conformance_passed` after the full shared offline suite passes against a fixture CLI. Real account/provider framing and resume remain unverified; Phase 0.5 and the live Phase 6 gate remain open. Pi and Claude Code now have the separate implementations below. See `docs/harness-compatibility.md` for official sources, installed-version evidence and limitations.
+Codex registry status is `conformance_passed`, based on synthetic offline conformance. Recorded live reporting/correction evidence and version-specific limits are in `docs/harness-compatibility.md`. Neither registry status nor old live results establish current account availability.
 
 ### 4.2 Pi integration
 
-Start with the **Pi headless CLI** (`--mode json` for one-shot turns, or `--mode rpc` for a long-lived session/correction). For a TypeScript runner, RPC isolates Pi in a child process and exposes structured events; the SDK is optional later. Check the exact user's Pi fork/package before coding against a hardcoded import name.
+The implementation uses the **Pi headless CLI** in one-shot `--mode json`; correction reopens the exact persisted session. RPC and SDK integration are not used. Verify the installed fork/package when changing the adapter.
 
 Pi JSON/RPC streams are strict LF-delimited JSONL. Read with a UTF-8 byte stream decoder, split **only on byte `\n`**, and consume continuously to avoid pipe backpressure. Distinguish `agent_end` (potentially followed by automatic retries) from `agent_settled` (run fully quiescent). Capture the persisted session ID/path needed to send a follow-up correction turn. The agent is allowed full tools according to the user's configured Pi setup.
 
@@ -229,7 +230,7 @@ Pi JSON/RPC streams are strict LF-delimited JSONL. Read with a UTF-8 byte stream
 
 Fresh sessions use unique directories under a runner-owned persistent root beside logs (or explicit adapter `sessionDir`). After settlement the adapter finds the exact UUID file and validates its bounded v3 header against the streamed identity. Its absolute path is the opaque durable engine session identity. Resume rechecks header/UUID/cwd before launch and preserves the requested identity if returned evidence mismatches. Pi creates missing *paths* and `--session-id` sessions, so resume instead uses `--session <full-UUID> --session-dir <that-file-directory>`. Installed source confirms missing ID lookup exits without creating a session; the dedicated directory prevents cross-project lookup. No selector, recent-session, fork or fresh fallback is used. Existing same-run/task/revision scoping and one sequential bounded correction remain runner responsibilities.
 
-The factory isolates version/help probes with a temporary Pi config directory, offline mode and resource discovery disabled. Runtime keeps the user's normal unrestricted tools, passes model/validated thinking level, selects a deliberate environment and scrubs injected secrets through the common supervisor. Version and permission mode are audited. The common probe runner now accepts an explicit environment; existing probes keep their previous default. The shared conformance helper accepts a harness id so Pi is exercised as `pi`. Its registry status is `conformance_passed` after shared offline tests, not live verification. No schema migrations, workflow control changes, daemon or UI were added.
+The factory isolates version/help probes with a temporary Pi config directory, offline mode and resource discovery disabled. Runtime keeps the user's normal unrestricted tools, passes model/validated thinking level, selects a deliberate environment and scrubs injected secrets through the common supervisor. Version and permission mode are audited. The common probe runner now accepts an explicit environment; existing probes keep their previous default. The shared conformance helper accepts a harness id so Pi is exercised as `pi`. Its registry status is `conformance_passed` after shared offline tests, not live verification. Session/routing policy stays with the runner; this adapter does not own run state.
 
 ### 4.3 Claude Code integration
 
@@ -239,11 +240,11 @@ The factory isolates version/help probes with a temporary Pi config directory, o
 
 The result UUID is the engine's opaque session identity. Missing identity cannot authorize correction. Explicit resume accepts only full UUIDs, uses `--resume <UUID>`, and preserves the requested identity on mismatch. Installed offline missing-UUID evidence confirms a nonzero terminal error without fresh fallback; the adapter maps that known result to unavailable resume. No recent selector, transcript-path lookup, fork or ephemeral flag is used. Same-harness/run/task/revision lookup and one bounded sequential correction remain owned by the runner.
 
-Only the common environment, explicitly selected Claude/Anthropic settings and report access reach the child; known injected auth is scrubbed by the supervisor. Version and selected permission mode are audited. Claude is `conformance_passed` after the full shared offline suite through a synthetic CLI, with additional framing, failure, identity and settlement cases. No workflow fields, migrations or coordinator behavior changed. Authentication, actual provider streams, tool environment and live persistence/resume remain unverified; see `docs/harness-compatibility.md`. OpenCode now has the separate implementation below; 0.5 and 6.8 remain open.
+Only the common environment, explicitly selected Claude/Anthropic settings and report access reach the child; known injected auth is scrubbed by the supervisor. Version and selected permission mode are audited. Claude is `conformance_passed` after the full shared offline suite through a synthetic CLI, with additional framing, failure, identity and settlement cases. The runner retains report/routing/session-scope authority. Recorded live evidence and remaining resource/tool compatibility limits are in `docs/harness-compatibility.md`.
 
 ### 4.4 OpenCode integration
 
-Phase 6.4 uses a private leased `opencode serve --stdio --hostname 127.0.0.1 --port 0` process per invocation, not the shared OpenCode service. **Rationale:** installed v2.0.32 and official source confirm `run --session` creates missing IDs; a precheck followed by CLI launch would race with deletion. Its JSON `step_finish` also represents a model step, not terminal execution. Exact API prompt admission cannot create a missing session, including a session removed after lookup. This is adapter-local process ownership, not Phase 7 daemon management.
+Phase 6.4 uses a private leased `opencode serve --stdio --hostname 127.0.0.1 --port 0` process per invocation, not the shared OpenCode service. **Rationale:** installed v2.0.32 and official source confirm `run --session` creates missing IDs; a precheck followed by CLI launch would race with deletion. Its JSON `step_finish` also represents a model step, not terminal execution. Exact API prompt admission cannot create a missing session, including a session removed after lookup. This process belongs to the adapter invocation, independently of the management daemon lifecycle.
 
 `adapters/opencode.ts` probes version/help offline and starts `opencode-bridge.ts` under the existing supervisor. The bridge receives its prompt/private lease credential on stdin, launches the server in the same process group, validates a bounded loopback readiness record, and authenticates bounded v2 JSON requests. Fresh execution alone calls session create. Resume first reads the exact ID and verifies cwd; later updates and prompt admission address only that ID. Missing/moved/mismatched sessions fail without fallback; returned evidence never replaces the requested durable identity.
 
@@ -253,7 +254,7 @@ On completion/error the bridge closes the stdin lease and awaits server exit. Th
 
 The supported v2 session permission ruleset is `[{action: "*", resource: "*", effect: "allow"}]`, audited as `session-allow-all` with CLI version. Session rules apply after agent rules; this explicit unrestricted selection overrides session denials, unlike `--auto`'s allow-unless-denied semantics. No global setting is written. Model/variant selection uses existing model/reasoning fields. Runtime selects the common environment plus documented OpenCode/config/provider names; the private server removes its lease password from tool inheritance, and the supervisor scrubs known injected secrets. No isolation or rollback is claimed.
 
-OpenCode is `conformance_passed` after the entire shared offline suite through a synthetic CLI/private API server, plus adapter-specific identity, framing, failure and settlement coverage. The shared missing-identity case now permits a protocol error when identity is required by the transport, while still requiring no correction/fresh fallback. Installed isolated checks independently confirmed CLI create-if-missing, exact API missing-session rejection and terminal invalid-provider failure. Live success/authentication, user-resource interactions and tool environment remain unverified; see `docs/harness-compatibility.md`.
+OpenCode is `conformance_passed` after the entire shared offline suite through a synthetic CLI/private API server, plus adapter-specific identity, framing, failure and settlement coverage. The shared missing-identity case now permits a protocol error when identity is required by the transport, while still requiring no correction/fresh fallback. Installed isolated checks independently confirmed CLI create-if-missing, exact API missing-session rejection and terminal invalid-provider failure. Recorded live reporting/correction evidence and unverified resource/tool interactions are distinguished in `docs/harness-compatibility.md`.
 
 ### 4.5 omp integration
 
@@ -263,7 +264,7 @@ OpenCode is `conformance_passed` after the entire shared offline suite through a
 
 `omp-session.ts` reads v3 UUID journals, accepting the optional physical title slot before the logical header. It retains only header/transfer metadata while checking bounded records. Dedicated directories default to `omp-sessions` beside logs. The absolute persisted file path is the engine identity; header/UUID/cwd are revalidated. Resume uses `--resume <absolute-path>` with its exact directory. Installed source and deletion-after-precheck smoke confirm strict open rejects missing files, unlike prefix/global ID lookup's permissive open. No continue/restore/selector/fork fallback is used. Latest valid departed-transfer markers make a journal unavailable before launch because the CLI would implicitly fork it. Returned mismatches never replace the durable target.
 
-The complete shared synthetic offline suite runs as `omp`; additional framing, native-recovery, persistence/identity, environment/secret and settlement coverage supports `conformance_passed`. Independent service smoke proves one sequential correction and durable reporting; installed negative smoke proves missing/deleted paths do not create replacements. Fresh isolated installed startup failed in database initialization, so the negative check used an empty schema fixture from official source; no runtime workaround or global change was introduced. Authentication, successful live sessions/streams, tool environment and resource interactions remain unverified. No coordinator, report contract, workflow fields, migrations, daemon or UI changes are needed; 0.5 and 6.8 remain open.
+The complete shared synthetic offline suite runs as `omp`; additional framing, native-recovery, persistence/identity, environment/secret and settlement coverage supports `conformance_passed`. Independent service smoke proves one sequential correction and durable reporting; installed negative smoke proves missing/deleted paths do not create replacements. Fresh isolated installed startup failed in database initialization, so the negative check used an empty schema fixture from official source; no runtime workaround or global change was introduced. Recorded live reporting/correction evidence is in the compatibility reference; arbitrary tool/resource interactions remain outside that scoped verification.
 
 ### 4.6 Harness capabilities and graceful incompatibilities
 
@@ -273,7 +274,7 @@ Phase 6.6 adds the missing connection between existing factory evidence and atte
 
 Snapshot capability cannot prove session existence or provider access. Journal/cwd validation and exact non-creating CLI/API admission remain in each adapter and still fail closed after prechecks, including deletion races. A fresh workflow does not require resume merely because correction is enabled; absent correction support produces the existing `system.report_error` after clean missing-report execution. All process/group/pipe settlement and token rules remain unchanged. Current transports advertise structured-final-output as false because no report fallback is implemented; OpenCode also advertises no provider event stream. Static CLI potential is not promoted into transport support.
 
-Preflight occurs at preparation of the affected attempt, not exhaustive run-creation validation of every branch or task. Factories are explicit offline snapshots: callers must recreate adapters after binary/configuration changes. Help markers are not authentication, live session, provider framing or tool-environment evidence. The independent `smoke:capabilities` exercises factory rejection, durable preflight failure, fresh reporting, unavailable correction and explicit workflow resume without providers. Phase 0.5 and 6.8 remain open.
+Preflight occurs at preparation of the affected attempt, not exhaustive run-creation validation of every branch or task. Factories are explicit offline snapshots: callers must recreate adapters after binary/configuration changes. Help markers are not authentication, live session, provider framing or tool-environment evidence. The independent `smoke:capabilities` exercises factory rejection, durable preflight failure, fresh reporting, unavailable correction and explicit workflow resume without providers.
 
 ### 4.7 Environment and diagnostic boundaries (Phase 6.7)
 
@@ -285,7 +286,7 @@ All adapters return optional scrubbed process diagnostics. The runner rechecks k
 
 Adapters expose their already-selected process secrets through memory-only handle metadata. Before yielding to report handlers, the runner registers them with the report channel so known provider/private credentials cannot leak through accepted reports or durable diagnostics. The report channel retains these values and issued tokens solely for redaction/rejection until `close`, including later same-channel attempts and correction; only the current token has report authority. Adapter input carries that memory-only history, and OpenCode forwards it through private bridge stdin for nested scrubbing. It never enters durable input snapshots, argv or the child environment. Authorization-history memory grows with distinct injected values/channel invocations; closing the channel discards it. Raw/provider text is not copied into preflight exceptions; unexpected supervision exceptions stay generic. No migrations or workflow/report fields are added.
 
-Limits: this is environment selection, not isolation. Only values known at this boundary and the specified representations are matched. Unknown credentials loaded by harnesses/tools, arbitrary encodings/transformations, fragments deliberately separated by other text, and tokens from a previous closed channel are not discoverable by this filter. Harness-managed journals/transcripts/auth/config and arbitrary tool-created files are not rewritten. Live authentication, provider framing, tool environment and resource/managed-config interactions remain 0.5/6.8 work. Process identity and escaped-descendant limits remain Phase 7 work.
+Limits: this is environment selection, not isolation. Only values known at this boundary and the specified representations are matched. Unknown credentials loaded by harnesses/tools, arbitrary encodings/transformations, fragments deliberately separated by other text, and tokens from a previous closed channel are not discoverable by this filter. Harness-managed journals/transcripts/auth/config and arbitrary tool-created files are not rewritten. Live verification remains version/account/path-scoped as recorded in the compatibility reference. Process identity and escaped-descendant limits are described in §7.
 
 ## 5. Reporting channel
 
@@ -359,7 +360,7 @@ An optional later enhancement can provide automated recovery for proven side-eff
 
 - **Ownership by group.** Every child starts as the leader of its own process group. A stop or timeout signals the group. After the leader exits normally, leftovers in its group are ended too. `completed` resolves only after the group disappears and output streams close; cleanup uncertainty rejects completion rather than falsely reporting success.
 - **Escalation.** SIGTERM first, then SIGKILL after a grace period (1 s by default). Failure to confirm group disappearance within the bounded reap wait is an error. Termination after completion is a no-op and never signals an old group.
-- **Known limits.** Signals go to the group id, which is the leader's pid. If a leader exits and its pid is reused while members remain, the wrong group could be signalled. Process-start identity checks (todo 7.1) address this gap. Descendants that deliberately escape the group cannot be terminated through group ownership; retained pipes cause an uncertain-settlement error, not a success. There is no sandbox or subreaper.
+- **Known limits.** Signals go to the process group. The implemented boot/start/group identity checks in §7.5 guard signal admission, but OS inspection and signalling are not atomic. Descendants that deliberately escape the group cannot be terminated through group ownership; retained pipes cause an uncertain-settlement error, not a success. There is no sandbox or subreaper.
 - **Bounded output.** The heads of stdout and stderr (64 KiB each by default) stay in memory; stdout supplies `{{steps.<id>.stdout}}`. Combined output goes to a per-attempt log file, capped at 16 MiB plus a cap marker. A chunk crossing the cap retains its fitting prefix instead of discarding the whole chunk.
 - **One process at a time.** `RunService.drive` awaits each attempt before asking for the next step and rejects concurrent drive calls. Stop only terminates the requested run's owned operation; stopping another saved run cannot affect it. Live operations cannot be reconciled as crashed. Adapter launch exceptions become spawn errors; completion rejections require termination before routing an internal error. If termination cannot be confirmed, the attempt remains active for reconciliation.
 - **Adapters are workflow-agnostic.** Adapters launch processes and report what happened. The runner maps results to settlements (`src/runner/settlement.ts`), so the same precedence rules apply to every harness. Terminated agents cannot succeed even if they reported an outcome and exited zero. Session resume selects the latest persisted session for the same harness, task, run and revision; absence routes `system.resume_unavailable` before launch.
@@ -372,8 +373,8 @@ An optional later enhancement can provide automated recovery for proven side-eff
 - **Process identity.** The supervisor captures Linux boot UUID, PID, process group/session IDs and `/proc/<pid>/stat` start ticks immediately after spawn. Commands, all five adapters and correction handles carry that identity to transactional invocation history and the existing attempt PID/PGID/identity columns. Unsupported identity environments fail before spawn. Before every group signal, current evidence must agree; a reaped leader's remaining group members must retain its reserved group/session IDs and start bounds. Mismatch or unavailable evidence is uncertain settlement, never permission to signal an unrelated PID.
 - **Spawn boundary.** `invocation_dispatching` commits before each command/agent/correction launch, clearing the attempt's previous process identity without discarding session/report/correction history. A crash between spawn and identity persistence is intentionally unknown. Original process absence cannot establish correction-process absence.
 - **Reconciliation.** The first service facade for an owner connection inspects every persisted running/pausing run and unresolved attempt. The runner supplies conservative OS observations; only `RunCoordinator` writes interruption state/events/attention in one transaction. Running runs with no active attempt also interrupt, preserving their committed cursor. Accepted reports, immutable inputs and prior transitions survive; no report routing, signalling, correction or side-effect replay occurs on startup.
-- **Durable execution barrier.** Append-only migration 7 adds `attempts.recovery_state` (`alive`, `gone`, `mismatch`, `unknown`); migrations 1–6 are unchanged. Legacy uncertain interrupted attempts start as unknown. Any unresolved observation blocks `start`, `resume` and running `advance` across that database. `reconcile(runId)` refreshes observations idempotently; changes append `process_reconciled`. Proven absence clears only the process barrier; the run remains interrupted until explicit resume with a reason. Live operations cannot be reconciled through another facade of the same owner connection.
-- **Scope and limits at 7.1.** The later headless decision API is described below; service management and management CLI/UI remain unimplemented. Check-then-signal is not atomic: Node exposes no pidfd/group-signalling primitive here. Escaped descendants, inaccessible process evidence, deliberate local lease tampering and arbitrary external effects are not isolated or rolled back. A group disappearing is not evidence that its work succeeded.
+- **Durable execution barrier.** Append-only migration 7 adds `attempts.recovery_state` (`alive`, `gone`, `mismatch`, `unknown`); migrations 1–6 are unchanged. Legacy uncertain interrupted attempts start as unknown. Any unresolved observation blocks `start`, `resume` and running `advance` across that database. `reconcile(runId)` refreshes observations idempotently; changes append `process_reconciled`. Proven absence clears only the process barrier; an explicit recovery disposition (§7.6) and separate reasoned resume are still required. Live operations cannot be reconciled through another facade of the same owner connection.
+- **Recovery limits.** The decision API is described below and management/browser surfaces in §8. Check-then-signal is not atomic: Node exposes no pidfd/group-signalling primitive here. Escaped descendants, inaccessible process evidence, deliberate local lease tampering and arbitrary external effects are not isolated or rolled back. A group disappearing is not evidence that its work succeeded.
 
 Rationale: use [SQLite's existing kernel-backed exclusive locks](https://www.sqlite.org/lockingv3.html) rather than race-prone stale PID-file takeover. Linux [`/proc/pid/stat`](https://man7.org/linux/man-pages/man5/proc_pid_stat.5.html) supplies process group/session and boot-relative start ticks; combining them with boot identity avoids treating observed PID reuse as ownership. The independent `npm run smoke:recovery` SIGKILL scenarios exercise the headless implementation without a daemon or provider.
 
@@ -385,7 +386,7 @@ Rationale: use [SQLite's existing kernel-backed exclusive locks](https://www.sql
 - **Unidentified operations.** `confirmExternalCleanup` requires `confirmedNoSurvivingOperation: true` plus fresh service-supplied evidence that is not a verified live owned group. The operator must independently investigate/settle any unidentified or mismatched operation. Append-only migration **8** adds `recovery_resolutions`, keyed by attempt, with observation, reason and timestamp; migrations 1–7 are unchanged. This explicit assertion clears that attempt's barrier without overwriting `recovery_state` as `gone`. It is not automated absence evidence, rollback or assurance about escaped descendants. False operator assertions can permit overlap; no arbitrary-PID termination or generic ignore-process override is provided.
 - **Workflow disposition is separate.** `decideRecovery` requires resolved process barriers and records `recovery_decided` with the reason/action and old/new cursor in the same transaction as state changes. Retry selects another execution of the interrupted stage; continue preserves the committed between-step cursor. Skip uses a declared outcome and a manual null-attempt transition; jump validates cursor/task compatibility; end records stopped. Non-ending choices stay paused until explicit resume/drive. Existing audited manual controls also refuse unresolved processes. Interrupted attempts, reports, frozen inputs, sessions and correction history are never rewritten into success.
 
-Rationale: distinguish **what the OS observed**, **what the operator asserts about process cleanup**, and **which workflow action the operator chooses**. Conflating those would make an unknown launch look like a successful operation or silently authorize replay. No management daemon/HTTP/CLI/UI, automatic retry or quality gate is introduced.
+Rationale: distinguish **what the OS observed**, **what the operator asserts about process cleanup**, and **which workflow action the operator chooses**. Conflating those would make an unknown launch look like a successful operation or silently authorize replay. Recovery disposition remains separate from execution; configured stage retries do not authorize crash replay.
 
 ### 7.7 Phase 7.4 limits and durable retry admission
 
@@ -425,7 +426,7 @@ All management operations use authenticated `POST /api/v1` with a strict discrim
 | `task-overrides` | Same cursor, `taskId`, existing `TaskOverrideEdit` as `edit` |
 | `recovery-terminate`, `recovery-confirm`, `recovery-decide` | `runId`, existing exact-attempt/event/reason contract as `request` |
 
-Replies are JSON: 200 success, 202 shutdown admission, 401 invalid management authority, 404 unknown route, 409 wrong state/stale or settling control, 413 oversized body, 422 invalid request/definition, 400 other operation rejection. Diagnostics preserve code/path/location; transport failures are not retried. CLI exit/option/output conventions are in README. CLI local validation and RPC validation share `app/workflow-validation.ts`.
+Replies are JSON: 200 success, 202 shutdown admission, 401 invalid management authority, 404 unknown route, 409 wrong state/stale or settling control, 413 oversized body, 422 invalid request/definition, 400 other operation rejection. Diagnostics preserve code/path/location; transport failures are not retried. Management CLI exits are 0 for success, 1 for control/validation/transport rejection, and 2 for malformed CLI or unreadable input. See `docs/development.md` for commands. CLI local validation and RPC validation share `app/workflow-validation.ts`.
 
 `ManagementService` serializes mutations by rejecting overlap during asynchronous control settlement, while durable reads remain available. It checks `expectedEventId` before action and again after offline adapter construction. It delegates lifecycle, overrides, revisions and recovery to existing coordinator/service APIs. Start/resume install selected existing adapter factories lazily and acknowledge the run ID while retaining the drive promise. A new drive is refused until the old drive, report server and stop operation have settled. The coordinator independently enforces one active run and the database enforces one active attempt. The same service instance resets its stop flag only when admitting a subsequent drive. No queue or hidden retry is introduced.
 
@@ -576,20 +577,13 @@ retained. This is bounded Chromium/390px coverage, not cross-browser coverage or
   A disposable tool helper checks actual `wf` acknowledgment; success also checks exact durable report content, session identity and ordered settled invocations. Report-only scenarios disable correction. Private artifacts remain; settled target projects are removed, uncertain ones preserved. Normal auth/resource discovery is retained, never replaced with empty HOME.
   Ordinary tests/check/build/probes never execute providers; synthetic CLI tests cover this developer surface. Live acceptance is recorded separately from tooling completion.
   The account-local `smoke:meta` convenience command reuses this same path with the owner's pinned Meta Contributor/low selection. Its explicitly authorized loader parses only `MUSE_SPARK_API_KEY` from the owner-only local secrets shell file as literal data, never executing the file or persisting the value. It maps the key to the selected adapter environment; Meta credential names join the existing allowlist/scrubber at both OpenCode boundaries and omp. A developer-only project-preparation callback writes credential-free OpenCode v2 provider configuration inside the disposable target. No global edits, provider client, workflow fields, migrations, engine model restrictions or new report/routing policy are introduced. Plan mode does not read credentials; exact live-execution admission remains separate.
-- UI smoke: `npm run test:browser` permanently covers the complete visual two-stage gate, paused intervention/stale-state/draft pinning, and file-gated browser-lifetime independence (§8.6). Phase 9.1 audited the broader end-to-end scenarios; Phase 9.5 reran the offline/browser/smoke gates and added integrated real-CLI recovery proof. See the implementation log for exact results and limits.
+- UI smoke: `npm run test:browser` permanently covers the complete visual two-stage gate, paused intervention/stale-state/draft pinning, and file-gated browser-lifetime independence (§8.6). Phase 9.1 audited the broader end-to-end scenarios; Phase 9.5 reran the offline/browser/smoke gates and added integrated real-CLI recovery proof. See the [archived implementation log](history/implementation-log.md) for exact historical results and limits.
 
-**Quality gate:** TypeScript typecheck, tests, lint and documented local developer commands must pass before calling MVP complete. No external LLM spend needed for basic functionality.
+**Verification:** Code changes require TypeScript typecheck, lint and relevant tests. UI changes also need applicable browser/visual checks. Use [development commands](development.md); ordinary verification needs no external LLM spend.
 
-## 10. Recommended implementation order
+## 10. Current development direction
 
-1. Define strict contracts and compiler.
-2. Implement SQLite reducer/event store and tests.
-3. Implement FakeHarness + command executor and runner lifecycle.
-4. Implement report CLI/server channel and bounded correction.
-5. Implement Markdown import/task primitives.
-6. Implement harness adapters: Codex and Pi first, then Claude Code, OpenCode, and omp, all against the same interface and conformance suite.
-7. Implement CLI management and recovery flows.
-8. Add local UI for workflow configuration + execution monitoring.
-9. End-to-end tests and documentation.
-
-See [todo.md](todo.md) for actionable milestones.
+The original implementation order is complete and retained in the [archived MVP plan](history/mvp-plan.md).
+Follow [todo.md](refinement-plan.md) for cleanup, the owner-led walkthrough/new guide, and subsequent UI design
+and implementation. Keep these runtime contracts stable unless a concrete user problem requires
+an explicitly documented behavior adjustment. Historical verification is in the [archive](history/README.md).
