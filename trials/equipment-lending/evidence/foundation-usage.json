@@ -1,0 +1,22 @@
+{
+  "model": {
+    "id": "deepseek-v4.1-flash-free",
+    "providerID": "opencode",
+    "variant": "default"
+  },
+  "cost": 0,
+  "tokens": {
+    "input": 66847,
+    "output": 17685,
+    "reasoning": 19014,
+    "cache": {
+      "read": 1022976,
+      "write": 0
+    }
+  },
+  "time": {
+    "created": 1792664150211,
+    "updated": 1792664452295
+  },
+  "note": "Harness-reported metadata for failed foundation only; cost 0 is not an all-trial billing total."
+}

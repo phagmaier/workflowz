@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1f4b3f">
+  <title>Workshop Lending</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">W</span>
+      <div>
+        <p class="brand-name">Workshop Lending</p>
+        <p class="brand-sub">Equipment desk</p>
+      </div>
+    </div>
+    <nav class="main-nav" aria-label="Sections">
+      <a href="#overview" aria-current="page">Overview</a>
+      <a href="#equipment">Equipment</a>
+      <a href="#borrowers">Borrowers</a>
+      <a href="#loans">Loans</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="page-title">
+      <p class="eyebrow">Community workshop · local records</p>
+      <h1 id="page-title">Know what is out, and what is overdue.</h1>
+      <p class="lede">
+        One place for the workshop's equipment, the people who borrow it and the
+        loans that need attention. Everything stays on this computer.
+      </p>
+      <p class="date-note">
+        The overview uses today's local date. Demo loans are dated around
+        <strong>22 October 2026</strong>, so live overdue counts can differ from the
+        fixed-date report.
+      </p>
+    </section>
+
+    <section id="overview" class="overview" aria-labelledby="summary-title">
+      <div class="section-heading">
+        <h2 id="summary-title">At a glance</h2>
+        <p id="summary-status" class="status" role="status" aria-live="polite">
+          Loading counts…
+        </p>
+      </div>
+      <div class="summary-grid">
+        <article class="stat">
+          <p class="stat-label">Equipment</p>
+          <p class="stat-value" data-count="equipment.total">–</p>
+          <p class="stat-detail"><span data-count="equipment.available">–</span> available now</p>
+        </article>
+        <article class="stat">
+          <p class="stat-label">On loan</p>
+          <p class="stat-value" data-count="equipment.on_loan">–</p>
+          <p class="stat-detail"><span data-count="loans.active">–</span> active loans</p>
+        </article>
+        <article class="stat">
+          <p class="stat-label">Overdue</p>
+          <p class="stat-value" data-count="loans.overdue">–</p>
+          <p class="stat-detail">active and past the due date</p>
+        </article>
+        <article class="stat">
+          <p class="stat-label">Borrowers</p>
+          <p class="stat-value" data-count="borrowers">–</p>
+          <p class="stat-detail">people on record</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="management" aria-label="Record management">
+      <article id="equipment" class="panel management-panel">
+        <div class="panel-heading">
+          <h2>Equipment</h2>
+          <a class="action-link" href="#equipment-form">Add equipment</a>
+        </div>
+        <p class="panel-note">One record per physical item. Tags must be unique.</p>
+        <div id="equipment-list" class="record-list" aria-live="polite"><p>Loading equipment…</p></div>
+        <form id="equipment-form" class="record-form" novalidate>
+          <h3 id="equipment-form-title">Add equipment</h3>
+          <input type="hidden" name="id">
+          <label>Name <input name="name" required autocomplete="off"></label>
+          <label>Asset tag <input name="asset_tag" required autocomplete="off"></label>
+          <label>Category <input name="category" required autocomplete="off"></label>
+          <label>Notes <textarea name="notes" rows="2"></textarea></label>
+          <p class="field-error" data-error="form" role="alert"></p>
+          <div class="form-actions"><button type="submit">Save equipment</button><button type="reset" class="secondary">Clear</button></div>
+        </form>
+      </article>
+
+      <article id="borrowers" class="panel management-panel">
+        <div class="panel-heading">
+          <h2>Borrowers</h2>
+          <a class="action-link" href="#borrower-form">Add borrower</a>
+        </div>
+        <p class="panel-note">Contact details for people borrowing workshop equipment.</p>
+        <div id="borrower-list" class="record-list" aria-live="polite"><p>Loading borrowers…</p></div>
+        <form id="borrower-form" class="record-form" novalidate>
+          <h3 id="borrower-form-title">Add borrower</h3>
+          <input type="hidden" name="id">
+          <label>Name <input name="name" required autocomplete="name"></label>
+          <label>Email <input name="email" type="email" required autocomplete="email"></label>
+          <label>Notes <textarea name="notes" rows="2"></textarea></label>
+          <p class="field-error" data-error="form" role="alert"></p>
+          <div class="form-actions"><button type="submit">Save borrower</button><button type="reset" class="secondary">Clear</button></div>
+        </form>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Workshop Lending · local SQLite records · no account or network service</p>
+  </footer>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

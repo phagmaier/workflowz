@@ -1,6 +1,7 @@
 /** Invocation-local API client. EOF releases the private server; common supervision owns its group. */
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { request as httpRequest, type IncomingMessage } from "node:http";
 import { z } from "zod";
 import { openCodeEnvironment } from "./opencode-environment.js";
 import { OPENCODE_RECORD_LIMIT, openCodeSessionId } from "./opencode-events.js";
@@ -35,6 +36,11 @@ const admissionSchema = z.object({
 });
 const errorSchema = z.object({ _tag: z.string(), sessionID: z.string().optional() });
 class MissingSession extends Error {}
+class ProtocolError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+  }
+}
 
 async function main(): Promise<void> {
   const chunks: Buffer[] = [];
@@ -89,14 +95,14 @@ async function main(): Promise<void> {
       emit({ type: "error", kind: "spawn_error", code: error.code ?? "UNKNOWN" });
       reject(error);
     });
-    server.once("exit", () => reject(new Error("OpenCode exited before readiness")));
+    server.once("exit", () => reject(new ProtocolError("server_exited_before_readiness")));
     server.stdout.on("data", (chunk: Buffer) => {
       if (ready) {
         stdoutFilter.push(chunk);
         return;
       }
       if (pending.length + chunk.length > OPENCODE_RECORD_LIMIT) {
-        reject(new Error("OpenCode readiness record exceeded limit"));
+        reject(new ProtocolError("readiness_too_large"));
         return;
       }
       pending = Buffer.concat([pending, chunk]);
@@ -121,7 +127,7 @@ async function main(): Promise<void> {
           url.search ||
           url.hash
         )
-          throw new Error("OpenCode returned a non-loopback endpoint");
+          throw new ProtocolError("invalid_loopback_endpoint");
         ready = true;
         stdoutFilter.push(pending.subarray(newline + 1));
         pending = Buffer.alloc(0);
@@ -148,37 +154,43 @@ async function main(): Promise<void> {
       body?: unknown,
       empty = false,
     ): Promise<unknown> => {
-      const response = await fetch(`${base}${route}`, {
-        method,
-        headers,
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        redirect: "error",
+      // The wait endpoint can remain silent for the entire agent invocation. fetch's default
+      // 300-second headers/body deadlines would end work before the supervisor's configured
+      // limit. Core HTTP has no such deadline; timeout/Stop still supervise this whole group.
+      // One connection per request, no redirect following or automatic mutation replay.
+      const response = await new Promise<IncomingMessage>((resolve, reject) => {
+        const outgoing = httpRequest(
+          `${base}${route}`,
+          { method, headers, agent: false, timeout: 0 },
+          resolve,
+        );
+        outgoing.on("error", reject);
+        outgoing.end(body === undefined ? undefined : JSON.stringify(body));
       });
       const buffers: Uint8Array[] = [];
       let bytes = 0;
-      if (response.body)
-        for await (const chunk of response.body) {
-          bytes += chunk.length;
-          if (bytes > OPENCODE_RECORD_LIMIT)
-            throw new Error("OpenCode API response exceeded limit");
-          buffers.push(chunk);
-        }
+      for await (const chunk of response) {
+        bytes += chunk.length;
+        if (bytes > OPENCODE_RECORD_LIMIT) throw new ProtocolError("response_too_large");
+        buffers.push(chunk);
+      }
       const text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(buffers));
       const value: unknown = text ? JSON.parse(text) : undefined;
-      if (!response.ok) {
+      const status = response.statusCode ?? 0;
+      if (status < 200 || status >= 300) {
         const error = errorSchema.safeParse(value);
         if (
           input.prior &&
-          response.status === 404 &&
+          status === 404 &&
           error.success &&
           error.data._tag === "SessionNotFoundError" &&
           error.data.sessionID === input.prior
         )
           throw new MissingSession();
-        throw new Error("OpenCode API request failed");
+        throw new ProtocolError("http_error");
       }
-      if (empty && (response.status !== 204 || value !== undefined))
-        throw new Error("OpenCode did not acknowledge an empty API result");
+      if (empty && (status !== 204 || value !== undefined))
+        throw new ProtocolError("invalid_empty_acknowledgment");
       return value;
     };
     const permissions = [{ action: "*", resource: "*", effect: "allow" }];
@@ -209,7 +221,7 @@ async function main(): Promise<void> {
       }),
     ).data;
     if (admission.id !== messageID || admission.sessionID !== id)
-      throw new Error("OpenCode prompt identity mismatch");
+      throw new ProtocolError("prompt_identity_mismatch");
     await request("POST", `/api/experimental/session/${id}/wait`, undefined, true);
     const final = sessionSchema.parse(await request("GET", `/api/session/${id}`)).data;
     if (final.id !== id || final.location.directory !== process.cwd()) throw new MissingSession();
@@ -219,20 +231,43 @@ async function main(): Promise<void> {
       (initial.time.idle !== undefined && final.time.idle <= initial.time.idle) ||
       final.outcome === undefined
     )
-      throw new Error("OpenCode did not confirm this execution's terminal outcome");
+      throw new ProtocolError("terminal_outcome_unconfirmed");
     emit({ type: "result", sessionID: id, outcome: final.outcome });
   } catch (error) {
-    if (!emittedSpawnError)
+    if (!emittedSpawnError) {
+      const missing = error instanceof MissingSession;
+      const code = missing ? "resume_unavailable" : protocolErrorCode(error);
       emit({
         type: "error",
-        kind: error instanceof MissingSession ? "resume_unavailable" : "protocol_error",
+        kind: missing ? "resume_unavailable" : "protocol_error",
+        code,
       });
+      process.stderr.write(`OpenCode bridge failed (${code}).\n`);
+    }
+    process.exitCode = 1;
   } finally {
     server.stdin.end();
     // A terminal API response is not process settlement. A stuck server remains subject to timeout/stop.
     const result = await closed;
     if (result.code !== 0 || result.signal) process.exitCode = 1;
   }
+}
+
+/** Only fixed categories/codes cross the boundary; API bodies and raw error messages may be private. */
+function protocolErrorCode(error: unknown): string {
+  if (error instanceof ProtocolError) return error.code;
+  if (error instanceof z.ZodError || error instanceof SyntaxError) return "invalid_api_response";
+  if (error instanceof Error && "code" in error) {
+    for (const code of [
+      "ECONNREFUSED",
+      "ECONNRESET",
+      "EPIPE",
+      "HPE_HEADER_OVERFLOW",
+      "ERR_ENCODING_INVALID_ENCODED_DATA",
+    ])
+      if (error.code === code) return code;
+  }
+  return "protocol_error";
 }
 function emit(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value)}\n`);

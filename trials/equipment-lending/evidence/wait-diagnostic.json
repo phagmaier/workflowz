@@ -1,0 +1,26 @@
+{
+  "providerCalls": 0,
+  "nodeVersion": "v26.7.0",
+  "bridge": "unmodified dist/adapters/opencode-bridge.js",
+  "delayedLocalWaitMs": 310000,
+  "elapsedMs": 301189,
+  "exitCode": 0,
+  "bridgeEvents": [
+    {
+      "type": "session",
+      "sessionID": "ses_offlinefixture"
+    },
+    {
+      "type": "error",
+      "kind": "protocol_error"
+    }
+  ],
+  "fetchError": {
+    "route": "/api/experimental/session/ses_offlinefixture/wait",
+    "elapsedMs": 300721,
+    "name": "TypeError",
+    "message": "fetch failed",
+    "causeCode": "UND_ERR_HEADERS_TIMEOUT",
+    "causeName": "HeadersTimeoutError"
+  }
+}

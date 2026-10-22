@@ -97,6 +97,14 @@ files/transcripts are outside that guarantee. A previous OpenCode diagnostic exp
 configured MCP credential; raw artifacts remain private and require review before sharing.
 
 All five adapters have synthetic offline launch/report/session/settlement conformance coverage.
+OpenCode's private HTTP wait follows the configured invocation supervision rather than an
+HTTP client's implicit five-minute deadline. It does not follow redirects or retry API
+mutations. Bridge protocol errors now include a safe category/code in saved Output and a
+nonzero bridge exit; they remain technical failures that bypass report-only correction.
+For the extended offline regression after building, run
+`WF_TEST_OPENCODE_WAIT_MS=310000 node --test --test-name-pattern='allows delayed wait headers' dist/adapters/opencode.test.js`.
+The ordinary suite uses a short delay; the extended form holds actual response headers for
+310 seconds, without authentication or a provider call.
 Recorded live reporting and exact-session correction passed for Codex/Pi, OpenCode/omp, and Claude
 in their selected versions/accounts/models. These results do not verify every resource, provider,
 tool, managed setting or future version. Source references, earlier failures and exact scoped

@@ -1,0 +1,20 @@
+{
+  "recorded_at": "2026-10-22T10:18:24.038203+00:00",
+  "sha256": {
+    "SPEC.md": "c1697fd1f948a0dec9787c1701f590b80e267a1895c776cfb9fa252f00cdcc08",
+    "AGENTS.md": "d1ab86ccd85d846b28d6c66a38eeb647fd84a40eb84b4612d748a842ad070456",
+    "TASKS.md": "989372e3b1cf79a5596bd5e5388191340c7d6239611a9088dd355dfabb2a25e6",
+    ".workflow/INSTRUCTIONS.md": "3293d81d0d474f572db6c0e1399660b59936dff751c288a7064a59ac0513d43e",
+    ".workflow/REVIEW.md": "a747fa289009ca3b242b2b4c20d01ae1b57be213ab4481d0d2096b9fd4c34319",
+    ".workflow/check.py": "c6206e8eb0d03f96d0a93e3cf93d425ee760f03044c98919cd1e06d3caa4924b",
+    ".workflow/prompts/audit.md": "ecc275b10a7db91623f7a5508ff757e9818f36efa9b439124c0c5ad1aff0ace1",
+    ".workflow/prompts/check-repair.md": "bb513a1a0789ce2d699bb2c45366a5c28dff995d57277ab233a743b4ce71bb04",
+    ".workflow/prompts/finalize.md": "4311a69ab7cc9ad90b017cf88fd4b339ed7e56dd55356f79d3e3e313dde10f7e",
+    ".workflow/prompts/foundation-repair.md": "4d0ba30559e56040729dc3b7b812977d735464017b35e80f56af2fccda9d79dc",
+    ".workflow/prompts/foundation.md": "0a2060e9650363f28d4bd37d65f67f9720f876085d923046239e76501d12c281",
+    ".workflow/prompts/implement.md": "8784d5433e5caadf16bf0cd60dbd023b96495aa2533d36d5bacb143601218776",
+    ".workflow/prompts/integrate.md": "bd3de1bcd5bd3a313c019228383cedb5a76b1c4573b09993afec823020bb3e58",
+    ".workflow/prompts/repair.md": "fb8823fc8ec833d03b0f00ad49ab60e410edbf4d857b88e7122daca896a5beff",
+    ".workflow/prompts/review.md": "d60ce5c609fe411cbd61586b61a773e10c603aa0bd6d6a91e8c1f42278fec1ef"
+  }
+}

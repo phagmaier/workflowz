@@ -1,0 +1,11 @@
+▶ OpenCode private API invocation
+  ✔ allows delayed wait headers under invocation supervision without replay (311076.149332ms)
+✔ OpenCode private API invocation (311079.866066ms)
+ℹ tests 1
+ℹ suites 1
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 311479.363699

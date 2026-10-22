@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
 import { RunService } from "../runner/run-service.js";
 import { WorkflowDatabase } from "../store/database.js";
-import { describeAdapterConformance } from "../test-support/adapter-conformance.js";
+import { describeAdapterConformance, until } from "../test-support/adapter-conformance.js";
 import { REPO_ROOT } from "../test-support/paths.js";
 import type { AgentScript, ScriptedOptions } from "../test-support/scripted-agent.js";
 import { type AgentInput, ResumeUnavailableError } from "./agent-adapter.js";
@@ -216,6 +216,69 @@ describe("OpenCode private API invocation", () => {
     assert.equal(result.providerError, undefined);
     assert.match(result.stdout, /"outcome":"succeeded"/);
   });
+  it("allows delayed wait headers under invocation supervision without replay", async () => {
+    // Run with WF_TEST_OPENCODE_WAIT_MS=310000 to cross fetch's former 300-second deadline.
+    const delay = Number(process.env.WF_TEST_OPENCODE_WAIT_MS ?? 750);
+    assert.ok(Number.isInteger(delay) && delay >= 0 && delay <= 320000);
+    const f = await fixture([{ mode: "delayed-wait", extra: String(delay) }]);
+    const started = Date.now();
+    const result = await f.adapter.start({ ...input(f.root), timeoutMs: delay + 10000 }).completed;
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.timedOut, false);
+    assert.equal(result.providerError, undefined);
+    assert.ok(Date.now() - started >= delay);
+    assert.match(result.stdout, /"outcome":"succeeded"/);
+    const calls = captured(f.capture).requests;
+    assert.equal(calls.filter((r) => r.path === "/api/session").length, 1);
+    assert.equal(calls.filter((r) => r.path.endsWith("/prompt")).length, 1);
+    assert.equal(calls.filter((r) => r.path.endsWith("/wait")).length, 1);
+  });
+  it("enforces the configured invocation timeout while waiting for headers", async () => {
+    const f = await fixture([{ mode: "delayed-wait", extra: "30000" }]);
+    const result = await f.adapter.start({ ...input(f.root), timeoutMs: 1500 }).completed;
+    assert.equal(result.timedOut, true);
+    assert.equal(result.timeoutReason, "execution");
+    assert.equal(result.providerError, undefined);
+    assert.doesNotMatch(result.stdout, /"type":"result"/);
+    const calls = captured(f.capture).requests;
+    assert.equal(calls.filter((r) => r.path.endsWith("/wait")).length, 1);
+  });
+  it("settles an explicit stop while waiting for headers", async () => {
+    const f = await fixture([{ mode: "delayed-wait", extra: "30000" }]);
+    const handle = f.adapter.start({ ...input(f.root), timeoutMs: 10000 });
+    try {
+      await until(
+        () =>
+          existsSync(f.capture) &&
+          captured(f.capture).requests.some((r) => r.path.endsWith("/wait")),
+      );
+    } finally {
+      await handle.terminate();
+    }
+    const result = await handle.completed;
+    assert.equal(result.terminated, true);
+    assert.equal(result.timedOut, false);
+    assert.equal(result.providerError, undefined);
+    assert.doesNotMatch(result.stdout, /"type":"result"/);
+  });
+  for (const [mode, code] of [
+    ["wait-reset", "ECONNRESET"],
+    ["wait-redirect", "http_error"],
+    ["oversized", "response_too_large"],
+    ["invalid-json", "invalid_api_response"],
+  ])
+    it(`reports a safe diagnostic for ${mode} without retrying or following redirects`, async () => {
+      const f = await fixture([{ mode: mode as string }]);
+      const result = await f.adapter.start(input(f.root)).completed;
+      assert.equal(result.exitCode, 1);
+      assert.ok(
+        result.stdout.includes(JSON.stringify({ type: "error", kind: "protocol_error", code })),
+      );
+      assert.ok(result.diagnostics?.stderr.includes(`OpenCode bridge failed (${code}).`));
+      const calls = captured(f.capture).requests;
+      assert.equal(calls.filter((r) => r.path.endsWith("/prompt")).length, 1);
+      assert.equal(calls.filter((r) => r.path.endsWith("/wait")).length, 1);
+    });
   it("keeps timeout precedence when a missing-session response does not release its server", async () => {
     const f = await fixture([{ mode: "silent" }, { mode: "unavailable-then-hang" }]);
     const first = await f.adapter.start(input(f.root)).completed;
@@ -243,6 +306,8 @@ describe("OpenCode provider/protocol failures through the service", () => {
     "missing-terminal",
     "stale-terminal",
     "wrong-wait-ack",
+    "wait-reset",
+    "wait-redirect",
     "bad-ready",
   ])
     it(`bypasses correction after ${mode}`, async () => {

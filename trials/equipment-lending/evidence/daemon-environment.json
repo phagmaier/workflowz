@@ -1,0 +1,12 @@
+{
+  "pid": "1087796",
+  "environment_matches_launcher": {
+    "PATH": true,
+    "HOME": true,
+    "CODEX_HOME": true,
+    "PI_CODING_AGENT_DIR": true,
+    "CLAUDE_CONFIG_DIR": true,
+    "XDG_CONFIG_HOME": true,
+    "XDG_DATA_HOME": true
+  }
+}

@@ -1,0 +1,20 @@
+test_browser_shell_and_summary_api (test_foundation.CommandAndServerTests.test_browser_shell_and_summary_api) ... 127.0.0.1 - "GET / HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/summary HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/not-a-route HTTP/1.1" 404 -
+127.0.0.1 - "GET /%2e%2e/README.md HTTP/1.1" 404 -
+ok
+test_cli_seed_and_report_entry_points (test_foundation.CommandAndServerTests.test_cli_seed_and_report_entry_points) ... ok
+test_invalid_loan_dates_are_rejected (test_foundation.IntegrityTests.test_invalid_loan_dates_are_rejected) ... ok
+test_one_active_loan_per_item_but_history_is_allowed (test_foundation.IntegrityTests.test_one_active_loan_per_item_but_history_is_allowed) ... ok
+test_referenced_records_cannot_be_deleted (test_foundation.IntegrityTests.test_referenced_records_cannot_be_deleted) ... ok
+test_required_fields_and_unique_asset_tags (test_foundation.IntegrityTests.test_required_fields_and_unique_asset_tags) ... ok
+test_overdue_boundary_and_deterministic_order (test_foundation.SeedAndReportTests.test_overdue_boundary_and_deterministic_order) ... ok
+test_report_rejects_loose_or_impossible_dates (test_foundation.SeedAndReportTests.test_report_rejects_loose_or_impossible_dates) ... ok
+test_report_uses_real_rows_not_seed_totals (test_foundation.SeedAndReportTests.test_report_uses_real_rows_not_seed_totals) ... ok
+test_seed_keeps_existing_local_records (test_foundation.SeedAndReportTests.test_seed_keeps_existing_local_records) ... ok
+test_seed_report_agreement_and_repeat_safety (test_foundation.SeedAndReportTests.test_seed_report_agreement_and_repeat_safety) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.113s
+
+OK

@@ -1,0 +1,288 @@
+version: 1
+name: Equipment lending · autonomous baseline
+project:
+  root: ./project
+  instructions:
+    - AGENTS.md
+    - SPEC.md
+    - .workflow/INSTRUCTIONS.md
+tasks:
+  source:
+    kind: markdown_checklist
+    path: TASKS.md
+start: foundation
+limits:
+  max_wall_time_seconds: 14400
+  max_step_executions: 180
+defaults:
+  report_correction_attempts: 1
+  on:
+    system.error:
+      pause: true
+policies:
+  - match:
+      tags:
+        - checks
+    on:
+      failed:
+        goto: unsuccessful
+  - match:
+      step_ids:
+        - slice_check
+    on:
+      failed:
+        goto: check_repair
+steps:
+  foundation:
+    kind: agent
+    harness: opencode
+    model: opencode/deepseek-v4.1-flash-free
+    session: fresh
+    prompt_file: .workflow/prompts/foundation.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes:
+      - complete
+      - blocked
+    on:
+      complete:
+        goto: foundation_check
+      blocked:
+        goto: unsuccessful
+  foundation_check:
+    kind: command
+    argv:
+      - python3
+      - .workflow/check.py
+      - foundation
+    cwd: "{{project.root}}"
+    timeout_seconds: 180
+    tags:
+      - checks
+    on:
+      complete:
+        goto: pick_task
+      failed:
+        goto: foundation_repair
+  foundation_repair:
+    kind: agent
+    harness: opencode
+    model: opencode/deepseek-v4.1-flash-free
+    session: resume
+    prompt_file: .workflow/prompts/foundation-repair.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes:
+      - complete
+      - blocked
+    on:
+      complete:
+        goto: foundation_recheck
+      blocked:
+        goto: unsuccessful
+  foundation_recheck:
+    kind: command
+    argv:
+      - python3
+      - .workflow/check.py
+      - foundation
+    cwd: "{{project.root}}"
+    timeout_seconds: 180
+    tags:
+      - checks
+    on:
+      complete:
+        goto: pick_task
+  pick_task:
+    kind: task.next
+    on:
+      task_ready:
+        goto: implement
+      exhausted:
+        goto: integrate
+  implement:
+    kind: agent
+    harness: codex
+    model: gpt-6-luna
+    reasoning_effort: low
+    session: fresh
+    prompt_file: .workflow/prompts/implement.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes:
+      - complete
+      - blocked
+    on:
+      complete:
+        goto: review
+      blocked:
+        goto: unsuccessful
+  review:
+    kind: agent
+    harness: claude
+    model: claude-haiku-5-5
+    reasoning_effort: low
+    session: fresh
+    prompt_file: .workflow/prompts/review.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes:
+      - approved
+      - changes
+    on:
+      approved:
+        goto: finalize
+      changes:
+        goto: repair
+    context:
+      include_reports:
+        - implement
+    instructions:
+      - .workflow/REVIEW.md
+  finalize:
+    kind: agent
+    harness: codex
+    model: gpt-6-luna
+    reasoning_effort: low
+    session: resume
+    prompt_file: .workflow/prompts/finalize.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes:
+      - complete
+      - blocked
+    on:
+      complete:
+        goto: slice_check
+      blocked:
+        goto: unsuccessful
+    context:
+      include_reports:
+        - review
+  repair:
+    kind: agent
+    harness: codex
+    model: gpt-6-luna
+    reasoning_effort: low
+    session: resume
+    prompt_file: .workflow/prompts/repair.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes:
+      - complete
+      - blocked
+    on:
+      complete:
+        goto: slice_check
+      blocked:
+        goto: unsuccessful
+    context:
+      include_reports:
+        - review
+  slice_check:
+    kind: command
+    argv:
+      - python3
+      - .workflow/check.py
+      - slice
+    cwd: "{{project.root}}"
+    timeout_seconds: 180
+    tags:
+      - checks
+    on:
+      complete:
+        goto: mark_done
+  check_repair:
+    kind: agent
+    harness: codex
+    model: gpt-6-luna
+    reasoning_effort: low
+    session: resume
+    prompt_file: .workflow/prompts/check-repair.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes:
+      - complete
+      - blocked
+    on:
+      complete:
+        goto: slice_recheck
+      blocked:
+        goto: unsuccessful
+  slice_recheck:
+    kind: command
+    argv:
+      - python3
+      - .workflow/check.py
+      - slice
+    cwd: "{{project.root}}"
+    timeout_seconds: 180
+    tags:
+      - checks
+    on:
+      complete:
+        goto: mark_done
+  mark_done:
+    kind: task.complete
+    on:
+      complete:
+        goto: pick_task
+  integrate:
+    kind: agent
+    harness: omp
+    model: openai-codex/gpt-6-luna
+    reasoning_effort: off
+    session: fresh
+    prompt_file: .workflow/prompts/integrate.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes:
+      - complete
+      - blocked
+    on:
+      complete:
+        goto: audit
+      blocked:
+        goto: unsuccessful
+  audit:
+    kind: agent
+    harness: pi
+    model: openai/gpt-6-luna
+    reasoning_effort: off
+    session: fresh
+    prompt_file: .workflow/prompts/audit.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes:
+      - complete
+      - blocked
+    on:
+      complete:
+        goto: acceptance
+      blocked:
+        goto: unsuccessful
+    context:
+      include_reports:
+        - integrate
+  acceptance:
+    kind: command
+    argv:
+      - python3
+      - .workflow/check.py
+      - acceptance
+    cwd: "{{project.root}}"
+    timeout_seconds: 180
+    tags:
+      - checks
+    on:
+      complete:
+        goto: successful
+    env:
+      LENDING_DEMO_DB: var/demo.sqlite
+      LENDING_AS_OF: 2026-10-22
+  successful:
+    kind: end
+    label: Baseline accepted by authored checks
+  unsuccessful:
+    kind: end
+    label: Unsuccessful · inspect actual path and evidence

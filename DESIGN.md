@@ -2,6 +2,31 @@
 
 ## Status
 
+- OpenCode long-wait transport repair (2026-10-22, separately authorized after the trial):
+  the bridge now uses core HTTP without an implicit five-minute deadline; configured
+  invocation timeout/Stop and process/group/stream settlement remain authoritative.
+  Requests use separate connections without redirects or automatic replay. Protocol
+  errors exit nonzero and expose fixed diagnostic categories/allowlisted network codes.
+  All 866 standard tests and 67 focused adapter/framing/conformance checks pass. An
+  actual 310-second offline header wait also passed, crossing the former cutoff without
+  replay; timeout, Stop and protocol-error regression checks pass. The equipment trial remains paused; no live
+  invocation was replayed. See its [repair record](trials/equipment-lending/EVALUATION.md#owner-authorized-transport-repair).
+- Autonomous multi-harness trial continued after repair (2026-10-22):
+  [equipment lending plan and sample project inputs](trials/equipment-lending/README.md)
+  cover OpenCode, Codex, Claude, OMP and Pi, autonomous task iteration and a later small
+  revision. The continuation handoff authorized execution; all five live tool/report
+  preflights passed, the 18-node workflow validates, and baseline revision 1 was explicitly
+  started through the Workbench. Foundation paused at 5m03s with a bridge protocol error;
+  an offline reproduction confirmed the unmodified bridge's 300-second HTTP header
+  timeout. The partial foundation passes 11 independent tests and bounded seed/report/
+  persistence/storage checks; CRUD, substantive work by the other four harnesses and the
+  maintenance follow-up were not reached in the initial attempt. After the separately
+  authorized transport fix, the owner delegated continuation; the evaluator explicitly
+  resumed the same run at Foundation through the Workbench, preserving its failed attempt
+  and frozen tasks. The continuation is in progress.
+  Actual outcomes, partial acceptance and prioritized recommendations are in the
+  [evaluation record](trials/equipment-lending/EVALUATION.md). This is an evaluation
+  exercise, not authorization for product changes or desktop work.
 - Owner-led real-provider walkthrough (2026-10-22): the prepared exercise in
   [walkthrough/](walkthrough/README.md) completed once with OpenCode and
   `opencode/deepseek-v4.1-flash-free`, using a one-line disposable project and isolated

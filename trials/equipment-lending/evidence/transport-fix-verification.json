@@ -1,0 +1,32 @@
+{
+  "recordedAt": "2026-10-22T10:52:09.735717+00:00",
+  "providerCalls": 0,
+  "standardTests": {
+    "pass": 866,
+    "fail": 0,
+    "skipped": 0
+  },
+  "focusedOpenCodeTests": {
+    "pass": 67,
+    "fail": 0,
+    "skipped": 0
+  },
+  "longWait": {
+    "heldHeadersMs": 310000,
+    "testElapsedMs": 311076.149332,
+    "pass": 1,
+    "fail": 0,
+    "skipped": 0,
+    "command": "WF_TEST_OPENCODE_WAIT_MS=310000 node --test --test-name-pattern='allows delayed wait headers' dist/adapters/opencode.test.js"
+  },
+  "typecheck": "passed",
+  "lint": "passed with 6 warnings and 142 infos",
+  "originalTrial": {
+    "runId": "run_9ae79946-41f0-4b67-a8ab-1a83d516d6f2",
+    "status": "paused",
+    "completedTasks": 0,
+    "activeAttempt": null,
+    "replayed": false
+  },
+  "bridgeSourceSha256": "b7880c8d1b4d0fb04f9a781192b6d10570ebcd648762fc46cdc5b09f485cdf57"
+}

@@ -252,6 +252,16 @@ Prompt admission must acknowledge the generated message ID and session ID. The b
 
 On completion/error the bridge closes the stdin lease and awaits server exit. The common supervisor independently confirms the bridge/group/pipe settlement; stuck shutdown still obeys timeout/stop precedence. No report or terminal API response allows early routing or correction. Existing correction limits, rotated report access, revision scope, state transactions and migrations are unchanged.
 
+The private API transport uses Node's core HTTP client with one connection per request,
+no redirect following and no transport-level deadline or automatic retry. The wait endpoint
+may withhold headers until the agent finishes; built-in `fetch` imposed an unintended
+300-second header deadline that interrupted longer work despite a larger workflow limit.
+The existing process supervisor remains the sole timeout/Stop boundary for the entire
+invocation, including readiness, API waits and leased-server shutdown. Responses still have
+the 1 MiB/strict UTF-8/JSON checks above. Protocol failures emit only fixed diagnostic
+categories or allowlisted network error codes, close the lease, await settlement and exit
+nonzero; raw exception messages, API bodies and authorization do not enter these diagnostics.
+
 The supported v2 session permission ruleset is `[{action: "*", resource: "*", effect: "allow"}]`, audited as `session-allow-all` with CLI version. Session rules apply after agent rules; this explicit unrestricted selection overrides session denials, unlike `--auto`'s allow-unless-denied semantics. No global setting is written. Model/variant selection uses existing model/reasoning fields. Runtime selects the common environment plus documented OpenCode/config/provider names; the private server removes its lease password from tool inheritance, and the supervisor scrubs known injected secrets. No isolation or rollback is claimed.
 
 OpenCode is `conformance_passed` after the entire shared offline suite through a synthetic CLI/private API server, plus adapter-specific identity, framing, failure and settlement coverage. The shared missing-identity case now permits a protocol error when identity is required by the transport, while still requiring no correction/fresh fallback. Installed isolated checks independently confirmed CLI create-if-missing, exact API missing-session rejection and terminal invalid-provider failure. Recorded live reporting/correction evidence and unverified resource/tool interactions are distinguished in `docs/harness-compatibility.md`.

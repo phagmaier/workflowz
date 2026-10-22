@@ -174,6 +174,9 @@ const server = createServer(async (req, res) => {
                 "missing-terminal",
                 "leak-credentials",
                 "wrong-wait-ack",
+                "delayed-wait",
+                "wait-reset",
+                "wait-redirect",
               ].includes(script.mode)
             ? "silent"
             : script.mode;
@@ -231,6 +234,16 @@ const server = createServer(async (req, res) => {
     }
     if (operation === "wait" && req.url.startsWith("/api/experimental/")) {
       await active;
+      if (script.mode === "delayed-wait")
+        await new Promise((resolve) => setTimeout(resolve, Number(script.extra)));
+      if (script.mode === "wait-reset") {
+        res.destroy();
+        return;
+      }
+      if (script.mode === "wait-redirect") {
+        res.writeHead(307, { location: `/api/session/${id}/prompt` }).end();
+        return;
+      }
       if (script.mode === "wrong-wait-ack") {
         send({ outcome: "succeeded" });
         return;
