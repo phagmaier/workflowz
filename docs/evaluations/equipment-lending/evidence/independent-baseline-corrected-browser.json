@@ -1,0 +1,55 @@
+{
+  "pass": false,
+  "failure": "TimeoutError: locator.selectOption: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#checkout-form').getByLabel('Equipment', { exact: true })\u001b[22m\n",
+  "observations": [
+    {
+      "check": "required-field feedback preserves equipment input",
+      "detail": true
+    },
+    {
+      "check": "create equipment and category appears without reload",
+      "detail": true
+    },
+    {
+      "check": "duplicate-tag feedback preserves input across asynchronous failure",
+      "detail": true
+    },
+    {
+      "check": "edit equipment moves focus to its form and saves",
+      "detail": true
+    },
+    {
+      "check": "delete unused item confirms its name and removes unused category",
+      "detail": {
+        "type": "confirm",
+        "message": "Delete “Unused browser item (BROWSER-BASELINE-CORRECTED-DELETE)”?"
+      }
+    },
+    {
+      "check": "borrower create/edit and invalid-email input preservation",
+      "detail": true
+    },
+    {
+      "check": "delete unused borrower with named confirmation",
+      "detail": {
+        "type": "confirm",
+        "message": "Delete “Unused browser borrower”?"
+      }
+    },
+    {
+      "check": "browser combined search/category/availability filters",
+      "detail": true
+    }
+  ],
+  "dialogs": [
+    {
+      "type": "confirm",
+      "message": "Delete “Unused browser item (BROWSER-BASELINE-CORRECTED-DELETE)”?"
+    },
+    {
+      "type": "confirm",
+      "message": "Delete “Unused browser borrower”?"
+    }
+  ],
+  "pageErrors": []
+}

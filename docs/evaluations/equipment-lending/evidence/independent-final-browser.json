@@ -1,0 +1,126 @@
+{
+  "pass": true,
+  "failure": null,
+  "observations": [
+    {
+      "check": "required-field feedback preserves equipment input",
+      "detail": true
+    },
+    {
+      "check": "create equipment and category appears without reload",
+      "detail": true
+    },
+    {
+      "check": "duplicate-tag feedback preserves input across asynchronous failure",
+      "detail": true
+    },
+    {
+      "check": "edit equipment moves focus to its form and saves",
+      "detail": true
+    },
+    {
+      "check": "delete unused item confirms its name and removes unused category",
+      "detail": {
+        "type": "confirm",
+        "message": "Delete “Unused browser item (BROWSER-FINAL-DELETE)”?"
+      }
+    },
+    {
+      "check": "borrower create/edit and invalid-email input preservation",
+      "detail": true
+    },
+    {
+      "check": "delete unused borrower with named confirmation",
+      "detail": {
+        "type": "confirm",
+        "message": "Delete “Unused browser borrower”?"
+      }
+    },
+    {
+      "check": "browser combined search/category/availability filters",
+      "detail": true
+    },
+    {
+      "check": "checkout date error preserves dates and selected equipment",
+      "detail": true
+    },
+    {
+      "check": "checkout updates card, displays borrower/date status and removes conflicting choice",
+      "detail": true
+    },
+    {
+      "check": "return preserves history and supports recheckout with fresh availability",
+      "detail": true
+    },
+    {
+      "check": "referenced equipment deletion refused in browser",
+      "detail": {
+        "type": "alert",
+        "message": "This record is referenced by loan history and cannot be deleted."
+      }
+    },
+    {
+      "check": "referenced borrower deletion refused in browser",
+      "detail": true
+    },
+    {
+      "check": "browser overdue and returned filters distinguish due-today and history",
+      "detail": true
+    },
+    {
+      "check": "responsive loan/forms viewport 1440",
+      "detail": {
+        "overflow": 0
+      }
+    },
+    {
+      "check": "responsive loan/forms viewport 768",
+      "detail": {
+        "overflow": 0
+      }
+    },
+    {
+      "check": "responsive loan/forms viewport 390",
+      "detail": {
+        "overflow": 0
+      }
+    },
+    {
+      "check": "visible form keyboard focus at phone width",
+      "detail": {
+        "outline": "solid"
+      }
+    },
+    {
+      "check": "no uncaught browser errors",
+      "detail": true
+    }
+  ],
+  "dialogs": [
+    {
+      "type": "confirm",
+      "message": "Delete “Unused browser item (BROWSER-FINAL-DELETE)”?"
+    },
+    {
+      "type": "confirm",
+      "message": "Delete “Unused browser borrower”?"
+    },
+    {
+      "type": "confirm",
+      "message": "Delete “Browser final drill edited (BROWSER-FINAL)”?"
+    },
+    {
+      "type": "alert",
+      "message": "This record is referenced by loan history and cannot be deleted."
+    },
+    {
+      "type": "confirm",
+      "message": "Delete “Browser final member”?"
+    },
+    {
+      "type": "alert",
+      "message": "This record is referenced by loan history and cannot be deleted."
+    }
+  ],
+  "pageErrors": []
+}

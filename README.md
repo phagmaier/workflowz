@@ -1,56 +1,64 @@
 # Workflowz
 
-A local runner for user-defined coding-agent and command workflows. You choose the steps and
-outcome rules; the runner executes them sequentially and saves progress/history in SQLite.
-A local browser interface and the `wf` CLI control the same daemon.
+A local runner for user-defined coding-agent and command workflows. You choose steps and
+outcome rules; Workflowz executes them sequentially and saves progress/history in SQLite.
+The browser Workbench and `wf` CLI control the same daemon.
 
-## UI implementation status
+**Current phase: refine Workflowz from real use.** The Workbench redesign, owner walkthrough
+and five-harness equipment-lending trial are complete. The disposable sample app has been
+removed; its findings and public evidence are archived. Start with
+[IMPROVEMENTS.md](IMPROVEMENTS.md) for current priorities and what we learned.
 
-The approved **Workbench (C)** interface is complete, including Graph and Form authoring,
-the shared checker, runs grouped by status, and run details with paused decisions, history,
-Report / Output and the execution-path map. All five slices and the final interface review
-are complete. The [user guide](USER_GUIDE.md) covers the current browser interface from pairing
-through running, inspection and recovery. Desktop packaging and automatic service lifecycle
-remain future work; a real-provider walkthrough is separate.
+## Project map
 
-- [USER_GUIDE.md](USER_GUIDE.md): end-user instructions and advanced usage reference.
-- [Owner walkthrough](walkthrough/README.md): disposable OpenCode exercise, prepared offline;
-  real-provider execution remains pending with the owner.
-- [DESIGN.md](DESIGN.md): approved UI requirements, decisions and implementation status.
-- [AGENTS.md](AGENTS.md): contribution instructions and runtime boundaries.
-- [Development reference](archive/development.md): additional commands and browser provisioning.
-- [Archive](archive/README.md): technical contracts and historical material.
-
-The previous interface's guides, feedback and prototypes are archived; their screen descriptions
-are historical context. Use the root user guide for current instructions.
+| Path | Purpose |
+| --- | --- |
+| [IMPROVEMENTS.md](IMPROVEMENTS.md) | Single active improvement backlog and current checkpoint |
+| [AGENTS.md](AGENTS.md) | Contribution workflow and runtime boundaries; CLAUDE.md links here |
+| [docs/](docs/README.md) | User guide, approved design, technical references and past evaluations |
+| `src/` | Workflow contracts, engine, persistence, harness adapters and local daemon/CLI |
+| `ui/` | React + TypeScript Workbench |
+| `test/` | Offline browser regressions and fixtures; unit tests live beside source |
+| [examples/](examples/README.md) | Illustrative workflow definitions and task inputs |
+| `scripts/`, `bin/` | Build/check helpers and the local `wf` entry point |
 
 ## Development
 
-Requires Linux with `/proc`, Node.js 26+ and npm. From the repository root:
+Requires Linux with `/proc`, Node.js 26+ and npm. Run from the repository root:
 
 ```bash
 npm ci
-npm run build
 npm run check
+npm run test:browser
 ```
 
-Start the application in one terminal:
+The core check builds the app, typechecks, lints and runs offline tests. Browser checks are
+separate and require the pinned Chromium to be provisioned; see
+[development and browser setup](docs/reference/development.md).
+No live model calls are needed for ordinary product improvements.
+
+Start the service in one terminal:
 
 ```bash
 bin/wf --state-dir "$HOME/.local/state/workflowz" daemon start
 ```
 
-In another terminal, from this directory:
+In another terminal:
 
 ```bash
 bin/wf --state-dir "$HOME/.local/state/workflowz" ui
 ```
 
-Open the printed address and enter the one-use pairing code. Leave the daemon terminal open.
-The interface opens at `/ui/`. Previous `/ui/app/` bookmarks redirect there, preserving hash
-navigation. The classic interface has been removed.
-An existing state directory must belong to you and have private permissions (`0700`).
-Core tests use offline fixtures; browser checks are separate (`npm run test:browser`). See the
-[archived development reference](archive/development.md) for provisioning and additional commands.
-Agent workflows use separately installed harnesses and can modify user-accessible files;
-stopping does not undo their changes. UI development does not require live model calls.
+Open the printed address and enter the one-use pairing code. Keep the daemon terminal open.
+An existing state directory must be owned by you with private permissions (`0700`). Use
+[the user guide](docs/USER_GUIDE.md) for authoring, running, results and recovery.
+Agents can modify user-accessible files; stopping does not undo their changes.
+
+## Improvement workflow
+
+Choose one finding from IMPROVEMENTS.md, reproduce current behavior, implement a complete
+small slice, and verify the affected flow. Update that finding's status/evidence; update
+the design or guide only when behavior changes. Historical reports are evidence, not a new
+assignment or permission to rerun providers. Keep temporary experiments outside the repository
+and preserve only useful findings/regressions afterward. `node_modules/` and `dist/` are
+ignored development/install output, not documentation or archived evidence.

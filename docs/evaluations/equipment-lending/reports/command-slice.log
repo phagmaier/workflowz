@@ -1,0 +1,65 @@
+test_browser_shell_and_summary_api (test_foundation.CommandAndServerTests.test_browser_shell_and_summary_api) ... 127.0.0.1 - "GET / HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/summary HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/not-a-route HTTP/1.1" 404 -
+127.0.0.1 - "GET /%2e%2e/README.md HTTP/1.1" 404 -
+ok
+test_checkout_return_conflicts_dates_and_restart_persistence (test_foundation.CommandAndServerTests.test_checkout_return_conflicts_dates_and_restart_persistence) ... 127.0.0.1 - "POST /api/loans HTTP/1.1" 201 -
+127.0.0.1 - "POST /api/loans HTTP/1.1" 409 -
+127.0.0.1 - "POST /api/loans HTTP/1.1" 400 -
+127.0.0.1 - "POST /api/loans HTTP/1.1" 400 -
+127.0.0.1 - "GET /api/loans?state=active HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/loans?state=active HTTP/1.1" 200 -
+127.0.0.1 - "PATCH /api/loans/1 HTTP/1.1" 400 -
+127.0.0.1 - "PATCH /api/loans/1 HTTP/1.1" 200 -
+127.0.0.1 - "PATCH /api/loans/1 HTTP/1.1" 409 -
+127.0.0.1 - "POST /api/loans HTTP/1.1" 201 -
+127.0.0.1 - "GET /api/loans?state=returned HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/equipment HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/loans?state=active HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/loans?state=all HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/equipment HTTP/1.1" 200 -
+ok
+test_cli_seed_and_report_entry_points (test_foundation.CommandAndServerTests.test_cli_seed_and_report_entry_points) ... ok
+test_equipment_and_borrower_crud_validation_and_history_conflicts (test_foundation.CommandAndServerTests.test_equipment_and_borrower_crud_validation_and_history_conflicts) ... 127.0.0.1 - "POST /api/equipment HTTP/1.1" 201 -
+127.0.0.1 - "GET /api/equipment HTTP/1.1" 200 -
+127.0.0.1 - "POST /api/equipment HTTP/1.1" 409 -
+127.0.0.1 - "POST /api/equipment HTTP/1.1" 400 -
+127.0.0.1 - "POST /api/equipment HTTP/1.1" 400 -
+127.0.0.1 - "POST /api/equipment HTTP/1.1" 400 -
+127.0.0.1 - "POST /api/borrowers HTTP/1.1" 201 -
+127.0.0.1 - "POST /api/borrowers HTTP/1.1" 201 -
+127.0.0.1 - "POST /api/borrowers HTTP/1.1" 400 -
+127.0.0.1 - "POST /api/borrowers HTTP/1.1" 400 -
+127.0.0.1 - "POST /api/borrowers HTTP/1.1" 400 -
+127.0.0.1 - "PUT /api/equipment/1 HTTP/1.1" 200 -
+127.0.0.1 - "PUT /api/borrowers/1 HTTP/1.1" 200 -
+127.0.0.1 - "DELETE /api/equipment/1 HTTP/1.1" 200 -
+127.0.0.1 - "DELETE /api/borrowers/1 HTTP/1.1" 200 -
+127.0.0.1 - "DELETE /api/equipment/1 HTTP/1.1" 409 -
+127.0.0.1 - "DELETE /api/borrowers/3 HTTP/1.1" 409 -
+ok
+test_equipment_filters_combine_search_category_and_availability (test_foundation.CommandAndServerTests.test_equipment_filters_combine_search_category_and_availability) ... 127.0.0.1 - "GET /api/equipment?search=drill HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/equipment?search=drill&category=Power%20Tools&availability=available HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/equipment?search=SAW&availability=on-loan HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/equipment?availability=maybe HTTP/1.1" 400 -
+/home/phagmaier/.local/share/mise/installs/python/3.15.1/lib/python3.15/tempfile.py:538: ResourceWarning: Implicitly cleaning up <HTTPError 400: 'Bad Request'>
+  _warnings.warn(self.warn_message, ResourceWarning)
+ok
+test_overdue_loan_filter_excludes_due_today_and_returned_loans (test_foundation.CommandAndServerTests.test_overdue_loan_filter_excludes_due_today_and_returned_loans) ... 127.0.0.1 - "GET /api/loans?state=overdue HTTP/1.1" 200 -
+ok
+test_overview_details_match_report_and_counts_after_mutation (test_foundation.CommandAndServerTests.test_overview_details_match_report_and_counts_after_mutation) ... 127.0.0.1 - "GET /api/summary HTTP/1.1" 200 -
+ok
+test_invalid_loan_dates_are_rejected (test_foundation.IntegrityTests.test_invalid_loan_dates_are_rejected) ... ok
+test_one_active_loan_per_item_but_history_is_allowed (test_foundation.IntegrityTests.test_one_active_loan_per_item_but_history_is_allowed) ... ok
+test_referenced_records_cannot_be_deleted (test_foundation.IntegrityTests.test_referenced_records_cannot_be_deleted) ... ok
+test_required_fields_and_unique_asset_tags (test_foundation.IntegrityTests.test_required_fields_and_unique_asset_tags) ... ok
+test_overdue_boundary_and_deterministic_order (test_foundation.SeedAndReportTests.test_overdue_boundary_and_deterministic_order) ... ok
+test_report_rejects_loose_or_impossible_dates (test_foundation.SeedAndReportTests.test_report_rejects_loose_or_impossible_dates) ... ok
+test_report_uses_real_rows_not_seed_totals (test_foundation.SeedAndReportTests.test_report_uses_real_rows_not_seed_totals) ... ok
+test_seed_keeps_existing_local_records (test_foundation.SeedAndReportTests.test_seed_keeps_existing_local_records) ... ok
+test_seed_report_agreement_and_repeat_safety (test_foundation.SeedAndReportTests.test_seed_report_agreement_and_repeat_safety) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.448s
+
+OK

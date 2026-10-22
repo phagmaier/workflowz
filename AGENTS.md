@@ -1,59 +1,60 @@
-# AGENTS.md — UI overhaul
+# AGENTS.md — Workflowz
 
 <!-- codebase-memory-mcp:start -->
 For structural codebase exploration, use the installed `codebase-memory` skill.
 <!-- codebase-memory-mcp:end -->
 
-## Current assignment
+## Current work
 
-Implement the approved Workbench design (direction C) in React + TypeScript. Design selection
-is complete. Read `README.md`, then `DESIGN.md`; use its Status section for completed and next
-slices. Approved target behavior does not imply that implementation is complete.
+Refine the existing Workflowz Workbench using the owner's real-use feedback and the completed
+multi-harness evaluation. Read `README.md`, then `IMPROVEMENTS.md`. Follow the current user
+request to choose the next slice; the backlog is not an instruction to implement everything.
+The completed sample app and one-off live exercise scaffolding were deliberately removed.
 
 Documentation roles:
 
-- `README.md`: setup and repository orientation.
-- `DESIGN.md`: approved UI requirements, decisions and current implementation status.
-- Source and tests: implemented behavior; verify the area being changed.
-- `archive/`: technical references and historical context. Read specific contracts as needed;
-  old plans, feedback, walkthroughs and approvals are not current assignments or authorization.
+- `IMPROVEMENTS.md`: single active backlog, finding status and current checkpoint.
+- `docs/DESIGN.md`: approved behavior and design decisions; consult for the selected UI slice.
+- `docs/USER_GUIDE.md`: implemented user-facing operation; update when behavior changes.
+- `docs/reference/`: runtime/schema/adapter contracts and development checks; verify against current source/tests.
+- `docs/evaluations/` and `docs/history/`: evidence and historical decisions, not current assignments or reusable authorization.
 
-There is no active `todo.md` or user-guide assignment.
+## Working loop
 
-## Implementation workflow
+1. Identify the selected finding and reproduce the current behavior with existing offline
+   fixtures or a bounded local check. Separate observed defects from proposed remedies.
+2. Implement one complete small slice. Make ordinary implementation decisions within the
+   request; explain necessary behavior/API changes before implementing them.
+3. Add a meaningful regression for a bug fix and run the checks appropriate to the change.
+   Preserve input/focus and keep feedback beside the action that caused it.
+4. Update the finding in IMPROVEMENTS.md with status, the actual change and verification.
+   Update `docs/DESIGN.md` for behavior/decision changes and `docs/USER_GUIDE.md` for operating changes.
+5. Report the result, checks and remaining limits. Keep one active backlog; avoid new root
+   plans, handoffs, status files or session transcripts for routine work.
 
-- Build one complete frontend slice at a time using the approved layout, theme and interactions in `DESIGN.md`.
-- Keep the distinction between approved target behavior and completed implementation clear. Archived prototypes are superseded; they are not the approved Workbench design.
-- Preserve all existing workflow capabilities. Make ordinary tasks straightforward and keep advanced YAML, policies and diagnostic details accessible in appropriate views.
-- Keep action feedback at the action and make created/selected objects apparent. Preserve input and focus through asynchronous updates and failures.
-- Record material decisions and concise implementation status in `DESIGN.md`; avoid a session transcript or duplicate task list.
-- Write the new user guide after the redesigned interface works. Do not resume the abandoned walkthrough unless the owner requests it.
+Use existing fake adapters and private disposable state for product work. UI changes need
+applicable offline browser, visual, keyboard and responsive checks, alongside typecheck,
+lint and meaningful tests. Documentation-only changes need link/example checks, not live
+workflows. Consult `docs/reference/development.md` and package.json for commands.
+Past provider trials do not authorize new live calls; retain the owner's exact requested
+models if a new evaluation is requested. Clean up owned temporary resources after settlement.
 
-## Technical boundaries
+## Product and runtime boundaries
 
-The frontend already uses React + TypeScript and Vite, served by the existing local daemon.
-Continue that integration. Desktop packaging and service lifecycle changes are deferred; see
-`DESIGN.md`. There is no authorization for an engine rewrite or speculative features.
+Continue React + TypeScript/Vite through the existing daemon. Preserve the approved
+Workbench direction and existing workflow capabilities. Desktop packaging/service lifecycle
+remain deferred. There is no authorization for an engine rewrite or speculative features.
 
 - Follow the authored deterministic graph. No supervisor LLM or mandatory review/test/approval stages.
-- Keep the coordinator as the sole canonical run/task state writer. State changes and their audit events remain transactional, with stable IDs and immutable historical records.
-- Wait for process/group/stream settlement before starting another operation. Stop/timeout must supervise and reap owned processes.
+- Keep the coordinator the sole canonical run/task state writer. State changes and audit events remain transactional, with stable IDs and immutable history.
+- Wait for process/group/stream settlement before the next operation. Stop/timeout supervise and reap owned processes.
 - Strict reports accept only declared outcomes. At most one configured exact-session correction follows clean missing-report execution; original technical failures bypass correction.
-- Never replay uncertain operations or signals automatically after a crash. Preserve explicit recovery decisions and separate resume.
-- Keep creation, validation and saving distinct from execution. Preserve explicit Start/Resume, stale-state rejection and no automatic mutation retries.
+- Never automatically replay uncertain operations or signals after a crash. Preserve explicit recovery decisions and separate Resume.
+- Keep creation, validation and saving separate from execution. Preserve explicit Start/Resume, stale-state rejection and no automatic mutation retries.
 - Preserve pairing, loopback Host/Origin checks, separate report/management/browser authority and CSP. Browser close/reload must not stop execution.
-- User-authored arbitrary commands and unrestricted harnesses remain permitted. Make consequences understandable without inventing isolation, rollback or extra mandatory workflow gates.
-- Do not edit global harness installations/configuration. Never expose credentials, report tokens, pairing codes or private runtime artifacts.
+- Arbitrary commands and unrestricted harnesses remain permitted. Explain consequences without inventing isolation, rollback or extra mandatory gates.
+- Keep dependencies project-local; preserve global harness installations/configuration. Never expose credentials, report tokens, pairing codes or private runtime artifacts.
 
-The [archived architecture](archive/architecture.md), [schema](archive/schema-v1.md), and
-[product contract](archive/spec.md) preserve detailed runtime constraints. Verify current
-source/tests for the area being changed; those documents include implementation history.
-
-## Verification and scope
-
-- Use existing fake adapters and disposable state. No paid provider execution is authorized for UI work. The owner's future walkthrough selection is OpenCode with `opencode/deepseek-v4.1-flash-free`; never substitute a paid model.
-- Keep dependencies project-local. Use current official docs when selecting frontend tooling or changing version-sensitive integrations.
-- Code changes require typecheck, lint and meaningful relevant tests. UI changes also require applicable offline browser checks and visual/keyboard/responsive verification. Do not weaken existing lifecycle/recovery checks to fit the UI.
-- Documentation-only work requires link/example checks. Do not run live workflows merely to verify documentation.
-- Explain any necessary behavior/API changes before implementing them, and update the relevant archived technical reference when its contract changes. Favor small complete frontend slices over a simultaneous rewrite of unrelated modules.
-- Report what changed, what was checked, and remaining limitations. Do not treat old commit/push approvals as current authorization.
+Use current official documentation for version-sensitive integrations. Update the affected
+technical reference if a contract changes. Preserve lifecycle/recovery tests; do not weaken
+them to fit a UI change. Treat old commit/push approvals as historical, not current task scope.

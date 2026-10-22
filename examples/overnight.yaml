@@ -1,13 +1,13 @@
 # Canonical YAML v1 example: task iteration, agent reporting, debugging, review and explicit Git commands.
 # Installed capabilities are checked before each agent invocation; offline probes do not verify authentication or live sessions.
 # Paths are relative to project.root unless noted otherwise.
-# `harness` may be any registered adapter: codex | pi | omp | opencode | claude (see archive/spec.md §2.4).
+# `harness` may be any registered adapter: codex | pi | omp | opencode | claude (see docs/reference/spec.md §2.4).
 version: 1
 name: Overnight feature tasks
 project:
   root: ".."
   instructions:
-    - archive/spec.md
+    - docs/reference/spec.md
     - AGENTS.md
 tasks:
   source:

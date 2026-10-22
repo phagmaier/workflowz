@@ -1,0 +1,84 @@
+version: 1
+name: Equipment lending · browser repair
+project:
+  root: ./project
+  instructions:
+    - AGENTS.md
+    - SPEC.md
+    - .workflow/INSTRUCTIONS.md
+# Deliberately no tasks source: the three original checklist tasks are already imported.
+start: repair
+limits:
+  max_wall_time_seconds: 3600
+  max_step_executions: 20
+defaults:
+  report_correction_attempts: 1
+  on:
+    system.error:
+      pause: true
+steps:
+  repair:
+    kind: agent
+    harness: codex
+    model: gpt-6-luna
+    reasoning_effort: low
+    session: fresh
+    prompt_file: .workflow/prompts/ui-repair.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes: [complete, blocked]
+    on:
+      complete: {goto: review}
+      blocked: {goto: unsuccessful}
+  review:
+    kind: agent
+    harness: claude
+    model: claude-haiku-5-5
+    reasoning_effort: low
+    session: fresh
+    prompt_file: .workflow/prompts/ui-review.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes: [approved, changes]
+    context:
+      include_reports: [repair]
+    on:
+      approved: {goto: finalize}
+      changes: {goto: finalize}
+  finalize:
+    kind: agent
+    harness: codex
+    model: gpt-6-luna
+    reasoning_effort: low
+    session: resume
+    prompt_file: .workflow/prompts/ui-finalize.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes: [complete, blocked]
+    context:
+      include_reports: [review]
+    on:
+      complete: {goto: checks}
+      blocked: {goto: unsuccessful}
+  checks:
+    kind: command
+    argv: [node, scripts/browser-regression.mjs]
+    cwd: "{{project.root}}"
+    timeout_seconds: 180
+    on:
+      complete: {goto: acceptance}
+      failed: {goto: unsuccessful}
+  acceptance:
+    kind: command
+    argv: [python3, .workflow/check.py, acceptance]
+    cwd: "{{project.root}}"
+    timeout_seconds: 180
+    on:
+      complete: {goto: successful}
+      failed: {goto: unsuccessful}
+  successful:
+    kind: end
+    label: Browser repair passed authored checks
+  unsuccessful:
+    kind: end
+    label: Unsuccessful · inspect evidence

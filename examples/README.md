@@ -19,8 +19,8 @@ The parameterized CLI test discovers every `examples/*.yaml`, including overnigh
 
 The agent reports `checkpoint`; that outcome pauses at `inspect` and opens attention.
 An operator must inspect the report and repository, then deliberately choose what
-happens next using existing [run controls](../archive/spec.md#6-lifecycle-and-safety-of-user-control)
-or [paused browser intervention](../archive/architecture.md#85-paused-run-revisions-and-manual-intervention-phase-84):
+happens next using existing [run controls](../docs/reference/spec.md#6-lifecycle-and-safety-of-user-control)
+or [paused browser intervention](../docs/reference/architecture.md#85-paused-run-revisions-and-manual-intervention-phase-84):
 
 - Accept the inspection externally: explicitly jump to `done` with a reason, then
   explicitly resume. A jump alone leaves the run paused.
@@ -35,7 +35,7 @@ behalf, or enforced as an engine-wide quality gate. Pausing is not rollback.
 ## Before execution
 
 Use the explicit foreground daemon and separate create/start commands described
-in the [development reference](../archive/development.md#local-application-commands). Import/create does not execute; start/resume does. Agent
+in the [development reference](../docs/reference/development.md#local-application-commands). Import/create does not execute; start/resume does. Agent
 samples may use paid providers when started; validation
 uses no live provider. Review prompts, argv, hooks and working directory before
 starting. Use a disposable copy for mutating samples, not this development tree.

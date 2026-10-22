@@ -1,0 +1,19 @@
+{
+  "reproduction": "Fresh reload, form.reset(), set name input, wait 150ms. Repeated twice.",
+  "results": [
+    {
+      "resets": 42,
+      "name": "",
+      "sameForm": true,
+      "connected": true
+    },
+    {
+      "resets": 42,
+      "name": "",
+      "sameForm": true,
+      "connected": true
+    }
+  ],
+  "cause": "clearForm calls form.reset; reset listener schedules clearForm recursively",
+  "classification": "generated application defect; browser coverage gap in main workflow"
+}

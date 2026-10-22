@@ -6,7 +6,7 @@ import { noSideScroll, pairApp, shot, watchPolicy } from "./app-helpers.mjs";
 import { expect, test } from "./fixture.mjs";
 
 test.use({ scenario: "owner-walkthrough" });
-const material = fileURLToPath(new URL("../../walkthrough/", import.meta.url));
+const material = fileURLToPath(new URL("../fixtures/owner-walkthrough/", import.meta.url));
 
 test("owner walkthrough imports the reviewed model, pauses, and creates a receipt only after Apply then Resume", async ({
   page,

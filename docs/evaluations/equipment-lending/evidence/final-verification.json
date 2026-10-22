@@ -1,0 +1,39 @@
+{
+  "documentation_relative_links_checked": 137,
+  "code_fences": "balanced",
+  "all_original_instruction_prompt_checker_hashes": "unchanged",
+  "source_checklist_unchecked": 3,
+  "workflow_validation": {
+    "baseline": {
+      "steps": 18,
+      "warnings": 0
+    },
+    "browser_repair": {
+      "steps": 7,
+      "warnings": 0
+    },
+    "maintenance": {
+      "steps": 9,
+      "warnings": 0
+    }
+  },
+  "workflowz_typecheck": "pass",
+  "workflowz_production_lint": {
+    "result": "pass",
+    "warnings": 1,
+    "infos": 140
+  },
+  "whole_repository_lint": {
+    "result": "fail",
+    "errors": 7,
+    "warnings": 40,
+    "infos": 167,
+    "errors_scope": "generated sample: formatting/import ordering and semantic-element rule"
+  },
+  "evaluator_js_checks": "pass",
+  "git_diff_check": "pass",
+  "remaining_sample_servers": 0,
+  "evaluator_chromium": "closed",
+  "daemon": "preserved for inspection",
+  "all_runs": "completed at successful end with no active attempt"
+}

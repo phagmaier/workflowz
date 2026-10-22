@@ -1,0 +1,340 @@
+{
+  "pass": true,
+  "failure": null,
+  "checks": [
+    {
+      "check": "fixed-date report agrees with independent SQL",
+      "pass": true,
+      "detail": {
+        "as_of": "2026-10-22",
+        "borrowers": 4,
+        "equipment": {
+          "available": 7,
+          "on_loan": 3,
+          "total": 10,
+          "under_maintenance": 0
+        },
+        "loans": {
+          "active": 3,
+          "overdue": 1,
+          "returned": 2
+        },
+        "overdue_loans": [
+          {
+            "asset_tag": "PT-001",
+            "borrower_name": "Maya Chen",
+            "days_overdue": 7,
+            "due_date": "2026-10-15"
+          }
+        ]
+      }
+    },
+    {
+      "check": "seed has required fictional coverage",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "POST /api/equipment \u2192 201",
+      "pass": true,
+      "detail": {
+        "id": 11
+      }
+    },
+    {
+      "check": "equipment trims fields and keeps null optional notes",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "duplicate asset tag rejected without mutation",
+      "pass": true,
+      "detail": {
+        "status": 409,
+        "response": {
+          "error": "This asset tag is already in use."
+        }
+      }
+    },
+    {
+      "check": "invalid equipment name rejected",
+      "pass": true,
+      "detail": {
+        "status": 400,
+        "response": {
+          "error": "Enter an equipment name."
+        }
+      }
+    },
+    {
+      "check": "invalid equipment name rejected",
+      "pass": true,
+      "detail": {
+        "status": 400,
+        "response": {
+          "error": "Enter an equipment name."
+        }
+      }
+    },
+    {
+      "check": "invalid equipment name rejected",
+      "pass": true,
+      "detail": {
+        "status": 400,
+        "response": {
+          "error": "Name must be text."
+        }
+      }
+    },
+    {
+      "check": "invalid equipment name rejected",
+      "pass": true,
+      "detail": {
+        "status": 400,
+        "response": {
+          "error": "Name must be text."
+        }
+      }
+    },
+    {
+      "check": "PUT /api/equipment/11 \u2192 200",
+      "pass": true,
+      "detail": {
+        "id": 11
+      }
+    },
+    {
+      "check": "POST /api/equipment \u2192 201",
+      "pass": true,
+      "detail": {
+        "id": 12
+      }
+    },
+    {
+      "check": "delete unused equipment",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "POST /api/borrowers \u2192 201",
+      "pass": true,
+      "detail": {
+        "id": 5
+      }
+    },
+    {
+      "check": "PUT /api/borrowers/5 \u2192 200",
+      "pass": true,
+      "detail": {
+        "id": 5
+      }
+    },
+    {
+      "check": "invalid borrower email rejected",
+      "pass": true,
+      "detail": {
+        "status": 400,
+        "response": {
+          "error": "Enter a valid email address, such as name@example.com."
+        }
+      }
+    },
+    {
+      "check": "POST /api/borrowers \u2192 201",
+      "pass": true,
+      "detail": {
+        "id": 6
+      }
+    },
+    {
+      "check": "duplicate email allowed and unused borrower deleted",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "invalid loan dates rejected",
+      "pass": true,
+      "detail": {
+        "status": 400,
+        "response": {
+          "error": "Enter a real checkout date in YYYY-MM-DD format."
+        }
+      }
+    },
+    {
+      "check": "invalid loan dates rejected",
+      "pass": true,
+      "detail": {
+        "status": 400,
+        "response": {
+          "error": "Enter a real checkout date in YYYY-MM-DD format."
+        }
+      }
+    },
+    {
+      "check": "invalid loan dates rejected",
+      "pass": true,
+      "detail": {
+        "status": 400,
+        "response": {
+          "error": "Due date cannot be before checkout date."
+        }
+      }
+    },
+    {
+      "check": "invalid loan dates rejected",
+      "pass": true,
+      "detail": {
+        "status": 400,
+        "response": {
+          "error": "Enter a real checkout date in YYYY-MM-DD format."
+        }
+      }
+    },
+    {
+      "check": "8 concurrent checkout requests leave exactly one active loan",
+      "pass": true,
+      "detail": [201, 409, 409, 409, 409, 409, 409, 409]
+    },
+    {
+      "check": "return before checkout rejected",
+      "pass": true,
+      "detail": {
+        "status": 400,
+        "response": {
+          "error": "Return date cannot be before checkout date."
+        }
+      }
+    },
+    {
+      "check": "PATCH /api/loans/6 \u2192 200",
+      "pass": true,
+      "detail": {
+        "id": 6,
+        "returned_date": "2026-10-22"
+      }
+    },
+    {
+      "check": "repeated return keeps original date",
+      "pass": true,
+      "detail": {
+        "status": 409,
+        "response": {
+          "error": "This loan has already been returned."
+        }
+      }
+    },
+    {
+      "check": "stored historical return date stable",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "POST /api/loans \u2192 201",
+      "pass": true,
+      "detail": {
+        "id": 7
+      }
+    },
+    {
+      "check": "PATCH /api/loans/7 \u2192 200",
+      "pass": true,
+      "detail": {
+        "id": 7,
+        "returned_date": "2026-10-22"
+      }
+    },
+    {
+      "check": "equipment with returned-only history cannot be deleted",
+      "pass": true,
+      "detail": {
+        "status": 409,
+        "response": {
+          "error": "This record is referenced by loan history and cannot be deleted."
+        }
+      }
+    },
+    {
+      "check": "borrower with returned-only history cannot be deleted",
+      "pass": true,
+      "detail": {
+        "status": 409,
+        "response": {
+          "error": "This record is referenced by loan history and cannot be deleted."
+        }
+      }
+    },
+    {
+      "check": "history retained through return and recheckout",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "combined name/tag/category/availability search",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "combined name/tag/category/availability search",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "on-loan filter excludes returned equipment",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "loan filter active",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "loan filter returned",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "loan filter overdue",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "reseed preserves entire database including CRUD/loans",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "fixed-date report agrees with independent SQL",
+      "pass": true,
+      "detail": {
+        "as_of": "2026-10-22",
+        "borrowers": 5,
+        "equipment": {
+          "available": 8,
+          "on_loan": 3,
+          "total": 11,
+          "under_maintenance": 0
+        },
+        "loans": {
+          "active": 3,
+          "overdue": 1,
+          "returned": 4
+        },
+        "overdue_loans": [
+          {
+            "asset_tag": "PT-001",
+            "borrower_name": "Maya Chen",
+            "days_overdue": 7,
+            "due_date": "2026-10-15"
+          }
+        ]
+      }
+    },
+    {
+      "check": "records and loan history persist across actual process restart",
+      "pass": true,
+      "detail": null
+    }
+  ]
+}

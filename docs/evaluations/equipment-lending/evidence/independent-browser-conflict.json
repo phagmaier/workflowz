@@ -1,0 +1,10 @@
+{
+  "pass": true,
+  "failure": null,
+  "detail": {
+    "message": "This equipment is already on loan.",
+    "activeLoans": 1,
+    "datesAndBorrowerRetained": true,
+    "keyboardSkipLinkOperates": true
+  }
+}

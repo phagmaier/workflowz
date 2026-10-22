@@ -1,0 +1,23 @@
+{
+  "as_of": "2026-10-22",
+  "borrowers": 4,
+  "equipment": {
+    "available": 7,
+    "on_loan": 3,
+    "total": 10,
+    "under_maintenance": 0
+  },
+  "loans": {
+    "active": 3,
+    "overdue": 1,
+    "returned": 2
+  },
+  "overdue_loans": [
+    {
+      "asset_tag": "PT-001",
+      "borrower_name": "Maya Chen",
+      "days_overdue": 7,
+      "due_date": "2026-10-15"
+    }
+  ]
+}

@@ -1,0 +1,663 @@
+{
+  "note": "Allowlisted event facts; session identities hashed, private process/log data omitted.",
+  "run": {
+    "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+    "revisionId": 5,
+    "projectRoot": "/home/phagmaier/Code/workflowz/trials/equipment-lending/project",
+    "status": "completed",
+    "cursorStepId": "successful",
+    "activeTaskId": null,
+    "createdAt": "2026-10-22T12:08:20.905Z",
+    "updatedAt": "2026-10-22T12:19:13.541Z",
+    "startTime": "2026-10-22T12:08:21.186Z",
+    "endTime": "2026-10-22T12:19:13.541Z",
+    "retryNotBefore": null
+  },
+  "progress": null,
+  "current": {
+    "kind": "end"
+  },
+  "activeAttempt": null,
+  "events": [
+    {
+      "eventId": 193,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": null,
+      "type": "run_created",
+      "timestamp": "2026-10-22T12:08:20.906Z",
+      "data": {
+        "tasks": 0
+      }
+    },
+    {
+      "eventId": 194,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": null,
+      "type": "run_started",
+      "timestamp": "2026-10-22T12:08:21.186Z",
+      "data": {}
+    },
+    {
+      "eventId": 195,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_a6b69d9b-c802-4b3b-b6af-32c12b5304da",
+      "type": "attempt_started",
+      "timestamp": "2026-10-22T12:08:21.187Z",
+      "data": {
+        "stepId": "implement",
+        "kind": "agent"
+      }
+    },
+    {
+      "eventId": 196,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_a6b69d9b-c802-4b3b-b6af-32c12b5304da",
+      "type": "attempt_prepared",
+      "timestamp": "2026-10-22T12:08:21.188Z",
+      "data": {}
+    },
+    {
+      "eventId": 197,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_a6b69d9b-c802-4b3b-b6af-32c12b5304da",
+      "type": "invocation_dispatching",
+      "timestamp": "2026-10-22T12:08:21.188Z",
+      "data": {
+        "invocation": 0
+      }
+    },
+    {
+      "eventId": 198,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_a6b69d9b-c802-4b3b-b6af-32c12b5304da",
+      "type": "invocation_started",
+      "timestamp": "2026-10-22T12:08:21.193Z",
+      "data": {
+        "invocation": 0,
+        "harnessVersion": "codex-cli 0.163.0",
+        "permissionMode": "dangerously-bypass-approvals-and-sandbox"
+      }
+    },
+    {
+      "eventId": 199,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_a6b69d9b-c802-4b3b-b6af-32c12b5304da",
+      "type": "report_accepted",
+      "timestamp": "2026-10-22T12:13:21.621Z",
+      "data": {
+        "outcome": "complete"
+      }
+    },
+    {
+      "eventId": 200,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_a6b69d9b-c802-4b3b-b6af-32c12b5304da",
+      "type": "invocation_settled",
+      "timestamp": "2026-10-22T12:13:25.226Z",
+      "data": {
+        "invocation": 0,
+        "exitCode": 0,
+        "timedOut": false,
+        "sessionFingerprint": "5a91df4c209b1e1165fc58c99676f301c7ea9e29832f545001617532e8971814"
+      }
+    },
+    {
+      "eventId": 201,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_a6b69d9b-c802-4b3b-b6af-32c12b5304da",
+      "type": "attempt_settled",
+      "timestamp": "2026-10-22T12:13:25.229Z",
+      "data": {
+        "outcome": "complete",
+        "status": "succeeded"
+      }
+    },
+    {
+      "eventId": 202,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_a6b69d9b-c802-4b3b-b6af-32c12b5304da",
+      "type": "transition_committed",
+      "timestamp": "2026-10-22T12:13:25.229Z",
+      "data": {
+        "from": "implement",
+        "outcome": "complete",
+        "decision": "goto",
+        "to": "review",
+        "reason": null
+      }
+    },
+    {
+      "eventId": 203,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_84eedf92-15e5-46ee-8966-d3d52ba62705",
+      "type": "attempt_started",
+      "timestamp": "2026-10-22T12:13:25.230Z",
+      "data": {
+        "stepId": "review",
+        "kind": "agent"
+      }
+    },
+    {
+      "eventId": 204,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_84eedf92-15e5-46ee-8966-d3d52ba62705",
+      "type": "attempt_prepared",
+      "timestamp": "2026-10-22T12:13:25.232Z",
+      "data": {}
+    },
+    {
+      "eventId": 205,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_84eedf92-15e5-46ee-8966-d3d52ba62705",
+      "type": "invocation_dispatching",
+      "timestamp": "2026-10-22T12:13:25.233Z",
+      "data": {
+        "invocation": 0
+      }
+    },
+    {
+      "eventId": 206,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_84eedf92-15e5-46ee-8966-d3d52ba62705",
+      "type": "invocation_started",
+      "timestamp": "2026-10-22T12:13:25.238Z",
+      "data": {
+        "invocation": 0,
+        "harnessVersion": "2.1.307 (Claude Code)",
+        "permissionMode": "bypassPermissions"
+      }
+    },
+    {
+      "eventId": 207,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_84eedf92-15e5-46ee-8966-d3d52ba62705",
+      "type": "report_accepted",
+      "timestamp": "2026-10-22T12:14:56.032Z",
+      "data": {
+        "outcome": "changes"
+      }
+    },
+    {
+      "eventId": 208,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_84eedf92-15e5-46ee-8966-d3d52ba62705",
+      "type": "invocation_settled",
+      "timestamp": "2026-10-22T12:15:00.469Z",
+      "data": {
+        "invocation": 0,
+        "exitCode": 0,
+        "timedOut": false,
+        "sessionFingerprint": "ee7f2c4da0cc1487973ff00c96586de96ccf399b65121cf0b2301bbedc019107"
+      }
+    },
+    {
+      "eventId": 209,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_84eedf92-15e5-46ee-8966-d3d52ba62705",
+      "type": "attempt_settled",
+      "timestamp": "2026-10-22T12:15:00.472Z",
+      "data": {
+        "outcome": "changes",
+        "status": "succeeded"
+      }
+    },
+    {
+      "eventId": 210,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_84eedf92-15e5-46ee-8966-d3d52ba62705",
+      "type": "transition_committed",
+      "timestamp": "2026-10-22T12:15:00.472Z",
+      "data": {
+        "from": "review",
+        "outcome": "changes",
+        "decision": "goto",
+        "to": "finalize",
+        "reason": null
+      }
+    },
+    {
+      "eventId": 211,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_26b3dc5f-7948-44c6-8d84-b3d7a11ec7de",
+      "type": "attempt_started",
+      "timestamp": "2026-10-22T12:15:00.474Z",
+      "data": {
+        "stepId": "finalize",
+        "kind": "agent"
+      }
+    },
+    {
+      "eventId": 212,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_26b3dc5f-7948-44c6-8d84-b3d7a11ec7de",
+      "type": "attempt_prepared",
+      "timestamp": "2026-10-22T12:15:00.477Z",
+      "data": {}
+    },
+    {
+      "eventId": 213,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_26b3dc5f-7948-44c6-8d84-b3d7a11ec7de",
+      "type": "invocation_dispatching",
+      "timestamp": "2026-10-22T12:15:00.478Z",
+      "data": {
+        "invocation": 0
+      }
+    },
+    {
+      "eventId": 214,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_26b3dc5f-7948-44c6-8d84-b3d7a11ec7de",
+      "type": "invocation_started",
+      "timestamp": "2026-10-22T12:15:00.483Z",
+      "data": {
+        "invocation": 0,
+        "harnessVersion": "codex-cli 0.163.0",
+        "permissionMode": "dangerously-bypass-approvals-and-sandbox",
+        "sessionFingerprint": "5a91df4c209b1e1165fc58c99676f301c7ea9e29832f545001617532e8971814"
+      }
+    },
+    {
+      "eventId": 215,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_26b3dc5f-7948-44c6-8d84-b3d7a11ec7de",
+      "type": "report_accepted",
+      "timestamp": "2026-10-22T12:17:11.721Z",
+      "data": {
+        "outcome": "complete"
+      }
+    },
+    {
+      "eventId": 216,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_26b3dc5f-7948-44c6-8d84-b3d7a11ec7de",
+      "type": "invocation_settled",
+      "timestamp": "2026-10-22T12:17:14.695Z",
+      "data": {
+        "invocation": 0,
+        "exitCode": 0,
+        "timedOut": false,
+        "sessionFingerprint": "5a91df4c209b1e1165fc58c99676f301c7ea9e29832f545001617532e8971814"
+      }
+    },
+    {
+      "eventId": 217,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_26b3dc5f-7948-44c6-8d84-b3d7a11ec7de",
+      "type": "attempt_settled",
+      "timestamp": "2026-10-22T12:17:14.698Z",
+      "data": {
+        "outcome": "complete",
+        "status": "succeeded"
+      }
+    },
+    {
+      "eventId": 218,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_26b3dc5f-7948-44c6-8d84-b3d7a11ec7de",
+      "type": "transition_committed",
+      "timestamp": "2026-10-22T12:17:14.698Z",
+      "data": {
+        "from": "finalize",
+        "outcome": "complete",
+        "decision": "goto",
+        "to": "audit",
+        "reason": null
+      }
+    },
+    {
+      "eventId": 219,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_0efe7c70-6ea1-4e49-a6cb-dd9f341f1451",
+      "type": "attempt_started",
+      "timestamp": "2026-10-22T12:17:14.700Z",
+      "data": {
+        "stepId": "audit",
+        "kind": "agent"
+      }
+    },
+    {
+      "eventId": 220,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_0efe7c70-6ea1-4e49-a6cb-dd9f341f1451",
+      "type": "attempt_prepared",
+      "timestamp": "2026-10-22T12:17:14.703Z",
+      "data": {}
+    },
+    {
+      "eventId": 221,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_0efe7c70-6ea1-4e49-a6cb-dd9f341f1451",
+      "type": "invocation_dispatching",
+      "timestamp": "2026-10-22T12:17:14.704Z",
+      "data": {
+        "invocation": 0
+      }
+    },
+    {
+      "eventId": 222,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_0efe7c70-6ea1-4e49-a6cb-dd9f341f1451",
+      "type": "invocation_started",
+      "timestamp": "2026-10-22T12:17:14.717Z",
+      "data": {
+        "invocation": 0,
+        "harnessVersion": "1.4.0",
+        "permissionMode": "default-unrestricted-tools"
+      }
+    },
+    {
+      "eventId": 223,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_0efe7c70-6ea1-4e49-a6cb-dd9f341f1451",
+      "type": "report_accepted",
+      "timestamp": "2026-10-22T12:18:57.650Z",
+      "data": {
+        "outcome": "complete"
+      }
+    },
+    {
+      "eventId": 224,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_0efe7c70-6ea1-4e49-a6cb-dd9f341f1451",
+      "type": "invocation_settled",
+      "timestamp": "2026-10-22T12:19:02.215Z",
+      "data": {
+        "invocation": 0,
+        "exitCode": 0,
+        "timedOut": false,
+        "sessionFingerprint": "ed570cabe49edfaa9f7e8acf6c118635ffa49334da67e54c7880008294a5ef51"
+      }
+    },
+    {
+      "eventId": 225,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_0efe7c70-6ea1-4e49-a6cb-dd9f341f1451",
+      "type": "attempt_settled",
+      "timestamp": "2026-10-22T12:19:02.218Z",
+      "data": {
+        "outcome": "complete",
+        "status": "succeeded"
+      }
+    },
+    {
+      "eventId": 226,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_0efe7c70-6ea1-4e49-a6cb-dd9f341f1451",
+      "type": "transition_committed",
+      "timestamp": "2026-10-22T12:19:02.218Z",
+      "data": {
+        "from": "audit",
+        "outcome": "complete",
+        "decision": "goto",
+        "to": "checks",
+        "reason": null
+      }
+    },
+    {
+      "eventId": 227,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_44778a8a-9f93-4a31-bc82-1643868965ac",
+      "type": "attempt_started",
+      "timestamp": "2026-10-22T12:19:02.220Z",
+      "data": {
+        "stepId": "checks",
+        "kind": "command"
+      }
+    },
+    {
+      "eventId": 228,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_44778a8a-9f93-4a31-bc82-1643868965ac",
+      "type": "invocation_dispatching",
+      "timestamp": "2026-10-22T12:19:02.224Z",
+      "data": {
+        "invocation": 0
+      }
+    },
+    {
+      "eventId": 229,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_44778a8a-9f93-4a31-bc82-1643868965ac",
+      "type": "invocation_started",
+      "timestamp": "2026-10-22T12:19:02.232Z",
+      "data": {
+        "invocation": 0
+      }
+    },
+    {
+      "eventId": 230,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_44778a8a-9f93-4a31-bc82-1643868965ac",
+      "type": "invocation_settled",
+      "timestamp": "2026-10-22T12:19:09.220Z",
+      "data": {
+        "invocation": 0,
+        "exitCode": 0,
+        "timedOut": false
+      }
+    },
+    {
+      "eventId": 231,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_44778a8a-9f93-4a31-bc82-1643868965ac",
+      "type": "attempt_settled",
+      "timestamp": "2026-10-22T12:19:09.220Z",
+      "data": {
+        "outcome": "complete",
+        "status": "succeeded"
+      }
+    },
+    {
+      "eventId": 232,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_44778a8a-9f93-4a31-bc82-1643868965ac",
+      "type": "transition_committed",
+      "timestamp": "2026-10-22T12:19:09.220Z",
+      "data": {
+        "from": "checks",
+        "outcome": "complete",
+        "decision": "goto",
+        "to": "maintenance_check",
+        "reason": null
+      }
+    },
+    {
+      "eventId": 233,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_645b0e30-fa4c-4883-8db0-462336ed79b2",
+      "type": "attempt_started",
+      "timestamp": "2026-10-22T12:19:09.222Z",
+      "data": {
+        "stepId": "maintenance_check",
+        "kind": "command"
+      }
+    },
+    {
+      "eventId": 234,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_645b0e30-fa4c-4883-8db0-462336ed79b2",
+      "type": "invocation_dispatching",
+      "timestamp": "2026-10-22T12:19:09.223Z",
+      "data": {
+        "invocation": 0
+      }
+    },
+    {
+      "eventId": 235,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_645b0e30-fa4c-4883-8db0-462336ed79b2",
+      "type": "invocation_started",
+      "timestamp": "2026-10-22T12:19:09.229Z",
+      "data": {
+        "invocation": 0
+      }
+    },
+    {
+      "eventId": 236,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_645b0e30-fa4c-4883-8db0-462336ed79b2",
+      "type": "invocation_settled",
+      "timestamp": "2026-10-22T12:19:11.653Z",
+      "data": {
+        "invocation": 0,
+        "exitCode": 0,
+        "timedOut": false
+      }
+    },
+    {
+      "eventId": 237,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_645b0e30-fa4c-4883-8db0-462336ed79b2",
+      "type": "attempt_settled",
+      "timestamp": "2026-10-22T12:19:11.654Z",
+      "data": {
+        "outcome": "complete",
+        "status": "succeeded"
+      }
+    },
+    {
+      "eventId": 238,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_645b0e30-fa4c-4883-8db0-462336ed79b2",
+      "type": "transition_committed",
+      "timestamp": "2026-10-22T12:19:11.654Z",
+      "data": {
+        "from": "maintenance_check",
+        "outcome": "complete",
+        "decision": "goto",
+        "to": "acceptance",
+        "reason": null
+      }
+    },
+    {
+      "eventId": 239,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_79ebce75-31b4-45b1-b627-b01c9bb81d7f",
+      "type": "attempt_started",
+      "timestamp": "2026-10-22T12:19:11.654Z",
+      "data": {
+        "stepId": "acceptance",
+        "kind": "command"
+      }
+    },
+    {
+      "eventId": 240,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_79ebce75-31b4-45b1-b627-b01c9bb81d7f",
+      "type": "invocation_dispatching",
+      "timestamp": "2026-10-22T12:19:11.655Z",
+      "data": {
+        "invocation": 0
+      }
+    },
+    {
+      "eventId": 241,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_79ebce75-31b4-45b1-b627-b01c9bb81d7f",
+      "type": "invocation_started",
+      "timestamp": "2026-10-22T12:19:11.659Z",
+      "data": {
+        "invocation": 0
+      }
+    },
+    {
+      "eventId": 242,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_79ebce75-31b4-45b1-b627-b01c9bb81d7f",
+      "type": "invocation_settled",
+      "timestamp": "2026-10-22T12:19:13.539Z",
+      "data": {
+        "invocation": 0,
+        "exitCode": 0,
+        "timedOut": false
+      }
+    },
+    {
+      "eventId": 243,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_79ebce75-31b4-45b1-b627-b01c9bb81d7f",
+      "type": "attempt_settled",
+      "timestamp": "2026-10-22T12:19:13.540Z",
+      "data": {
+        "outcome": "complete",
+        "status": "succeeded"
+      }
+    },
+    {
+      "eventId": 244,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": "attempt_79ebce75-31b4-45b1-b627-b01c9bb81d7f",
+      "type": "transition_committed",
+      "timestamp": "2026-10-22T12:19:13.540Z",
+      "data": {
+        "from": "acceptance",
+        "outcome": "complete",
+        "decision": "goto",
+        "to": "successful",
+        "reason": null
+      }
+    },
+    {
+      "eventId": 245,
+      "revisionId": 5,
+      "runId": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "attemptId": null,
+      "type": "run_completed",
+      "timestamp": "2026-10-22T12:19:13.542Z",
+      "data": {}
+    }
+  ]
+}

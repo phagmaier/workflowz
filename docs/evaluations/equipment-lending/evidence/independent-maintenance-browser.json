@@ -1,0 +1,15 @@
+{
+  "pass": true,
+  "failure": null,
+  "checks": [
+    "browser creates maintenance item and excludes it from checkout choices",
+    "combined browser search/category/maintenance filter and available exclusion",
+    "clearing maintenance updates filtered card and checkout choice without reload",
+    "browser returns existing loan while maintenance stays set and item unavailable",
+    "maintenance checkbox persists on browser reload",
+    "maintenance form usable without page overflow at 1440px",
+    "maintenance form usable without page overflow at 768px",
+    "maintenance form usable without page overflow at 390px"
+  ],
+  "errors": []
+}

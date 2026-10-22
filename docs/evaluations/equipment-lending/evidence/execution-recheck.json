@@ -1,0 +1,58 @@
+{
+  "source": "read-only canonical state.sqlite plus native attempt logs, not evaluation prose",
+  "runs": [
+    {
+      "run": "run_9ae79946-41f0-4b67-a8ab-1a83d516d6f2",
+      "status": "completed",
+      "end_node": "successful",
+      "attempts": 18,
+      "nonempty_attempt_logs": 18,
+      "accepted_outcomes": {
+        "complete": 9,
+        "changes": 3
+      },
+      "harness_invocations": {
+        "opencode v2.0.32": 2,
+        "codex-cli 0.163.0": 6,
+        "2.1.307 (Claude Code)": 3,
+        "omp/18.12.6": 1,
+        "1.4.0": 1
+      }
+    },
+    {
+      "run": "run_55be6ae8-61e4-4c3e-b04b-4a9ce92e7c1b",
+      "status": "completed",
+      "end_node": "successful",
+      "attempts": 5,
+      "nonempty_attempt_logs": 5,
+      "accepted_outcomes": {
+        "complete": 2,
+        "approved": 1
+      },
+      "harness_invocations": {
+        "codex-cli 0.163.0": 2,
+        "2.1.307 (Claude Code)": 1
+      }
+    },
+    {
+      "run": "run_4816e7c2-c7d6-4be8-bb07-4253880bfe32",
+      "status": "completed",
+      "end_node": "successful",
+      "attempts": 7,
+      "nonempty_attempt_logs": 7,
+      "accepted_outcomes": {
+        "complete": 3,
+        "changes": 1
+      },
+      "harness_invocations": {
+        "codex-cli 0.163.0": 2,
+        "2.1.307 (Claude Code)": 1,
+        "1.4.0": 1
+      }
+    }
+  ],
+  "tested_project_hash_mismatches": [],
+  "native_codex_completed_turns": 10,
+  "native_codex_completed_command_items": 101,
+  "billing": "not investigated"
+}

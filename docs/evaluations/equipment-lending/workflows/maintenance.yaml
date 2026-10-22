@@ -1,0 +1,108 @@
+version: 1
+name: Equipment lending · maintenance follow-up
+project:
+  root: ./project
+  instructions:
+    - AGENTS.md
+    - SPEC.md
+    - .workflow/INSTRUCTIONS.md
+    - .workflow/MAINTENANCE.md
+# Deliberately no tasks source: the three original checklist tasks are already imported.
+start: implement
+limits:
+  max_wall_time_seconds: 5400
+  max_step_executions: 60
+defaults:
+  report_correction_attempts: 1
+  on:
+    system.error:
+      pause: true
+steps:
+  implement:
+    kind: agent
+    harness: codex
+    model: gpt-6-luna
+    reasoning_effort: low
+    session: fresh
+    prompt_file: .workflow/prompts/maintenance-implement.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes: [complete, blocked]
+    on:
+      complete: {goto: review}
+      blocked: {goto: unsuccessful}
+  review:
+    kind: agent
+    harness: claude
+    model: claude-haiku-5-5
+    reasoning_effort: low
+    session: fresh
+    prompt_file: .workflow/prompts/maintenance-review.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes: [approved, changes]
+    context:
+      include_reports: [implement]
+    on:
+      approved: {goto: finalize}
+      changes: {goto: finalize}
+  finalize:
+    kind: agent
+    harness: codex
+    model: gpt-6-luna
+    reasoning_effort: low
+    session: resume
+    prompt_file: .workflow/prompts/maintenance-finalize.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes: [complete, blocked]
+    context:
+      include_reports: [review]
+    on:
+      complete: {goto: audit}
+      blocked: {goto: unsuccessful}
+  audit:
+    kind: agent
+    harness: pi
+    model: openai/gpt-6-luna
+    reasoning_effort: off
+    session: fresh
+    prompt_file: .workflow/prompts/maintenance-audit.md
+    cwd: "{{project.root}}"
+    timeout_seconds: 1500
+    outcomes: [complete, blocked]
+    context:
+      include_reports: [finalize]
+    on:
+      complete: {goto: checks}
+      blocked: {goto: unsuccessful}
+  maintenance_check:
+    kind: command
+    argv: [node, scripts/maintenance-regression.mjs]
+    cwd: "{{project.root}}"
+    timeout_seconds: 180
+    on:
+      complete: {goto: acceptance}
+      failed: {goto: unsuccessful}
+  checks:
+    kind: command
+    argv: [node, scripts/browser-regression.mjs]
+    cwd: "{{project.root}}"
+    timeout_seconds: 180
+    on:
+      complete: {goto: maintenance_check}
+      failed: {goto: unsuccessful}
+  acceptance:
+    kind: command
+    argv: [python3, .workflow/check.py, acceptance]
+    cwd: "{{project.root}}"
+    timeout_seconds: 180
+    on:
+      complete: {goto: successful}
+      failed: {goto: unsuccessful}
+  successful:
+    kind: end
+    label: Maintenance passed authored checks
+  unsuccessful:
+    kind: end
+    label: Unsuccessful · inspect evidence

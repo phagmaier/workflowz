@@ -1,0 +1,249 @@
+{
+  "pass": true,
+  "failure": null,
+  "checks": [
+    {
+      "check": "old-schema migration preserves every original equipment field and ID",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "old-schema migration preserves every original borrowers field and ID",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "old-schema migration preserves every original loans field and ID",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "old equipment defaults out of maintenance",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "create maintenance equipment",
+      "pass": true,
+      "detail": {
+        "id": 13
+      }
+    },
+    {
+      "check": "maintenance excluded from available filter",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "combined maintenance/name/category filter finds item",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "six concurrent checkout requests refuse maintenance without mutation",
+      "pass": true,
+      "detail": [400, 400, 400, 400, 400, 400]
+    },
+    {
+      "check": "SQLite independently refuses checkout under maintenance",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "malformed maintenance flag rejected without mutation",
+      "pass": true,
+      "detail": {
+        "value": null,
+        "status": 400
+      }
+    },
+    {
+      "check": "malformed maintenance flag rejected without mutation",
+      "pass": true,
+      "detail": {
+        "value": 0,
+        "status": 400
+      }
+    },
+    {
+      "check": "malformed maintenance flag rejected without mutation",
+      "pass": true,
+      "detail": {
+        "value": 1,
+        "status": 400
+      }
+    },
+    {
+      "check": "malformed maintenance flag rejected without mutation",
+      "pass": true,
+      "detail": {
+        "value": "false",
+        "status": 400
+      }
+    },
+    {
+      "check": "malformed maintenance flag rejected without mutation",
+      "pass": true,
+      "detail": {
+        "value": [],
+        "status": 400
+      }
+    },
+    {
+      "check": "malformed maintenance flag rejected without mutation",
+      "pass": true,
+      "detail": {
+        "value": {},
+        "status": 400
+      }
+    },
+    {
+      "check": "ordinary edit succeeds",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "omitted flag preserves maintenance",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "report and overview agree with independent maintenance/loan SQL",
+      "pass": true,
+      "detail": {
+        "expected": {
+          "total": 13,
+          "on_loan": 4,
+          "under_maintenance": 1,
+          "available": 8
+        },
+        "report": {
+          "available": 8,
+          "on_loan": 4,
+          "total": 13,
+          "under_maintenance": 1
+        },
+        "overview": {
+          "total": 13,
+          "available": 8,
+          "on_loan": 4,
+          "under_maintenance": 1
+        }
+      }
+    },
+    {
+      "check": "clear maintenance",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "checkout succeeds after maintenance cleared",
+      "pass": true,
+      "detail": {
+        "id": 8
+      }
+    },
+    {
+      "check": "mark on-loan item under maintenance",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "report and overview agree with independent maintenance/loan SQL",
+      "pass": true,
+      "detail": {
+        "expected": {
+          "total": 13,
+          "on_loan": 5,
+          "under_maintenance": 1,
+          "available": 8
+        },
+        "report": {
+          "available": 8,
+          "on_loan": 5,
+          "total": 13,
+          "under_maintenance": 1
+        },
+        "overview": {
+          "total": 13,
+          "available": 8,
+          "on_loan": 5,
+          "under_maintenance": 1
+        }
+      }
+    },
+    {
+      "check": "existing loan remains returnable",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "return preserves maintenance flag and history",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "returned maintenance item remains unavailable for checkout",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "report and overview agree with independent maintenance/loan SQL",
+      "pass": true,
+      "detail": {
+        "expected": {
+          "total": 13,
+          "on_loan": 4,
+          "under_maintenance": 1,
+          "available": 8
+        },
+        "report": {
+          "available": 8,
+          "on_loan": 4,
+          "total": 13,
+          "under_maintenance": 1
+        },
+        "overview": {
+          "total": 13,
+          "available": 8,
+          "on_loan": 4,
+          "under_maintenance": 1
+        }
+      }
+    },
+    {
+      "check": "repeated seed preserves maintenance and every migrated record",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "maintenance persists across actual server restart",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "check": "report and overview agree with independent maintenance/loan SQL",
+      "pass": true,
+      "detail": {
+        "expected": {
+          "total": 13,
+          "on_loan": 4,
+          "under_maintenance": 1,
+          "available": 8
+        },
+        "report": {
+          "available": 8,
+          "on_loan": 4,
+          "total": 13,
+          "under_maintenance": 1
+        },
+        "overview": {
+          "total": 13,
+          "available": 8,
+          "on_loan": 4,
+          "under_maintenance": 1
+        }
+      }
+    }
+  ]
+}

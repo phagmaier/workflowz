@@ -1,0 +1,87 @@
+{
+  "private_copy": "/tmp/workflowz-equipment-trial-cdyf0bhm/old-schema-migration.sqlite",
+  "source": "accepted baseline browser data",
+  "tables": {
+    "equipment": {
+      "columns": ["id", "name", "asset_tag", "category", "notes"],
+      "rows": [
+        [
+          1,
+          "Cordless Drill",
+          "PT-001",
+          "Power Tools",
+          "18 V, two batteries; chuck key in the case."
+        ],
+        [
+          2,
+          "Angle Grinder",
+          "PT-002",
+          "Power Tools",
+          "125 mm discs; spares live in the tool crib."
+        ],
+        [3, "Circular Saw", "PT-003", "Power Tools", "Blade guard checked 2026-09-30."],
+        [4, "Orbital Sander", "PT-004", "Power Tools", null],
+        [5, "Socket Wrench Set", "HT-001", "Hand Tools", "Metric and imperial sockets."],
+        [6, "Claw Hammer", "HT-002", "Hand Tools", null],
+        [7, "Screwdriver Set", "HT-003", "Hand Tools", "Phillips, flat and square tips."],
+        [8, "Safety Goggles", "SF-001", "Safety", "Anti-fog coating; clean before returning."],
+        [9, "Hearing Protection", "SF-002", "Safety", null],
+        [10, "First Aid Kit", "SF-003", "Safety", "Check consumables monthly."],
+        [
+          11,
+          "Browser baseline-corrected drill edited",
+          "BROWSER-BASELINE-CORRECTED",
+          "Browser category",
+          "Fictional browser verification"
+        ],
+        [
+          12,
+          "Browser baseline-verified drill edited",
+          "BROWSER-BASELINE-VERIFIED",
+          "Browser category",
+          "Fictional browser verification"
+        ]
+      ]
+    },
+    "borrowers": {
+      "columns": ["id", "name", "email", "notes"],
+      "rows": [
+        [1, "Maya Chen", "maya.chen@example.com", "Weekend woodworking volunteer."],
+        [2, "Daniel Okafor", "daniel.okafor@example.com", "Shop steward."],
+        [3, "Priya Raman", "priya.raman@example.com", null],
+        [4, "Sam Rivera", "sam.rivera@example.com", "New member; onboarding complete."],
+        [
+          5,
+          "Browser baseline-corrected member",
+          "baseline-corrected@example.com",
+          "Edited member note"
+        ],
+        [
+          6,
+          "Browser baseline-verified member",
+          "baseline-verified@example.com",
+          "Edited member note"
+        ]
+      ]
+    },
+    "loans": {
+      "columns": [
+        "id",
+        "equipment_id",
+        "borrower_id",
+        "checkout_date",
+        "due_date",
+        "returned_date"
+      ],
+      "rows": [
+        [1, 1, 1, "2026-10-01", "2026-10-15", null],
+        [2, 2, 2, "2026-10-08", "2026-10-22", null],
+        [3, 3, 3, "2026-10-20", "2026-10-29", null],
+        [4, 6, 1, "2026-09-20", "2026-10-04", "2026-10-02"],
+        [5, 8, 4, "2026-09-12", "2026-09-26", "2026-09-25"],
+        [6, 12, 6, "2026-10-22", "2026-10-22", "2026-10-22"],
+        [7, 12, 6, "2026-10-22", "2026-10-22", null]
+      ]
+    }
+  }
+}
