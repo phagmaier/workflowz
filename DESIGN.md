@@ -77,9 +77,12 @@
   capture limits outside the output scrollers and shows the latest settled invocation's
   diagnostics; a clean correction no longer inherits earlier stderr. Earlier invocation evidence
   stays in Technical details.
-- The main Workbench screens and final interface review are complete. The new user guide remains
-  separate future work. Saved/new-workflow links open Form; Graph remains the first view choice
-  and import view.
+- The main Workbench screens, final interface review and [end-user guide](USER_GUIDE.md) are
+  complete. The guide covers the current browser workflow and terminal recovery, with advanced
+  usage kept in reference sections. Saved/new-workflow links open Form; Graph remains the first
+  view choice and import view. Desktop work and a real-provider walkthrough remain separate.
+  Documentation links and workflow/CLI examples are checked; nine focused offline Chromium
+  scenarios pass, with current screenshots inspected against the guide.
 - Graph limitations: manual placement is deferred. Large graphs use local scrolling and zoom;
   Fit can make labels small. On narrow screens, settings stack below the graph. Technical
   failure rules and policies remain accessible in step settings and Rules & limits; the graph
@@ -171,8 +174,8 @@ see what happened, without learning internal field names or hunting for controls
 
 Continue the browser-served React UI one complete slice at a time, following the checks in
 [AGENTS.md](AGENTS.md). Graph and Form authoring with their shared checker, the grouped Runs page
-and run details are built and have completed the final interface review. The new user guide is
-separate future work and should describe the completed behavior.
+and run details are built and have completed the final interface review. The completed
+[user guide](USER_GUIDE.md) documents their implemented behavior.
 
 Bundled Manrope/JetBrains Mono fonts and the required CSP change remain undecided and do not
 block layout work. Use system fonts until that decision is resolved. Desktop packaging,

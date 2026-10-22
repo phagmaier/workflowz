@@ -6,24 +6,21 @@ A local browser interface and the `wf` CLI control the same daemon.
 
 ## UI implementation status
 
-The approved direction is **Workbench (C)**. The first slice is built: a shared dark theme,
-a sidebar with workflows and run groups, and the Workflows table with file import. Slice 2 adds
-Graph authoring with step settings, Outcome connections, automatic layout and a bottom checker.
-Parsed imports open in Graph; malformed YAML stays editable as text. Slice 3 adds the Form steps
-table and settings panel, the shared checker, natural command entry and browser effort
-preferences. Slice 4 groups Runs by status, with direct sidebar navigation and explicit Open
-actions. Slice 5 adds the Run details overview, paused decisions, history with Report / Output
-tabs, and the execution-path map. The main Workbench screens and final interface review are
-complete. The new user guide, desktop packaging and service lifecycle changes remain separate
-future work.
+The approved **Workbench (C)** interface is complete, including Graph and Form authoring,
+the shared checker, runs grouped by status, and run details with paused decisions, history,
+Report / Output and the execution-path map. All five slices and the final interface review
+are complete. The [user guide](USER_GUIDE.md) covers the current browser interface from pairing
+through running, inspection and recovery. Desktop packaging and automatic service lifecycle
+remain future work; a real-provider walkthrough is separate.
 
+- [USER_GUIDE.md](USER_GUIDE.md): end-user instructions and advanced usage reference.
 - [DESIGN.md](DESIGN.md): approved UI requirements, decisions and implementation status.
 - [AGENTS.md](AGENTS.md): contribution instructions and runtime boundaries.
 - [Development reference](archive/development.md): additional commands and browser provisioning.
 - [Archive](archive/README.md): technical contracts and historical material.
 
-The previous interface's guide, feedback and prototypes are archived. A new user guide will
-follow the completed redesign; historical screen descriptions are not current instructions.
+The previous interface's guides, feedback and prototypes are archived; their screen descriptions
+are historical context. Use the root user guide for current instructions.
 
 ## Development
 
