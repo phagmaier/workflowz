@@ -1,5 +1,8 @@
 # Workflowz — UI design brief
 
+> Archived on 2026-10-21. This brief and its acceptance statements precede the approved Workbench
+> redesign. Follow [DESIGN.md](../../DESIGN.md) and [AGENTS.md](../../AGENTS.md) for current work.
+
 ## Goal
 
 Make Workflowz understandable through its interface. The owner should be able to create a
@@ -9,7 +12,7 @@ through internal field names and scattered controls.
 **Current status:** All four slices of the selected React + TypeScript direction are implemented
 at `/ui/`. A subsequent live test drive exposed substantial usability and appearance problems;
 the owner no longer considers the interface satisfactory. The existing engine remains the
-baseline. The [user guide](USER_GUIDE.md) describes the implemented interface.
+baseline. The [user guide](react-user-guide-2026-10-21.md) describes the implemented interface.
 
 ## What the walkthrough established
 
@@ -20,7 +23,7 @@ manual apply controls, technical IDs and unrelated run information. Run history 
 The owner stopped the walkthrough because these interactions prevented learning.
 
 This calls for a substantial navigation and interaction redesign. Preserve these findings as
-context, without maintaining a separate task for every symptom. The [unfinished walkthrough](archive/history/usability-walkthrough.md)
+context, without maintaining a separate task for every symptom. The [unfinished walkthrough](usability-walkthrough.md)
 is available if particular observations or verified startup details are needed.
 
 ## Product shape to explore
@@ -108,7 +111,7 @@ experience. No desktop shell, packaging or daemon lifecycle changes have been ma
 **Live test drive feedback (2026-10-21):** The command and two-agent demos worked,
 but the owner rejected the interface's appearance and usability after using it.
 The earlier acceptance below is historical, not current design acceptance.
-See [demo feedback](DEMO_FEEDBACK.md) for observed interaction problems.
+See [demo feedback](demo-feedback-2026-10-21.md) for observed interaction problems.
 
 The next proposals should feel like a polished application: restrained, modern
 styling, clear visual separation, less information competing on each screen,
@@ -159,7 +162,7 @@ All four frontend slices and follow-up regression fixes are complete.
 
 **Selected direction (2026-10-20):** Direction A, the developer workspace, is the base. It
 borrows two elements from B and one from C. The three prototypes remain in
-[prototypes/design-directions/](prototypes/design-directions/index.html) as reference until
+[prototypes/design-directions/](../prototypes/design-directions/index.html) as reference until
 the implementation replaces them.
 
 - **Structure (A):** persistent sidebar (Workflows, Runs) with an attention count, breadcrumbs
@@ -191,7 +194,7 @@ browser API are unchanged. Slices: (1) frame, pairing, Runs, Run details and Map
 inside each slice rather than in a separate prototype round.
 
 **Slice 1 (2026-10-20): frame, pairing, Runs, Run details, Map.** Code lives in `ui/`; the serving
-contract is in [architecture §8.7](archive/architecture.md).
+contract is in [architecture §8.7](../architecture.md).
 
 - Pairing is its own screen, with distinct copy for a new browser, an ended session, a logged-out
   browser and an unreachable daemon. The code field clears after every attempt.
@@ -308,11 +311,11 @@ closed the remaining gaps:
   records. **Accepted report** shows all report fields and identity, even before process settlement.
   Technical details keep their private-path filtering. Editor tab labels/counts stay together on phones.
 
-The [migration browser checks](test/browser/app-migration.spec.mjs) cover redirect/hash/session
+The [migration browser checks](../../test/browser/app-migration.spec.mjs) cover redirect/hash/session
 continuity, exact imports (including arbitrary command arguments/environment), invalid text,
 failed checks, task preview and distinct manual task decisions. Classic end-to-end revision/resume,
 frozen-input/report history, and reload/last-tab no-replay assertions now run against React, using
-the same fake adapters and durable reopen checks. [USER_GUIDE.md](USER_GUIDE.md) is the current guide;
+the same fake adapters and durable reopen checks. [USER_GUIDE.md](react-user-guide-2026-10-21.md) is the current guide;
 the stopped historical walkthrough stays archived. Draft memory, YAML comment regeneration,
 prompt-placeholder renames, Apply-time task-override validation and CLI recovery remain as above.
 

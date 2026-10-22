@@ -1,11 +1,16 @@
 # Using Workflowz
 
+> Archived on 2026-10-21. This guide describes the previous React interface, before the Workbench
+> redesign. Labels, screens and command-entry instructions are historical. Follow
+> [README.md](../../README.md) for setup and [DESIGN.md](../../DESIGN.md) for current UI direction.
+> A replacement guide will be written after the redesigned interface works.
+
 Workflowz runs the steps and result rules you author. Workflows are definitions; runs are
 executions of a particular immutable revision. The daemon owns execution and history.
 
 ## Open and pair
 
-Build and start Workflowz as described in [README](README.md#development). In a second terminal,
+Build and start Workflowz as described in [README](../../README.md#development). In a second terminal,
 run `bin/wf --state-dir "$HOME/.local/state/workflowz" ui` with the same state directory as the
 daemon. Open the printed `/ui/` address and enter its one-use pairing code. Keep the code private;
 it expires after five minutes. Run the command again for a new code if needed.
@@ -197,5 +202,5 @@ Follow the inspection's process evidence and blocking notes. Recovery may requir
 owned-process termination or explicit external-cleanup confirmation before a reasoned decision.
 Decisions use exact event/attempt identity and leave execution paused; Resume is separate.
 Do not guess that a vanished process succeeded or blindly repeat signals. Recovery and per-task
-settings stay in the CLI; see the [recovery contract](archive/architecture.md#76-phase-72-explicit-headless-recovery)
-and [CLI reference](archive/development.md#local-application-commands).
+settings stay in the CLI; see the [recovery contract](../architecture.md#76-phase-72-explicit-headless-recovery)
+and [CLI reference](../development.md#local-application-commands).

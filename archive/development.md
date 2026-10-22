@@ -2,10 +2,14 @@
 
 > Archived for the UI-focused reset on 2026-10-20. This is reference/history, not the current work plan or agent instructions. Use [DESIGN.md](../DESIGN.md) and [AGENTS.md](../AGENTS.md) for active direction.
 
-This contains development setup and verification commands. The [active plan](../DESIGN.md)
-controls current work. The [UI design brief](../DESIGN.md) describes the active redesign. The
+This contains development setup and verification commands. The [approved Workbench design](../DESIGN.md)
+controls current UI work. The
 [interrupted walkthrough](history/usability-walkthrough.md) and [previous guide](history/user-guide.md)
-remain historical operating references. The current [user guide](../USER_GUIDE.md) covers the finished interface.
+remain historical operating references. The [archived React user guide](history/react-user-guide-2026-10-21.md)
+describes the previous interface; a replacement follows the Workbench redesign. Commands below
+remain the development reference; check `package.json` for the current script definitions.
+Bundled third-party skills in `.cursor/skills/` and `.claude/skills/` are excluded from Biome;
+application source, tests, examples, scripts and project configuration remain checked.
 
 ## Setup and commands
 
@@ -46,8 +50,8 @@ npm run test:browser
 # Optional: npm run test:browser -- --headed
 ```
 
-The command builds the real application and runs bounded Chromium scenarios for the legacy
-interface and the new app (`test/browser/app-*.spec.mjs`), sequentially,
+The command builds the real application and runs bounded Chromium scenarios for the React
+interface (`test/browser/app-*.spec.mjs`), sequentially,
 with no test retries. It never installs packages/browsers or invokes a provider. A missing browser
 fails with provisioning guidance. `npm run check` remains browser-independent and offline.
 
@@ -79,7 +83,7 @@ artifact is retained.
 After building, `bin/wf daemon start` starts the explicit foreground owner. A separate terminal
 using the same state directory can run `bin/wf ui` to obtain the local address and one-use pairing
 code. The React interface is served at `/ui/`; old `/ui/app/` hash bookmarks redirect there.
-See the [user guide](../USER_GUIDE.md). `WF_SHOTS=DIR npm run test:browser` saves
+The [archived React user guide](history/react-user-guide-2026-10-21.md) describes the previous UI. `WF_SHOTS=DIR npm run test:browser` saves
 credential-free screenshots for visual review. `bin/wf daemon stop` requests graceful shutdown after the current step; the owner may still
 be draining when that client returns. `bin/wf --help` lists management commands.
 
@@ -119,7 +123,7 @@ redaction cannot identify every secret loaded by harnesses or tools.
 | `src/test-support/`, `test/fixtures/` | Offline fake adapters and process/workflow fixtures |
 | `test/browser/` | Disposable daemon/Chromium scenarios |
 | `examples/` | Valid sample definitions and illustrative task inputs |
-| `docs/archive/` | Historical MVP documentation and evidence |
+| `archive/` | Historical MVP documentation and evidence |
 
 `src/architecture.test.ts` verifies import boundaries. SQLite uses built-in `node:sqlite`; core
 unit/integration tests use `node:test`. Dependency versions are authoritative in `package.json`

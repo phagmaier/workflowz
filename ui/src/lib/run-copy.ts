@@ -17,6 +17,14 @@ export const STATUS: Record<RunStatus, { label: string; tone: Tone }> = {
 export const needsAttention = (status: RunStatus) =>
   status === "paused" || status === "interrupted";
 
+/** Sidebar and Runs grouping: every status belongs to exactly one group. */
+export const RUN_GROUPS: readonly { label: string; statuses: readonly RunStatus[] }[] = [
+  { label: "Waiting for you", statuses: ["paused", "interrupted"] },
+  { label: "Ready to start", statuses: ["draft", "ready"] },
+  { label: "Running", statuses: ["running", "pausing"] },
+  { label: "Finished", statuses: ["completed", "stopped"] },
+];
+
 const quote = (text: string) => `“${text}”`;
 
 export function taskPosition(status: BrowserRunStatus): string | null {

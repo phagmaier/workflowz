@@ -6,30 +6,34 @@ For structural codebase exploration, use the installed `codebase-memory` skill.
 
 ## Current assignment
 
-Redesign Workflowz's frontend. The owner stopped the walkthrough because the interface was too
-confusing to follow even with instructions. The direction is a substantial UI overhaul with
-focused screens and clear navigation. Read `README.md`, then `DESIGN.md`.
+Implement the approved Workbench design (direction C) in React + TypeScript. Design selection
+is complete. Read `README.md`, then `DESIGN.md`; use its Status section for completed and next
+slices. Approved target behavior does not imply that implementation is complete.
 
-There is no active `todo.md` or user-guide assignment. Old specifications, plans, walkthroughs
-and milestone approvals are archived reference, not current assignments or authorization.
-Use specific archived references only when a technical contract is relevant; do not require
-reading the historical documentation set before design work.
+Documentation roles:
 
-## Design workflow
+- `README.md`: setup and repository orientation.
+- `DESIGN.md`: approved UI requirements, decisions and current implementation status.
+- Source and tests: implemented behavior; verify the area being changed.
+- `archive/`: technical references and historical context. Read specific contracts as needed;
+  old plans, feedback, walkthroughs and approvals are not current assignments or authorization.
 
-- Start with comparable visual/interactive proposals using realistic content. The owner needs help choosing a design; do not ask them to supply a finished design specification.
-- Show distinct layouts and interaction approaches, then develop the chosen direction. Keep production implementation separate from clearly labeled prototypes.
-- Use the focused screens and design prompt in `DESIGN.md`. Develop navigation, hierarchy and authoring interactions before selecting detailed styling.
+There is no active `todo.md` or user-guide assignment.
+
+## Implementation workflow
+
+- Build one complete frontend slice at a time using the approved layout, theme and interactions in `DESIGN.md`.
+- Keep the distinction between approved target behavior and completed implementation clear. Archived prototypes are superseded; they are not the approved Workbench design.
 - Preserve all existing workflow capabilities. Make ordinary tasks straightforward and keep advanced YAML, policies and diagnostic details accessible in appropriate views.
 - Keep action feedback at the action and make created/selected objects apparent. Preserve input and focus through asynchronous updates and failures.
-- Record the selected direction and material decisions in `DESIGN.md`. Keep guidance concise; avoid another large issue checklist or session transcript.
+- Record material decisions and concise implementation status in `DESIGN.md`; avoid a session transcript or duplicate task list.
 - Write the new user guide after the redesigned interface works. Do not resume the abandoned walkthrough unless the owner requests it.
 
 ## Technical boundaries
 
-The proposed implementation direction is React + TypeScript for the frontend, served by the
-existing local daemon. Decide the exact integration and project-local tooling after reviewing
-the interaction direction. There is no authorization for an engine rewrite or speculative features.
+The frontend already uses React + TypeScript and Vite, served by the existing local daemon.
+Continue that integration. Desktop packaging and service lifecycle changes are deferred; see
+`DESIGN.md`. There is no authorization for an engine rewrite or speculative features.
 
 - Follow the authored deterministic graph. No supervisor LLM or mandatory review/test/approval stages.
 - Keep the coordinator as the sole canonical run/task state writer. State changes and their audit events remain transactional, with stable IDs and immutable historical records.

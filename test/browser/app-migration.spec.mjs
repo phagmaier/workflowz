@@ -20,15 +20,15 @@ test("old app bookmarks redirect with their hash; imported YAML keeps exact sour
   await expect(page.getByRole("link", { name: "Classic interface" })).toHaveCount(0);
   await expect(page.locator("pre.yaml")).toHaveText(WORKFLOW);
   await page.getByRole("link", { name: "Workflows", exact: true }).first().click();
-  await page.getByRole("link", { name: "Import YAML…" }).click();
+  await page.getByRole("link", { name: "Import file…" }).click();
   const original = `# Keep this comment and formatting\n${WORKFLOW.replace("Implement and review", "Imported workflow")}  exact_command: {kind: command, argv: [printf, "", " a ", "b\\nc"], env: {SPACED: " v ", MULTILINE: "a\\nb"}, on: {complete: {goto: done}, failed: {pause: true}}}\n`;
   await page
     .getByLabel("Workflow YAML file")
     .setInputFiles({ name: "flow.yaml", mimeType: "text/yaml", buffer: Buffer.from(original) });
-  await page.getByLabel("Original workflow folder").fill(app.root);
+  await page.getByLabel("Workflow folder").fill(app.root);
   await noSideScroll(page);
   await shot(page, "migration-import-form-desktop");
-  await page.getByLabel("Original workflow folder").press("Tab");
+  await page.getByLabel("Workflow folder").press("Tab");
   await expect(page.getByRole("button", { name: "Open draft" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByLabel("Workflow YAML", { exact: true })).toHaveValue(original);
@@ -78,10 +78,10 @@ test("phone import keeps invalid text through failed checks, navigation and disc
     mimeType: "text/yaml",
     buffer: Buffer.alloc(1024 * 1024 + 1),
   });
-  await page.getByLabel("Original workflow folder").fill("relative");
+  await page.getByLabel("Workflow folder").fill("relative");
   await page.getByRole("button", { name: "Open draft" }).click();
   await expect(page.getByRole("alert")).toContainText("full workflow folder path");
-  await page.getByLabel("Original workflow folder").fill(app.root);
+  await page.getByLabel("Workflow folder").fill(app.root);
   await page.getByRole("button", { name: "Open draft" }).click();
   await expect(page.getByRole("alert")).toContainText("exceeds 1 MiB");
   await noSideScroll(page);

@@ -1,11 +1,18 @@
-# Workflowz UI brief
+# Workflowz — approved Workbench design
 
 ## Status
 
 - The React UI built in the previous round was rejected on usability and appearance. The engine,
   saved state and execution contracts are unchanged and remain the baseline.
 - Direction C (Workbench) was selected and its main screens approved on 2026-10-21 (see
-  Decisions). Production work starts with the open questions below, then one React slice at a time.
+  Decisions). Production work proceeds one React slice at a time.
+- Slice 1 (2026-10-21): C's dark theme for the whole app, the sidebar (workflows, run groups,
+  connection), and the Workflows page with import as a drop zone. Other screens keep their
+  earlier layout in the dark theme until their slices. Fonts fall back to system faces; bundling
+  Manrope/JetBrains Mono needs a `font-src 'self'` CSP addition, not yet approved.
+- Next slice: the workflow editor's Graph view with its checker panel. The Form editor, Runs
+  and run details still need their approved layouts. Sidebar run groups currently open the same
+  Runs page; imported files open in YAML until Graph view exists.
 - The target form is a desktop app (Electron proposed). Do not build the desktop shell or change
   daemon lifecycle yet.
 - The full earlier brief, slice logs and decision history are archived in
@@ -33,7 +40,8 @@ see what happened, without learning internal field names or hunting for controls
 - Feedback appears at the action that caused it, and the created or selected object stays visible.
 - Command entry is natural (for example `node --version` on one line).
 - Command output is visible after a run, not only success or failure.
-- Project folder can be pasted or browsed on the daemon's machine.
+- Project folder can be pasted as a path in the browser UI. The desktop app must provide the
+  operating system's folder picker; daemon filesystem browsing is outside the browser UI scope.
 - Advanced branching, retries, task loops, policies, YAML and paused-run intervention remain
   available in deliberate places.
 
@@ -54,22 +62,20 @@ see what happened, without learning internal field names or hunting for controls
   and the CSP stay as they are.
 - The workflow is a deterministic graph of steps and results. No supervisor AI decides what runs next.
 
-## Open questions
+## Implementation sequence
 
-- None blocking. Revisit the quit and reopen behavior after using the first desktop build.
+Continue the browser-served React UI one complete slice at a time, following the checks in
+[AGENTS.md](AGENTS.md). Next is the Graph editor and checker; complete the remaining approved
+editor, Runs and run-detail interactions before rewriting the user guide.
 
-## Design process
+Bundled Manrope/JetBrains Mono fonts and the required CSP change remain undecided and do not
+block layout work. Use system fonts until that decision is resolved. Desktop packaging,
+automatic service management, folder picking, notifications and quit/reopen behavior are
+later work; do not implement them as part of the browser UI slices.
 
-1. Make three dark-theme directions. Each shows the same sample workflow twice: a graph view with
-   the checker, and a form editor. Sample: Pick task → Implement (Codex agent) → Review (Pi agent)
-   → Done, where "blocked" pauses for the owner. Use Claude Design. Prototypes are not production code.
-2. The owner picks a direction by looking at it. Record the choice in Decisions with the date.
-3. Implement one complete slice at a time in React + TypeScript, following AGENTS.md checks.
-4. Rewrite the user guide after the redesigned interface works.
-
-Owner feedback in detail: [DEMO_FEEDBACK.md](DEMO_FEEDBACK.md). Engine contracts: [archive/](archive/README.md).
-The old prototypes in [prototypes/design-directions/](prototypes/design-directions/index.html) are
-superseded and will be removed when the new design is implemented.
+The approved visual reference is the design canvas linked in Decisions. Earlier feedback,
+guides and rejected prototypes are indexed in the [archive](archive/README.md); they are
+historical context. Engine contracts remain available there as technical references.
 
 ## Decisions
 
@@ -105,6 +111,12 @@ superseded and will be removed when the new design is implemented.
 - **2026-10-21:** Effort uses sensible per-harness defaults. The owner can change each harness's
   default, and custom values entered before are offered again. These are app settings, not
   workflow fields.
+
+## Deferred desktop behavior
+
+These decisions apply when the desktop shell is designed and built. Revisit quit and reopen
+behavior after using the first desktop build. Electron remains proposed, not final.
+
 - **2026-10-21:** The desktop app is a single window that starts and stops the local service
   itself, replacing the separate terminal and manual pairing. This changes daemon lifecycle and
   browser authority, so the details are designed with the desktop shell, not in the early slices.

@@ -1,5 +1,9 @@
 # Live demo feedback — 2026-10-21
 
+> Archived on 2026-10-21. Research from the rejected interface; its conclusions are incorporated
+> into [DESIGN.md](../../DESIGN.md). Open questions and proposed interactions below are historical,
+> not current implementation instructions.
+
 The owner drove the current UI through pairing, creating a Commands only draft,
 editing its command to `node --version`, saving, creating a run and starting it.
 The demo used `/tmp/workflowz-demo/project` with separate disposable daemon state.

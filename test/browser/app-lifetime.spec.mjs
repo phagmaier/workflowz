@@ -126,7 +126,9 @@ test("interrupted, pausing and load-error states explain what is known and what 
   await shot(page, "s1-runs-error");
   failRuns = false;
   await page.getByRole("button", { name: "Try again now" }).click();
-  await expect(page.getByRole("link", { name: "Browser lifetime" })).toBeVisible();
+  await expect(
+    page.getByRole("main").getByRole("link", { name: "Browser lifetime" }),
+  ).toBeVisible();
 
   rewrite = (status) => ({
     ...status,
@@ -153,7 +155,7 @@ test("interrupted, pausing and load-error states explain what is known and what 
   await expect(recovery).toContainText("Its process is confirmed gone.");
   await expect(recovery).toContainText("the daemon restarted while work was active");
   await expect(page.getByRole("button", { name: /Start|Resume/ })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: /Runs\s*1 needs attention/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Waiting for you\s*[1-9]/ })).toHaveCount(0);
   await shot(page, "s2-interrupted");
 
   rewrite = (status) => ({ ...status, run: { ...status.run, status: "pausing" } });

@@ -128,7 +128,7 @@ conformance does not establish current authentication, model entitlement or ever
 
 ## 3. Canonical workflow schema (v1)
 
-> Implementation decisions for this section (field names, open semantics, deviations) are recorded in [`docs/schema-v1.md`](schema-v1.md).
+> Implementation decisions for this section (field names, open semantics, deviations) are recorded in [`schema-v1.md`](schema-v1.md).
 
 ### 3.1 Document top level
 

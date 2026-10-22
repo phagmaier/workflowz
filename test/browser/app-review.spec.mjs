@@ -30,13 +30,13 @@ test("saving keeps earlier revision addresses immutable and preserves a collidin
 
   // Another draft saves identical text, so storage returns the already-open revision.
   await page.getByRole("link", { name: "Workflows", exact: true }).first().click();
-  await page.getByRole("link", { name: "Import YAML…" }).click();
+  await page.getByRole("link", { name: "Import file…" }).click();
   await page.getByLabel("Workflow YAML file").setInputFiles({
     name: "same.yaml",
     mimeType: "text/yaml",
     buffer: Buffer.from(WORKFLOW),
   });
-  await page.getByLabel("Original workflow folder").fill(app.root);
+  await page.getByLabel("Workflow folder").fill(app.root);
   await page.getByRole("button", { name: "Open draft" }).click();
   await expect(save).toBeEnabled();
   await save.click();

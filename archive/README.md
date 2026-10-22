@@ -19,12 +19,15 @@ or authorization. Read a specific reference when needed; there is no mandatory a
 | [Interrupted walkthrough](history/usability-walkthrough.md) | Completed command-only journey and observed UI problems; no agent run was started |
 | [MVP history](history/README.md) | Earlier guide, completed roadmap, implementation log and compatibility history |
 | [Previous design brief](history/design-brief-2026-10-21.md) | Full pre-redesign brief with slice logs and decision history |
+| [Previous React user guide](history/react-user-guide-2026-10-21.md) | Rejected interface's operating details; screen descriptions are historical |
+| [Demo feedback](history/demo-feedback-2026-10-21.md) | Design research incorporated into the approved Workbench direction |
+| [Superseded prototypes](prototypes/README.md) | Earlier proposals, distinct from the approved Workbench canvas |
 
 The runtime source, tests, fixtures and tooling were retained. The canonical overnight example
 now points to the archived spec so its instruction-file reference remains valid. The user guide
 will be rebuilt against the redesigned UI; the unfinished draft is preserved as research.
 
-UI-focused reset verification: typecheck, lint, build and the existing CLI validation suite passed
+Historical UI-focused reset verification: typecheck, lint, build and the existing CLI validation suite passed
 (**10 tests**, including all **6 examples with zero warnings**). All **228 local Markdown links**
 and heading anchors resolved; `git diff --check` passed. Runtime behavior was not changed; one
 source comment and the overnight example's instruction path were updated for the archive move.

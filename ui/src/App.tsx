@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { EditorPage } from "./components/EditorPage.tsx";
-import { ImportWorkflowPage } from "./components/ImportWorkflowPage.tsx";
 import { NewWorkflowPage } from "./components/NewWorkflowPage.tsx";
 import { Pairing } from "./components/Pairing.tsx";
 import { RunPage } from "./components/RunPage.tsx";
@@ -26,7 +25,7 @@ function Screens() {
     case "new-workflow":
       return <NewWorkflowPage example={route.example} />;
     case "import-workflow":
-      return <ImportWorkflowPage />;
+      return <WorkflowsPage importing />;
     case "editor": {
       // Keyed by draft, so saving a new draft as a revision keeps the page and its feedback.
       const key = sessionKey(route.target);

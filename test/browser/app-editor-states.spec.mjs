@@ -19,7 +19,7 @@ test("edit a saved workflow through slow checks, failures, navigation and discar
   const { revisionId } = await app.seed({ workflowText: WORKFLOW });
 
   await pairApp(page, app, "#/workflows");
-  await page.getByRole("link", { name: "Implement and review" }).click();
+  await page.getByRole("main").getByRole("link", { name: "Implement and review" }).click();
   await expect(page).toHaveURL(new RegExp(`#/workflows/${revisionId}$`));
   const heading = page.getByRole("heading", { level: 1 });
   await expect(heading).toHaveText("Implement and review");

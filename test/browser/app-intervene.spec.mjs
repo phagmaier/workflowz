@@ -114,7 +114,7 @@ test("choose what happens next on a phone; stale choices change nothing and are 
   await page.getByRole("link", { name: "Runs", exact: true }).first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Runs" })).toBeFocused();
   await expect(page.getByRole("row", { name: /Stopped/ })).toContainText(runId);
-  await expect(page.getByRole("link", { name: /needs attention/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Waiting for you\s*[1-9]/ })).toHaveCount(0);
   await noSideScroll(page);
   await shot(page, "m4-runs");
   await policy();

@@ -125,12 +125,20 @@ test("late Save keeps its revision without redirecting a screen already left", a
   await answered;
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Workflows");
   await expect(page).toHaveURL(/#\/workflows$/);
-  await expect(page.getByRole("link", { name: "Saved while leaving", exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "Implement and review", exact: true }).click();
+  await expect(
+    page.getByRole("main").getByRole("link", { name: "Saved while leaving", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: "Implement and review", exact: true })
+    .click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Implement and review");
   await expect(page.getByText(`revision ${revisionId}`, { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Workflows", exact: true }).first().click();
-  await page.getByRole("link", { name: "Saved while leaving", exact: true }).click();
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: "Saved while leaving", exact: true })
+    .click();
   await expect(page).toHaveURL(new RegExp(`#/workflows/${savedRevision}$`));
   await expect(page.getByText("Saved", { exact: true })).toBeVisible();
   expect((await app.request({ op: "runs" })).length).toBe(1);
@@ -223,7 +231,10 @@ test("reopening the same draft while Save is pending moves only that editor to i
   await expect(page.locator("pre.yaml")).toContainText("Pending reopened draft");
   await expect(page.getByText(`revision ${savedRevision}`, { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Workflows", exact: true }).first().click();
-  await page.getByRole("link", { name: "Implement and review", exact: true }).click();
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: "Implement and review", exact: true })
+    .click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Implement and review");
   await expect(page.getByText(`revision ${revisionId}`, { exact: true })).toBeVisible();
   await policy();

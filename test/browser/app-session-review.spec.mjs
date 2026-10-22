@@ -43,7 +43,7 @@ for (const imported of [false, true]) {
         mimeType: "text/yaml",
         buffer: Buffer.from(WORKFLOW),
       });
-      await page.getByLabel("Original workflow folder").fill(app.root);
+      await page.getByLabel("Workflow folder").fill(app.root);
     } else {
       await page.getByLabel("Name", { exact: true }).fill("Pending draft");
       await page.getByLabel("Project folder").fill(app.root);
@@ -52,9 +52,9 @@ for (const imported of [false, true]) {
       .getByRole("button", { name: imported ? "Open draft" : "Create draft", exact: true })
       .click();
     await pending;
-    await page.getByRole("link", { name: "Cancel", exact: true }).click();
+    await page.getByRole(imported ? "button" : "link", { name: "Cancel", exact: true }).click();
     if (!imported) {
-      await page.getByRole("link", { name: "＋ Create workflow", exact: true }).click();
+      await page.getByRole("link", { name: "New workflow", exact: true }).click();
       await page.getByLabel("Name", { exact: true }).fill("My next draft");
       await page.getByRole("link", { name: "Cancel", exact: true }).click();
     }
@@ -68,7 +68,7 @@ for (const imported of [false, true]) {
     await expect(page.getByRole("region", { name: "Unsaved drafts in this tab" })).toBeVisible();
     await expect(page).toHaveURL(/#\/workflows$/);
     if (!imported) {
-      await page.getByRole("link", { name: "＋ Create workflow", exact: true }).click();
+      await page.getByRole("link", { name: "New workflow", exact: true }).click();
       await expect(page.getByLabel("Name", { exact: true })).toHaveValue("My next draft");
     }
     expect(app.children).toEqual([]);

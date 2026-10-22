@@ -4,17 +4,20 @@ A local runner for user-defined coding-agent and command workflows. You choose t
 outcome rules; the runner executes them sequentially and saves progress/history in SQLite.
 A local browser interface and the `wf` CLI control the same daemon.
 
-## Browser interface
+## UI implementation status
 
-The developer workspace provides Workflows, a visual/YAML editor, Runs and focused run details.
-The [user guide](USER_GUIDE.md) covers creation, rules, results, paused decisions and recovery.
+The approved direction is **Workbench (C)**. The first slice is built: a shared dark theme,
+a sidebar with workflows and run groups, and the Workflows table with file import. The editor,
+Runs and run details retain their previous layouts until their slices. Next is the workflow
+editor's Graph view and checker panel. Desktop packaging and service lifecycle changes are deferred.
 
-- [DESIGN.md](DESIGN.md): the design brief, design-selection process and reusable prompt.
-- [AGENTS.md](AGENTS.md): focused instructions for contributing to the UI overhaul.
-- [archive/](archive/README.md): previous specs, guides, plans and compatibility evidence.
+- [DESIGN.md](DESIGN.md): approved UI requirements, decisions and implementation status.
+- [AGENTS.md](AGENTS.md): contribution instructions and runtime boundaries.
+- [Development reference](archive/development.md): additional commands and browser provisioning.
+- [Archive](archive/README.md): technical contracts and historical material.
 
-The selected direction and implementation decisions are recorded in
-[DESIGN.md](DESIGN.md#decisions); the [design-direction prototypes](prototypes/design-directions/index.html) remain for reference.
+The previous interface's guide, feedback and prototypes are archived. A new user guide will
+follow the completed redesign; historical screen descriptions are not current instructions.
 
 ## Development
 

@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { RUN_STATUSES } from "../../../src/contracts/run-state.ts";
 import { parseRoute, runHref } from "../route.ts";
 import type { BrowserRunStatus, ResolvedTransition, RunStatus } from "../types.ts";
 import { duration, humanize } from "./format.ts";
 import { layoutMap } from "./map-layout.ts";
-import { describeRun, needsAttention, STATUS } from "./run-copy.ts";
+import { describeRun, needsAttention, RUN_GROUPS, STATUS } from "./run-copy.ts";
 
 const goto = (outcome: string, target: string, level = "step"): ResolvedTransition =>
   ({
@@ -102,6 +103,13 @@ describe("status copy", () => {
     ]);
     const retry = status("running", { retryNotBefore: "2999-01-01T00:00:00.000Z" });
     assert.match(describeRun(retry, []).headline, /waiting to retry Review/);
+  });
+
+  it("puts every status in exactly one sidebar group, attention first", () => {
+    const grouped = RUN_GROUPS.flatMap((group) => group.statuses);
+    assert.deepEqual([...grouped].sort(), [...RUN_STATUSES].sort());
+    assert.equal(new Set(grouped).size, grouped.length);
+    assert.deepEqual(RUN_GROUPS[0]?.statuses.filter(needsAttention), RUN_GROUPS[0]?.statuses);
   });
 });
 

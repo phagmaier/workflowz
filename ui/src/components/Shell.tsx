@@ -1,9 +1,15 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { describeFailure } from "../api.ts";
 import { useConnection } from "../connection.tsx";
-import { needsAttention } from "../lib/run-copy.ts";
+import { unsavedDrafts, useSessionRegistry } from "../editor-session.ts";
+import { RUN_GROUPS } from "../lib/run-copy.ts";
+import { groupWorkflows } from "../lib/workflow-edit.ts";
+import { editorHref, useRoute } from "../route.ts";
 import { useRuns } from "../runs-data.tsx";
+import { PlusIcon } from "./icons.tsx";
 import { Feedback, type FeedbackState } from "./ui.tsx";
+
+const SIDEBAR_WORKFLOWS = 8;
 
 // The location whose heading should receive focus once its content (not a placeholder) renders.
 const focus: { shown: string | null; pending: string | null } = { shown: null, pending: null };
@@ -26,7 +32,7 @@ export interface Crumb {
   href?: string;
 }
 
-/** Persistent frame: sidebar navigation, breadcrumbs with page actions, connection banners. */
+/** Persistent frame: sidebar with workflows and run groups, breadcrumbs, connection banners. */
 export function Shell({
   section,
   crumbs,
@@ -42,8 +48,22 @@ export function Shell({
   children: ReactNode;
 }) {
   const { online, closing, driveFailure, busy, mutate, loggedOut } = useConnection();
-  const { runs } = useRuns();
-  const attention = runs?.filter((run) => needsAttention(run.status)).length ?? 0;
+  const { runs, saved, names } = useRuns();
+  const route = useRoute();
+  useSessionRegistry();
+  const perRevision = new Map<number, number>();
+  for (const run of runs ?? [])
+    perRevision.set(run.revisionId, (perRevision.get(run.revisionId) ?? 0) + 1);
+  const groups = saved ? groupWorkflows(saved, perRevision) : null;
+  const openRevision =
+    route.view === "editor" && route.target.kind === "revision" ? route.target.revisionId : null;
+  const currentName = openRevision === null ? null : (names.get(openRevision) ?? null);
+  const edited = new Set(
+    unsavedDrafts().flatMap((session) => {
+      const name = session.state.basedOn === null ? undefined : names.get(session.state.basedOn);
+      return name === undefined ? [] : [name];
+    }),
+  );
   const [logout, setLogout] = useState<FeedbackState>(null);
   const main = useRef<HTMLElement>(null);
 
@@ -74,32 +94,77 @@ export function Shell({
         Skip to content
       </button>
       <nav className="side" aria-label="Main">
-        <a className="brand" href="#/runs">
+        <a className="brand" href="#/workflows">
           Workflowz
         </a>
-        <a
-          href="#/workflows"
-          className={`navlink ${section === "workflows" ? "current" : ""}`}
-          aria-current={section === "workflows" ? "page" : undefined}
-        >
-          Workflows
-        </a>
-        <a
-          href="#/runs"
-          className={`navlink ${section === "runs" ? "current" : ""}`}
-          aria-current={section === "runs" ? "page" : undefined}
-        >
-          Runs
-          {attention ? (
-            <span
-              className="badge"
-              title={`${attention} need${attention === 1 ? "s" : ""} attention`}
-            >
-              {attention}
-              <span className="sr-only"> need{attention === 1 ? "s" : ""} attention</span>
-            </span>
+        <div className="side-actions">
+          <a className="btn btn-primary" href="#/workflows/new">
+            <PlusIcon />
+            New workflow
+          </a>
+          <a className="btn" href="#/workflows/import">
+            Import file…
+          </a>
+        </div>
+        <div className="side-group side-workflows">
+          <a
+            href="#/workflows"
+            className={`side-head ${section === "workflows" ? "current" : ""}`}
+            aria-current={section === "workflows" && !currentName ? "page" : undefined}
+          >
+            Workflows
+            <span aria-hidden="true">All</span>
+          </a>
+          {groups?.length ? (
+            <ul className="side-list">
+              {groups.slice(0, SIDEBAR_WORKFLOWS).map((group) => (
+                <li key={group.name}>
+                  <a
+                    className={`side-item ${group.name === currentName ? "current" : ""}`}
+                    aria-current={group.name === currentName ? "page" : undefined}
+                    href={editorHref({ kind: "revision", revisionId: group.latest.revisionId })}
+                  >
+                    <span className="side-name">{group.name}</span>
+                    {edited.has(group.name) ? (
+                      <span
+                        className="dot dot-warn"
+                        role="img"
+                        aria-label="edited"
+                        title="Unsaved changes in this tab"
+                      />
+                    ) : null}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : groups ? (
+            <p className="side-empty">No saved workflows yet</p>
           ) : null}
-        </a>
+        </div>
+        <div className="side-group">
+          <a
+            href="#/runs"
+            className={`side-head ${section === "runs" ? "current" : ""}`}
+            aria-current={section === "runs" ? "page" : undefined}
+          >
+            Runs
+            <span aria-hidden="true">All</span>
+          </a>
+          <ul className="side-list">
+            {RUN_GROUPS.map((group) => {
+              const count = runs?.filter((run) => group.statuses.includes(run.status)).length;
+              const waiting = group === RUN_GROUPS[0] && Boolean(count);
+              return (
+                <li key={group.label}>
+                  <a className={`side-item ${waiting ? "waiting" : ""}`} href="#/runs">
+                    <span className="side-name">{group.label}</span>
+                    <span className={`side-count ${waiting ? "badge" : ""}`}>{count ?? "–"}</span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
         <div className="side-foot">
           <p className="conn" role="status">
             <span className={`dot ${online ? "dot-ok" : "dot-bad"}`} aria-hidden="true" />

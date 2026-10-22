@@ -41,7 +41,7 @@ test("pair, follow a run from ready to completed, read history and the map", asy
 
   // A run created elsewhere appears without reloading.
   const { runId } = await app.seed({ workflowText: WORKFLOW });
-  const link = page.getByRole("link", { name: "Implement and review" });
+  const link = page.getByRole("main").getByRole("link", { name: "Implement and review" });
   await expect(link).toBeVisible();
   await expect(page.getByRole("row", { name: /Ready/ })).toContainText(runId);
   await link.click();
@@ -77,7 +77,7 @@ test("pair, follow a run from ready to completed, read history and the map", asy
   await page.getByRole("button", { name: "Start run", exact: true }).click();
   await expect(heading).toContainText("Paused — Work needs your decision");
   expect(mutations).toEqual([{ op: "start", runId, expectedEventId: ready.expectedEventId }]);
-  await expect(page.getByRole("link", { name: /Runs\s*1 needs attention/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Waiting for you\s*1/ })).toBeVisible();
   await expect(page.locator(".lede").first()).toContainText(
     "Work reported “blocked”: Fake agent result",
   );
@@ -135,7 +135,7 @@ test("pair, follow a run from ready to completed, read history and the map", asy
   );
   await expect(history.getByRole("button", { name: /^Task 1:/ })).toBeVisible();
   await expect(history.getByRole("button", { name: /^Task 2: second browser task/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: /needs attention/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Waiting for you\s*[1-9]/ })).toHaveCount(0);
   await shot(page, "05-run-completed");
 
   // Selecting an earlier step shows its result; arrow keys walk the history.

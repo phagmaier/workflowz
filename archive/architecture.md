@@ -601,7 +601,7 @@ never resent. Unsaved drafts are browser memory only. Local YAML import reads up
 an explicit absolute workflow directory, then opens an exact-text draft through the same `draft`
 operation, even if validation fails. It adds no filesystem or mutation API. Full task preview,
 accepted report JSON, imported task bodies and historical attention remain available in
-contextual disclosures; private log paths stay hidden. The current guide is [USER_GUIDE.md](../USER_GUIDE.md).
+contextual disclosures; private log paths stay hidden. The previous interface is documented in the archived [React user guide](history/react-user-guide-2026-10-21.md).
 
 Save-time route aliases expire when navigation settles, so an earlier revision address loads
 its own immutable text. If an identical save reuses a revision with another dirty editor, that
@@ -651,5 +651,6 @@ requires its own explicit submission and current event.
 
 The original implementation order is complete and retained in the [archived MVP plan](history/mvp-plan.md).
 Follow [DESIGN.md](../DESIGN.md) for current interface decisions and the
-[user guide](../USER_GUIDE.md) for usage. Historical plans and walkthrough approvals are reference only. Keep these runtime contracts stable unless a concrete user problem requires
+[archived React user guide](history/react-user-guide-2026-10-21.md) for previous UI usage;
+a replacement guide follows the redesign. Historical plans and walkthrough approvals are reference only. Keep these runtime contracts stable unless a concrete user problem requires
 an explicitly documented behavior adjustment. Historical verification is in the [archive](history/README.md).

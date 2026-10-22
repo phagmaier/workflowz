@@ -40,7 +40,7 @@ test("create a workflow from an example, connect results directly, save, then pr
   await shot(page, "e01-workflows-empty");
 
   // New workflow: three answers, checked in the browser before anything is sent.
-  await page.getByRole("link", { name: "＋ Create workflow" }).click();
+  await page.getByRole("link", { name: "New workflow" }).click();
   await expect(heading).toHaveText("New workflow");
   await expect(heading).toBeFocused();
   await page.getByLabel("Name", { exact: true }).fill("Fix tests");
