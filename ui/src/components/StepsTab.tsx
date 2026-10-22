@@ -1,19 +1,20 @@
 import { type FormEvent, useRef, useState } from "react";
+import { effortPreferences } from "../editor-preferences.ts";
 import type { Session, SessionState } from "../editor-session.ts";
-import { GRAPH_KIND } from "../lib/editor-graph.ts";
-import { humanize, KIND_LABEL, plural } from "../lib/format.ts";
+import { GRAPH_KIND, graphRows } from "../lib/editor-graph.ts";
+import { applyEffortDefaults } from "../lib/effort-preferences.ts";
+import { humanize, KIND_LABEL } from "../lib/format.ts";
 import {
   addStep,
   type Doc,
   KINDS,
   moveStep,
   type Problem,
-  routeLines,
   type StepKind,
   stepMeta,
 } from "../lib/workflow-edit.ts";
 import type { WorkflowStep } from "../types.ts";
-import { type Ctx, focusField, useFocusOnMount } from "./editor-fields.tsx";
+import { type Ctx, fieldId, focusField, useFocusOnMount } from "./editor-fields.tsx";
 import { type Origin, StepForm } from "./StepForm.tsx";
 import { Feedback, type FeedbackState } from "./ui.tsx";
 
@@ -45,7 +46,7 @@ function AddStepForm({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const added = addStep(ctx.doc, kind, name.trim() || KIND_LABEL[kind] || kind, after);
-    ctx.session.edit(() => added.doc);
+    ctx.session.edit(() => applyEffortDefaults(added.doc, effortPreferences(), [added.id]));
     onAdded(
       added.id,
       `Added “${humanize(added.id)}”${after && !plain ? ` after “${humanize(after)}”` : ""}. Connect it by choosing it as a destination for another step's outcome.`,
@@ -144,122 +145,30 @@ export function StepsTab({
   const selected =
     state.selected && Object.hasOwn(doc.steps, state.selected)
       ? state.selected
-      : ((doc.start && Object.hasOwn(doc.steps, doc.start) ? doc.start : ids[0]) ?? null);
+      : ((Object.hasOwn(doc.steps, doc.start) ? doc.start : ids[0]) ?? null);
   const [moved, setMoved] = useState("");
   const [origin, setOrigin] = useState<Origin | null>(null);
   const [added, setAdded] = useState<FeedbackState>(null);
   const ctx: Ctx = { session, doc, state, problems };
-  const narrow = () => window.matchMedia("(max-width: 900px)").matches;
-  const select = (id: string, focus = false) => {
-    if (!id) return;
-    // A step created from a destination shows where it came from until another step is chosen.
+  const select = (id: string, focus = false, field = "step-title") => {
     if (origin?.to !== id) setOrigin(null);
-    session.set({ selected: id });
-    if (focus || narrow()) focusField("step-title");
+    session.set({ selected: id || null });
+    if (!id) focusField("form-add-step");
+    else if (focus || window.matchMedia("(max-width: 1100px)").matches) focusField(field);
   };
-  const stepErrors = (id: string) =>
-    problems.filter((p) => p.stepId === id && p.severity === "error").length;
   return (
-    <div className="three">
-      <section className="pane pane-list" aria-labelledby="steps-title">
-        <div className="pane-head">
-          <h2 id="steps-title">Steps</h2>
-          <span className="muted">{ids.length}</span>
-        </div>
-        <p className="hint" id="reorder-help">
-          Alt + ↑ / ↓ on a step moves it in the list. This does not change execution order.
-        </p>
-        <span className="sr-only" role="status">
-          {moved}
-        </span>
-        <ol className="step-list">
-          {ids.map((id, index) => {
-            const step = doc.steps[id] as WorkflowStep;
-            const errors = stepErrors(id);
-            return (
-              <li key={id}>
-                <button
-                  type="button"
-                  className={`step-item ${id === selected ? "current" : ""}`}
-                  aria-current={id === selected ? "true" : undefined}
-                  aria-describedby="reorder-help"
-                  aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
-                  onKeyDown={(event) => {
-                    if (!event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
-                    event.preventDefault();
-                    const delta = event.key === "ArrowUp" ? -1 : 1;
-                    const to = index + delta;
-                    if (to < 0 || to >= ids.length) return;
-                    session.edit((d) => moveStep(d, id, delta));
-                    setMoved(`${humanize(id)} moved to position ${to + 1} of ${ids.length}.`);
-                  }}
-                  onClick={() => select(id)}
-                >
-                  <span className="num">{index + 1}</span>
-                  <span className={`step-icon k-${step.kind.replace(".", "-")}`} aria-hidden="true">
-                    {ICON[step.kind]}
-                  </span>
-                  <span className="step-text">
-                    <span className="step-name">
-                      {humanize(id)}
-                      {doc.start === id ? <span className="tag">first</span> : null}
-                    </span>
-                    <span className="step-meta">{stepMeta(step)}</span>
-                  </span>
-                  {errors ? (
-                    <span className="err-dot" title={`${errors} to fix`}>
-                      !<span className="sr-only"> {errors} to fix</span>
-                    </span>
-                  ) : null}
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-        {ids.length === 0 ? <p className="muted">No steps yet. Add the first one.</p> : null}
-        <AddStep
-          ctx={ctx}
-          after={selected}
-          onAdded={(id, text) => {
-            setAdded({ kind: "ok", text });
-            setOrigin(null);
-            session.set({ selected: id });
-            if (narrow()) focusField("step-title");
-          }}
-        />
-        <Feedback value={added} />
-      </section>
-      <section className="pane pane-form" aria-label="Selected step">
-        {selected ? (
-          <StepForm
-            key={selected}
-            ctx={ctx}
-            stepId={selected}
-            origin={origin && origin.to === selected ? origin : null}
-            onSelect={select}
-            onCreated={(created) => {
-              setOrigin(created);
-              session.set({ selected: created.to });
-              focusField("step-title");
-            }}
-          />
-        ) : (
-          <p className="muted">Add a step to begin.</p>
-        )}
-      </section>
-      <aside className="pane pane-side" aria-labelledby="checks-title">
-        <Checks ctx={ctx} onSelect={select} />
-        <div className="block">
-          <label htmlFor="start-step" className="h3">
-            Runs first
-          </label>
+    <section className="form-workbench" aria-label="Form editor">
+      <div className="form-toolbar">
+        <div className="row">
+          <span className="kind-label">{ids.length} steps</span>
+          <label htmlFor="start-step">Runs first</label>
           <select
             id="start-step"
             value={Object.hasOwn(doc.steps, doc.start) ? doc.start : ""}
             onChange={(event) => session.edit((d) => ({ ...d, start: event.target.value }))}
           >
             {!Object.hasOwn(doc.steps, doc.start) ? (
-              <option value="">Choose the first step…</option>
+              <option value="">Choose first step…</option>
             ) : null}
             {ids.map((id) => (
               <option key={id} value={id}>
@@ -268,105 +177,159 @@ export function StepsTab({
             ))}
           </select>
         </div>
-        <p className="hint">
-          Steps run one at a time. After each step, its result decides what runs next — the order of
-          this list is only for reading.
-        </p>
-        {selected && doc.steps[selected]?.kind !== "end" ? (
-          <>
-            <h3 className="h3">{humanize(selected)} at a glance</h3>
-            <ul className="route-lines">
-              {routeLines(doc, state.draft, selected).map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-          </>
-        ) : null}
-      </aside>
-    </div>
-  );
-}
-
-function Checks({ ctx, onSelect }: { ctx: Ctx; onSelect: (id: string, focus?: boolean) => void }) {
-  const { state, problems } = ctx;
-  const pending = state.checking || state.checked !== state.generation;
-  const errors = problems.filter((p) => p.severity === "error").length;
-  const open = (p: Problem) => {
-    if (p.code === "unbounded_cycle" || p.place === "rules") {
-      window.location.hash = window.location.hash.replace(
-        /(\/(project|rules|yaml|map))?$/,
-        "/rules",
-      );
-      window.setTimeout(() => focusField("limits-title"), 0);
-    } else if (p.stepId) {
-      onSelect(p.stepId);
-      const field = p.outcome
-        ? `f-${p.stepId}-${p.outcome}`
-        : p.field
-          ? `f-${p.stepId}-${p.field}`
-          : "step-title";
-      focusField(field);
-    } else if (p.place === "start") focusField("start-step");
-    else if (p.place === "project" || p.place === "name")
-      window.location.hash = window.location.hash.replace(
-        /(\/(project|rules|yaml|map))?$/,
-        "/project",
-      );
-    else
-      window.location.hash = window.location.hash.replace(
-        /(\/(project|rules|yaml|map))?$/,
-        "/yaml",
-      );
-  };
-  return (
-    <>
-      <div className="pane-head">
-        <h2 id="checks-title">Checks</h2>
-        <span className="muted small" role="status">
-          {pending ? (
-            <>
-              <span className="spinner" aria-hidden="true" />
-              Checking…
-            </>
-          ) : state.checkError ? (
-            "Not checked"
-          ) : errors ? (
-            `${errors} to fix`
-          ) : problems.length ? (
-            plural(problems.length, "warning")
-          ) : (
-            "All good"
-          )}
-        </span>
+        <span className="hint">Outcomes decide what runs next.</span>
       </div>
-      {state.checkError ? (
-        <p className="inline-alert">
-          {state.checkError}{" "}
-          <button type="button" className="link" onClick={() => ctx.session.recheck()}>
-            Check again
-          </button>
-        </p>
-      ) : null}
-      {problems.length ? (
-        <ul className="problems">
-          {problems.map((p) => (
-            <li key={`${p.code}:${p.stepId}:${p.field}:${p.outcome}:${p.text}`}>
-              <button type="button" className={`problem ${p.severity}`} onClick={() => open(p)}>
-                <span aria-hidden="true">{p.severity === "error" ? "●" : "○"}</span>
-                <span>
-                  {p.severity === "warning" ? <span className="sr-only">Warning: </span> : null}
-                  {p.text}
-                </span>
+      <div className="form-body">
+        <section className="form-steps" aria-labelledby="steps-title">
+          <div className="form-table-head">
+            <h2 id="steps-title">Steps</h2>
+            <span className="hint">Select a step to configure it</span>
+          </div>
+          <p className="sr-only" id="reorder-help">
+            Alt + ↑ / ↓ on a step moves it in the list. This does not change execution order.
+          </p>
+          <span className="sr-only" role="status">
+            {moved}
+          </span>
+          <div className="form-table-scroll">
+            <table className="form-steps-table">
+              <caption className="sr-only">Workflow steps and their outcome connections</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col">Kind</th>
+                  <th scope="col">Outcomes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ids.map((id, index) => {
+                  const step = doc.steps[id] as WorkflowStep;
+                  const errors = problems.filter(
+                    (p) => p.stepId === id && p.severity === "error",
+                  ).length;
+                  const rows = graphRows(doc, session.current ? state.draft : null, id);
+                  return (
+                    <tr key={id} data-step={id} className={id === selected ? "current" : ""}>
+                      <td>
+                        <button
+                          type="button"
+                          id={`form-step-${id}`}
+                          className="form-step-select"
+                          aria-label={`Configure ${humanize(id)}`}
+                          aria-current={id === selected ? "true" : undefined}
+                          aria-controls="selected-step"
+                          aria-describedby="reorder-help"
+                          aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+                          onKeyDown={(event) => {
+                            if (!event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key))
+                              return;
+                            event.preventDefault();
+                            const delta = event.key === "ArrowUp" ? -1 : 1;
+                            const to = index + delta;
+                            if (to < 0 || to >= ids.length) return;
+                            session.edit((d) => moveStep(d, id, delta));
+                            setMoved(
+                              `${humanize(id)} moved to position ${to + 1} of ${ids.length}.`,
+                            );
+                          }}
+                          onClick={() => select(id)}
+                        >
+                          <span
+                            className={`step-icon k-${step.kind.replace(".", "-")}`}
+                            aria-hidden="true"
+                          >
+                            {ICON[step.kind]}
+                          </span>
+                          <span className="form-step-name">
+                            <strong>{humanize(id)}</strong>
+                            <span className="step-meta">{stepMeta(step)}</span>
+                            {doc.start === id ? <span className="tag">Start</span> : null}
+                            {errors ? (
+                              <span className="form-step-error">{errors} to fix</span>
+                            ) : null}
+                          </span>
+                        </button>
+                      </td>
+                      <td>
+                        <span className="form-kind">{GRAPH_KIND[step.kind]}</span>
+                      </td>
+                      <td>
+                        {rows.length ? (
+                          <ul className="form-outcomes">
+                            {rows.map((row) => (
+                              <li key={row.outcome}>
+                                <button
+                                  type="button"
+                                  className={`table-outcome ${row.missing ? "missing" : ""}`}
+                                  aria-label={`${humanize(id)}: ${row.outcome} → ${row.label}`}
+                                  onClick={() => select(id, true, fieldId(id, row.outcome))}
+                                >
+                                  <code>{row.outcome}</code>
+                                  <span>→ {row.label}</span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span className="hint">Workflow completes here</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {!ids.length ? <p className="form-empty">No steps yet. Add the first one.</p> : null}
+          <div className="form-add" id="form-add-step" tabIndex={-1}>
+            <AddStep
+              ctx={ctx}
+              after={selected}
+              plain
+              onAdded={(id, text) => {
+                setAdded({ kind: "ok", text });
+                setOrigin(null);
+                session.set({ selected: id });
+                focusField("step-title");
+              }}
+            />
+            <Feedback value={added} />
+            <p className="hint">List order is for reading. Use Alt + ↑ / ↓ to reorder.</p>
+          </div>
+        </section>
+        <section className="form-inspector" id="selected-step" aria-label="Selected step">
+          <div className="form-inspector-bar">
+            <span className="kind-label">Step settings</span>
+            {selected ? (
+              <button
+                type="button"
+                className="btn btn-sm btn-quiet"
+                onClick={() => focusField(`form-step-${selected}`)}
+              >
+                Back to steps
               </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {problems.length && state.draft && !state.draft.document && !pending ? (
-        <p className="hint">More checks run once these are fixed.</p>
-      ) : !problems.length && !pending && !state.checkError ? (
-        <p className="muted">No problems found.</p>
-      ) : null}
-    </>
+            ) : null}
+          </div>
+          <div className="form-inspector-content" key={selected ?? "empty"}>
+            {selected ? (
+              <StepForm
+                key={selected}
+                ctx={ctx}
+                stepId={selected}
+                origin={origin?.to === selected ? origin : null}
+                onSelect={(id, focus) => select(id, focus)}
+                onCreated={(created) => {
+                  setOrigin(created);
+                  session.set({ selected: created.to });
+                  focusField("step-title");
+                }}
+              />
+            ) : (
+              <p className="muted">Add a step to begin.</p>
+            )}
+          </div>
+        </section>
+      </div>
+    </section>
   );
 }

@@ -12,6 +12,7 @@ import type {
   WorkflowDocument,
   WorkflowStep,
 } from "../types.ts";
+import { formatCommand } from "./command-line.ts";
 import { harnessLabel, humanize, outcomeLabel } from "./format.ts";
 
 export type Doc = Omit<WorkflowDocument, "steps"> & { steps: Record<string, WorkflowStep> };
@@ -79,7 +80,7 @@ export function stepSummary(step: WorkflowStep): string {
     }
     case "command":
       return step.argv.length && step.argv[0]
-        ? `Runs ${clip(step.argv.join(" "), 80)} in ${step.cwd ?? "the project folder"}.`
+        ? `Runs ${clip(Array.isArray(step.argv) ? formatCommand(step.argv) : String(step.argv), 80)} in ${step.cwd ?? "the project folder"}.`
         : "Runs a command — not set yet.";
     case "task.next":
       return "Takes the next unchecked task from the checklist.";
@@ -94,7 +95,10 @@ export function stepSummary(step: WorkflowStep): string {
 export function stepMeta(step: WorkflowStep): string {
   if (step.kind === "agent")
     return `${harnessLabel(step.harness)}${step.model ? ` · ${step.model.split("/").pop()}` : ""}`;
-  if (step.kind === "command") return step.argv.join(" ") || "No command yet";
+  if (step.kind === "command")
+    return (
+      (Array.isArray(step.argv) ? formatCommand(step.argv) : String(step.argv)) || "No command yet"
+    );
   if (step.kind === "end") return step.label ? `Finish · ${step.label}` : "Finish";
   return step.kind === "task.next" ? "Next task" : "Task done";
 }

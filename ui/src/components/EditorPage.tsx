@@ -953,7 +953,7 @@ export function EditorPage({ target, tab }: { target: EditorTarget; tab: EditorT
 
   const href = (t: EditorTab) => editorHref(target, t);
   const fix = (problem: Problem) => {
-    let destination: EditorTab = "map";
+    let destination: EditorTab = tab === "steps" ? "steps" : "map";
     let id = "step-title";
     if (state.mode === "text" || problem.place === "yaml") {
       destination = "yaml";
@@ -1066,9 +1066,7 @@ export function EditorPage({ target, tab }: { target: EditorTarget; tab: EditorT
       ) : (
         <GraphTab key={state.opened} session={session} state={state} problems={list} />
       )}
-      {tab !== "steps" ? (
-        <CheckerDock session={session} state={state} problems={list} onFix={fix} />
-      ) : null}
+      <CheckerDock session={session} state={state} problems={list} onFix={fix} />
     </Shell>
   );
 }

@@ -9,8 +9,10 @@ A local browser interface and the `wf` CLI control the same daemon.
 The approved direction is **Workbench (C)**. The first slice is built: a shared dark theme,
 a sidebar with workflows and run groups, and the Workflows table with file import. Slice 2 adds
 Graph authoring with step settings, Outcome connections, automatic layout and a bottom checker.
-Parsed imports open in Graph; malformed YAML stays editable as text. The full Form redesign,
-Runs and run details follow next. Desktop packaging and service lifecycle changes are deferred.
+Parsed imports open in Graph; malformed YAML stays editable as text. Slice 3 adds the Form steps
+table and settings panel, the shared checker, natural command entry and browser effort
+preferences. Runs and run details follow next. Desktop packaging and service lifecycle changes
+are deferred.
 
 - [DESIGN.md](DESIGN.md): approved UI requirements, decisions and implementation status.
 - [AGENTS.md](AGENTS.md): contribution instructions and runtime boundaries.

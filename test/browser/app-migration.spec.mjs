@@ -142,7 +142,7 @@ test.describe("migrated classic execution and intervention proofs", () => {
     await page.getByRole("link", { name: "Edit the workflow for this run" }).click();
     await page
       .getByRole("region", { name: "Steps" })
-      .getByRole("button", { name: /Work Codex/ })
+      .getByRole("button", { name: "Configure Work", exact: true })
       .click();
     const form = page.getByRole("region", { name: "Selected step" });
     await form.getByLabel("Model", { exact: true }).fill("offline-revised");

@@ -56,22 +56,22 @@ test("create a workflow from an example, connect results directly, save, then pr
   await expect(page).toHaveURL(/#\/workflows\/draft\/\d+$/);
   await expect(heading).toHaveText("Fix tests");
   await expect(page.getByText("New draft · not saved yet")).toBeVisible();
-  const checks = page.getByRole("complementary", { name: "Checks" });
+  const checks = page.getByRole("complementary", { name: "Checker" });
   await expect(checks).toContainText("All good");
   const list = page.getByRole("region", { name: "Steps" });
-  await expect(list.getByRole("button")).toHaveText([
+  await expect(list.getByRole("button", { name: /^Configure/ })).toHaveText([
     /Pick task/,
     /Implement/,
     /Mark done/,
     /Done/,
-    /Add step/,
   ]);
+  await expect(list.getByRole("button", { name: "＋ Add step", exact: true })).toBeVisible();
   await shot(page, "e03-editor-new");
 
-  await list.getByRole("button", { name: /Implement/ }).click();
+  await list.getByRole("button", { name: "Configure Implement", exact: true }).click();
   const form = page.getByRole("region", { name: "Selected step" });
   await expect(form.getByRole("heading", { level: 2 })).toHaveText("Implement");
-  await expect(form).toContainText("Codex:");
+  await expect(form.getByLabel("Agent", { exact: true })).toHaveValue("codex");
 
   // A new result is unconnected until a destination is chosen, and the checks say so in context.
   await form.getByLabel("New outcome name").fill("needs info");

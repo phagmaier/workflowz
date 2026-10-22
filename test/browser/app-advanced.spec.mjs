@@ -16,11 +16,11 @@ test("author shared rules, defaults and limits; inspect all failures and reorder
   const { revisionId } = await app.seed({ workflowText: WORKFLOW });
   await pairApp(page, app, `#/workflows/${revisionId}`);
   const steps = page.getByRole("region", { name: "Steps" });
-  const work = steps.getByRole("button", { name: /Work Codex/ });
+  const work = steps.getByRole("button", { name: "Configure Work", exact: true });
   await work.focus();
   await page.keyboard.press("Alt+ArrowUp");
   await expect(work).toBeFocused();
-  await expect(steps.locator("li").first()).toContainText("Work");
+  await expect(steps.getByRole("row").nth(1)).toHaveAttribute("data-step", "work");
   await expect(
     page.getByRole("status").filter({ hasText: "Work moved to position" }),
   ).toContainText("1 of 5");

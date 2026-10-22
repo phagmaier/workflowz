@@ -16,16 +16,28 @@
   choose destinations (including creating a destination step), and choose the first step.
   Missing destinations remain visible and repairable. Graph, Form and YAML use the same draft
   and daemon validation; graph layout never changes execution order or the saved document.
-- The bottom checker dock is available in Graph, Project, Rules & limits and YAML. Its Fix
+- The bottom checker dock is available in Graph, Form, Project, Rules & limits and YAML. Its Fix
   actions open the relevant step/outcome, first-step selector, project field, rules/limits or
   YAML; advanced fields open before focus moves. Pending/failed checks cannot enable stale
   fixes or saving. Valid imports open in Graph, as do parsed imports with routing problems;
   malformed/schema-invalid YAML and failed import checks retain the exact text in YAML.
-- Remaining editor work: Form still has its earlier list/form/checks layout, and Graph reuses
-  those step fields. The full Form redesign (including natural one-line command entry and
-  harness effort defaults) follows. Existing saved/new-workflow links still open Form; Graph
-  is the first view choice and the import landing view. Runs and run details also need their
-  approved layouts; sidebar run groups currently open the same Runs page.
+- Slice 3 (2026-10-21): Form uses C's steps table, with Outcome connections beside each step,
+  a selected-step settings panel and the shared bottom checker. Outcome buttons and Fix actions
+  focus the relevant field without leaving Form. Keyboard reordering changes display order
+  only. Settings stack below the table on smaller screens, with a Back to steps action.
+- Shared Graph/Form fields now accept commands on one line, with quotes and backslash escaping
+  for explicit arguments. Unfinished quotes/escapes and implicit shell operators remain visible
+  and block saving; shell scripts use an explicit `sh -c '…'`. Existing argument arrays, including
+  empty arguments and embedded newlines, retain their meaning. No shell is added by the editor.
+- Effort preferences are saved per harness in this browser, with recent custom values offered
+  again. Empty uses the harness's own default; OpenCode variants depend on the provider/model.
+  Saved preferences apply to new agent steps and new workflow examples. Existing/imported steps
+  keep their effort unless the owner explicitly changes it or chooses Use my default. The
+  workflow still stores its selected `reasoning_effort`; preference defaults/history are separate
+  browser settings. If browser storage is unavailable, preferences last for the current tab.
+- Remaining UI work: Runs and run details need their approved layouts; sidebar run groups
+  currently open the same Runs page. Saved/new-workflow links open Form; Graph remains the
+  first view choice and the import landing view.
 - Graph limitations: manual placement is deferred. Large graphs use local scrolling and zoom;
   Fit can make labels small. On narrow screens, settings stack below the graph. Technical
   failure rules and policies remain accessible in step settings and Rules & limits; the graph
@@ -37,6 +49,10 @@
   long labels and narrow screens. Desktop and phone screenshots were inspected visually.
 - Graph return lanes have left canvas padding for every outcome, including fourth-outcome
   self-loops and returns to the first column; regression checks cover their full SVG bounds.
+- Slice 3 verification: typecheck and lint pass (the existing CSS warning remains), all 853
+  standard tests and 42 offline browser checks pass. Coverage includes quoted/unfinished commands,
+  failed checks, per-harness preferences and storage failures, checker focus, reordering, selection
+  scrolling and long labels. Final desktop, tablet and phone screenshots were inspected visually.
 - The target form is a desktop app (Electron proposed). Do not build the desktop shell or change
   daemon lifecycle yet.
 - The full earlier brief, slice logs and decision history are archived in
@@ -89,7 +105,7 @@ see what happened, without learning internal field names or hunting for controls
 ## Implementation sequence
 
 Continue the browser-served React UI one complete slice at a time, following the checks in
-[AGENTS.md](AGENTS.md). Graph authoring and its checker are built; next is the Form redesign.
+[AGENTS.md](AGENTS.md). Graph and Form authoring with their shared checker are built; next is Runs.
 Complete the remaining approved editor, Runs and run-detail interactions before rewriting the
 user guide.
 

@@ -63,7 +63,7 @@ test("invalid step time limits cannot save or create a run and survive editor na
   await pairApp(page, app, `#/workflows/${revisionId}`);
   await page
     .getByRole("region", { name: "Steps" })
-    .getByRole("button", { name: /Work Codex/ })
+    .getByRole("button", { name: "Configure Work", exact: true })
     .click();
   const form = page.getByRole("region", { name: "Selected step" });
   await form.getByText("Advanced", { exact: false }).click();

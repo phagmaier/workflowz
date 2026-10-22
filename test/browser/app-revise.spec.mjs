@@ -40,7 +40,7 @@ test("edit the workflow for one paused run; a stale apply is refused, kept and n
   // Change the review prompt; the form keeps the text through checks.
   await page
     .getByRole("region", { name: "Steps" })
-    .getByRole("button", { name: /Review/ })
+    .getByRole("button", { name: "Configure Review", exact: true })
     .click();
   const form = page.getByRole("region", { name: "Selected step" });
   await expect(form.getByRole("heading", { level: 2 })).toHaveText("Review");
@@ -48,7 +48,7 @@ test("edit the workflow for one paused run; a stale apply is refused, kept and n
   const prompt = form.getByLabel("Prompt text");
   await prompt.fill("Review carefully: {{task.text}}");
   await expect(page.getByText("Changes not applied yet")).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Checks" })).toContainText("1 warning");
+  await expect(page.getByRole("complementary", { name: "Checker" })).toContainText("1 warning");
   await page.getByLabel(/^Reason \(saved/).fill("Ask for a careful review");
   await expect(apply).toBeEnabled();
   await noSideScroll(page);

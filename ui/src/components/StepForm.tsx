@@ -1,9 +1,9 @@
 import { type FormEvent, type ReactNode, useRef, useState } from "react";
+import { formatCommand, parseCommand } from "../lib/command-line.ts";
 import { harnessLabel, humanize, KIND_LABEL } from "../lib/format.ts";
 import {
   describeAction,
   HARNESSES,
-  KIND_HINT,
   moveStep,
   outcomeRows,
   removeStep,
@@ -13,6 +13,7 @@ import {
   stepSummary,
 } from "../lib/workflow-edit.ts";
 import type { WorkflowStep } from "../types.ts";
+import { EffortField } from "./EffortField.tsx";
 import {
   type Ctx,
   errAttrs,
@@ -188,18 +189,16 @@ function AgentFields({
           field="model"
           label="Model"
           value={step.model ?? ""}
-          placeholder="The agent's default model"
+          placeholder="Default model"
           mono
           onValue={(value) => withField(step, "model", value.trim() || undefined)}
         />
-        <TextField
+        <EffortField
           ctx={ctx}
           stepId={stepId}
-          field="reasoning_effort"
-          label="Reasoning effort"
+          harness={step.harness}
           value={step.reasoning_effort ?? ""}
-          placeholder="Agent default"
-          onValue={(value) => withField(step, "reasoning_effort", value.trim() || undefined)}
+          onValue={(value) => set("reasoning_effort", value || undefined, TYPING)}
         />
         <div className="block">
           <label htmlFor={fieldId(stepId, "session")}>Conversation</label>
@@ -208,14 +207,14 @@ function AgentFields({
             value={step.session}
             onChange={(event) => set("session", event.target.value)}
           >
-            <option value="fresh">Start a new conversation</option>
-            <option value="resume">Continue this agent's previous conversation for the task</option>
+            <option value="fresh">New conversation</option>
+            <option value="resume">Continue previous conversation for the task</option>
           </select>
         </div>
       </div>
       <p className="perm">
-        Agent steps run with <strong>unrestricted permissions</strong>: the agent can read and
-        change any file your user can access. The run page lists the exact mode before you start.
+        <strong>Unrestricted permissions:</strong> this agent can read and change any file your user
+        can access.
       </p>
       <fieldset className="inline-choice">
         <legend>Prompt</legend>
@@ -298,28 +297,41 @@ function CommandFields({
   stepId: string;
   step: Extract<WorkflowStep, { kind: "command" }>;
 }) {
-  const shown = step.argv.map((a) => (a === "" || /\s/.test(a) ? JSON.stringify(a) : a)).join(" ");
+  const [text, setText] = useLocalText(
+    Array.isArray(step.argv) ? formatCommand(step.argv) : String(step.argv),
+  );
+  const parsed = parseCommand(text);
+  const id = fieldId(stepId, "argv");
   return (
-    <LinesField
-      ctx={ctx}
-      stepId={stepId}
-      field="argv"
-      label="Command — one argument per line"
-      rows={4}
-      value={step.argv}
-      commit={(list) => ({ ...step, argv: list })}
-      hint={
-        <>
-          {shown ? (
-            <>
-              Runs as <code>{shown}</code>.{" "}
-            </>
-          ) : null}
-          There is no shell, so pipes and <code>&amp;&amp;</code> aren't interpreted. For a shell,
-          put <code>sh</code>, <code>-c</code> and the script on separate lines.
-        </>
-      }
-    />
+    <div className="block command-field">
+      <label htmlFor={id}>Command</label>
+      <textarea
+        id={id}
+        className="mono command-input"
+        rows={text.includes("\n") ? 4 : 1}
+        value={text}
+        placeholder="node --version"
+        spellCheck={false}
+        {...errAttrs(ctx, stepId, "argv")}
+        onChange={(event) => {
+          const value = event.target.value;
+          setText(value);
+          const result = parseCommand(value);
+          // Keep incomplete text in the model so navigation and failed checks cannot lose it.
+          ctx.session.edit(
+            (d) => replaceStep(d, stepId, withField(step, "argv", result.argv ?? value)),
+            TYPING,
+          );
+        }}
+      />
+      {parsed.error ? <span className="field-err">{parsed.error}</span> : null}
+      <FieldProblems ctx={ctx} stepId={stepId} field="argv" />
+      <span className="hint">
+        Quotes group arguments with spaces. This runs the program directly; variables, pipes and
+        redirects need an explicit shell, such as{" "}
+        <code>sh -c 'npm test &amp;&amp; npm run build'</code>.
+      </span>
+    </div>
   );
 }
 
@@ -345,6 +357,9 @@ function Advanced({
       <summary>
         Advanced <span className="muted">— {parts.join(", ")}</span>
       </summary>
+      <p className="hint">
+        Step ID: <code>{stepId}</code>
+      </p>
       {step.kind === "agent" || step.kind === "command" ? (
         <div className="grid2">
           <TextField
@@ -531,10 +546,9 @@ function StepHead({
             {ctx.doc.start === stepId ? <span className="tag">runs first</span> : null}
           </h2>
         )}
-        <p className="summary">{stepSummary(step)}</p>
-        <p className="muted small">
-          {KIND_HINT[step.kind]} <span className="mono">id: {stepId}</span>
-        </p>
+        {step.kind !== "agent" && step.kind !== "command" ? (
+          <p className="summary">{stepSummary(step)}</p>
+        ) : null}
       </div>
       <div className="form-tools">
         <button

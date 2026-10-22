@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { effortPreferences } from "../editor-preferences.ts";
+import { applyEffortDefaults } from "../lib/effort-preferences.ts";
 import { KIND_LABEL } from "../lib/format.ts";
 import {
   addStep,
@@ -192,9 +194,13 @@ function NewStep({
             key={kind}
             type="button"
             className="btn btn-sm"
-            onClick={() =>
-              onDone(addStep(doc, kind, name.trim() || KIND_LABEL[kind] || kind, after))
-            }
+            onClick={() => {
+              const added = addStep(doc, kind, name.trim() || KIND_LABEL[kind] || kind, after);
+              onDone({
+                ...added,
+                doc: applyEffortDefaults(added.doc, effortPreferences(), [added.id]),
+              });
+            }}
           >
             {KIND_LABEL[kind]}
           </button>

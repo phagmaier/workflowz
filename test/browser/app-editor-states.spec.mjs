@@ -28,7 +28,7 @@ test("edit a saved workflow through slow checks, failures, navigation and discar
 
   // Keyboard: the step list is buttons; Enter selects without moving focus on a wide screen.
   const list = page.getByRole("region", { name: "Steps" });
-  const work = list.getByRole("button", { name: /Work Codex/ });
+  const work = list.getByRole("button", { name: "Configure Work", exact: true });
   await work.focus();
   await page.keyboard.press("Enter");
   await expect(work).toHaveAttribute("aria-current", "true");
@@ -53,10 +53,12 @@ test("edit a saved workflow through slow checks, failures, navigation and discar
   await prompt.fill("First version {{task.text}}");
   await firstSent;
   await expect(page.getByText("Unsaved changes")).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Checks" })).toContainText("Checking…");
+  await expect(page.getByRole("complementary", { name: "Checker" })).toContainText(
+    "Checking latest changes",
+  );
   await expect(save).toBeDisabled();
   await prompt.fill("Final version {{task.text}}");
-  await expect(page.getByRole("complementary", { name: "Checks" })).toContainText("1 warning");
+  await expect(page.getByRole("complementary", { name: "Checker" })).toContainText("1 warning");
   await expect(save).toBeEnabled();
   releaseFirst();
   await page.waitForTimeout(300);

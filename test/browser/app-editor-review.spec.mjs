@@ -13,7 +13,7 @@ test("step renaming supports keyboard focus and preserves structural references"
   const form = page.getByRole("region", { name: "Selected step" });
   await page
     .getByRole("region", { name: "Steps" })
-    .getByRole("button", { name: /Work Codex/ })
+    .getByRole("button", { name: "Configure Work", exact: true })
     .click();
   const rename = form.getByRole("button", { name: "Rename", exact: true });
   await rename.focus();
@@ -59,7 +59,7 @@ test("failed task previews can be retried without losing the checked workflow", 
   await policy();
 });
 
-test("Checks opens a collapsed advanced field before moving keyboard focus", async ({
+test("Checker opens a collapsed advanced field before moving keyboard focus", async ({
   page,
   app,
 }) => {
@@ -68,7 +68,7 @@ test("Checks opens a collapsed advanced field before moving keyboard focus", asy
   await pairApp(page, app, `#/workflows/${revisionId}`);
   await page
     .getByRole("region", { name: "Steps" })
-    .getByRole("button", { name: /Work Codex/ })
+    .getByRole("button", { name: "Configure Work", exact: true })
     .click();
   const form = page.getByRole("region", { name: "Selected step" });
   const advanced = form.locator("summary").filter({ hasText: /^Advanced/ });
@@ -76,9 +76,8 @@ test("Checks opens a collapsed advanced field before moving keyboard focus", asy
   const timeout = form.getByLabel("Time limit (seconds)", { exact: true });
   await timeout.fill("0");
   const check = page
-    .getByRole("complementary", { name: "Checks" })
-    .getByRole("button")
-    .filter({ hasText: "time limit:" });
+    .getByRole("complementary", { name: "Checker" })
+    .getByRole("button", { name: /Fix: .*time limit:/ });
   await expect(check).toBeVisible();
   await advanced.click();
   await expect(timeout).toBeHidden();

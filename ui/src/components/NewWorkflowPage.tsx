@@ -1,6 +1,8 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useConnection } from "../connection.tsx";
+import { effortPreferences } from "../editor-preferences.ts";
 import { createSession, dropSession, newDraftKey } from "../editor-session.ts";
+import { applyEffortDefaults } from "../lib/effort-preferences.ts";
 import { EXAMPLES, type ExampleId, exampleDoc } from "../lib/workflow-edit.ts";
 import { editorHref } from "../route.ts";
 import { Shell } from "./Shell.tsx";
@@ -53,7 +55,9 @@ export function NewWorkflowPage({ example }: { example: ExampleId | null }) {
     pending.current = true;
     session.read = read;
     setFeedback({ kind: "pending", text: "Creating the draft…" });
-    await session.begin(exampleDoc(pick, name.trim(), root, tasks.trim()));
+    await session.begin(
+      applyEffortDefaults(exampleDoc(pick, name.trim(), root, tasks.trim()), effortPreferences()),
+    );
     pending.current = false;
     if (!session.state.draft) {
       dropSession(key);
