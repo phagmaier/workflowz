@@ -682,6 +682,169 @@ select:focus-visible {
   margin-bottom: 4px;
 }
 
+/* ---------- runs ---------- */
+.runs-page-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+.runs-page-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.run-groups {
+  display: grid;
+  gap: 28px;
+}
+.run-group {
+  min-width: 0;
+}
+.run-group-head {
+  margin-bottom: 12px;
+}
+.run-group-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  max-width: 100%;
+  scroll-margin-block: 20px;
+  margin-bottom: 4px;
+  border-radius: 4px;
+}
+.run-group-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.run-group-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+.run-group-dot-waiting {
+  background: var(--warn-strong);
+}
+.run-group-dot-running {
+  background: var(--accent);
+}
+.run-group-count {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-strong);
+}
+.run-group-waiting .run-group-count {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.run-group-empty {
+  margin: 0;
+  padding: 13px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.runs-table {
+  table-layout: fixed;
+}
+.runs-table th:first-child {
+  width: 35%;
+}
+.runs-table th:nth-child(2) {
+  width: 23%;
+}
+.runs-table th:last-child {
+  width: 90px;
+}
+.run-identity {
+  margin-top: 4px;
+}
+.run-open {
+  white-space: nowrap;
+}
+.runs-read-error,
+.runs-empty {
+  margin-bottom: 24px;
+}
+.runs-read-error {
+  max-width: none;
+  border-color: var(--warn-strong);
+}
+.runs-read-error p {
+  margin: 0;
+  color: var(--muted-strong);
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .runs-table thead {
+    display: none;
+  }
+  .runs-table,
+  .runs-table tbody {
+    display: block;
+    width: 100%;
+  }
+  .runs-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+    padding: 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .runs-table tr:last-child {
+    border-bottom: 0;
+  }
+  .runs-table td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+  .runs-table td:first-child {
+    grid-column: 1 / -1;
+  }
+  .runs-table .run-open-cell {
+    align-self: end;
+    justify-self: end;
+  }
+}
+@media (max-width: 1100px) {
+  .runs-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .runs-table .row-attention {
+    box-shadow: inset 3px 0 0 var(--warn-strong);
+  }
+  .runs-table .row-attention td:first-child {
+    box-shadow: none;
+  }
+}
+@media (max-width: 760px) {
+  .runs-table tr {
+    padding: 12px 0;
+  }
+  .runs-table .run-open-cell {
+    padding-top: 10px;
+  }
+  .runs-table .run-open {
+    min-height: 36px;
+    padding: 6px 12px;
+  }
+}
+
 /* ---------- workflows ---------- */
 .page-head {
   margin-bottom: 20px;

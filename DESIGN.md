@@ -35,9 +35,24 @@
   keep their effort unless the owner explicitly changes it or chooses Use my default. The
   workflow still stores its selected `reasoning_effort`; preference defaults/history are separate
   browser settings. If browser storage is unavailable, preferences last for the current tab.
-- Remaining UI work: Runs and run details need their approved layouts; sidebar run groups
-  currently open the same Runs page. Saved/new-workflow links open Form; Graph remains the
-  first view choice and the import landing view.
+- Slice 4 (2026-10-21): Runs uses four visible status groups: Waiting for you (paused and
+  interrupted), Ready to start (draft and ready), Running (running and pausing), and Finished
+  (completed and stopped). Each group shows its count, purpose and empty state, with newest
+  runs first. Rows retain workflow names, run/revision IDs, status, current step and timestamps;
+  both the workflow name and an explicit Open action lead to run details. Opening never starts
+  or resumes work.
+- Sidebar status links open the matching Runs group and focus its heading. The selected group
+  has a shareable hash route, survives reload and follows browser Back/Forward. All groups stay
+  visible. Repeated activation returns to the heading. Background polling preserves keyboard
+  focus on a run's name or Open link even when its status moves it to another group, without
+  scrolling the page. Delayed first reads and retries preserve controls focused while waiting.
+- Runs distinguishes loading, no runs, empty groups and failed reads. Failed refreshes keep the
+  last known rows/counts with an out-of-date notice and a retry action, including when the last
+  successful list was empty. Tables become cards with two columns on tablets and stack into
+  labelled rows on phones, keeping long workflow names and run identifiers readable.
+- Remaining UI work: run details needs its approved status, next-action, history/output and
+  execution-path presentation. Saved/new-workflow links open Form; Graph remains the first view
+  choice and the import landing view.
 - Graph limitations: manual placement is deferred. Large graphs use local scrolling and zoom;
   Fit can make labels small. On narrow screens, settings stack below the graph. Technical
   failure rules and policies remain accessible in step settings and Rules & limits; the graph
@@ -53,6 +68,14 @@
   standard tests and 42 offline browser checks pass. Coverage includes quoted/unfinished commands,
   failed checks, per-harness preferences and storage failures, checker focus, reordering, selection
   scrolling and long labels. Final desktop, tablet and phone screenshots were inspected visually.
+- Slice 4 verification: typecheck and lint pass (the existing CSS warning remains), with 854
+  standard tests and 48 offline browser checks passing, run sequentially with four-CPU affinity.
+  Coverage includes all statuses, group links/focus/history/reload, explicit Open without
+  execution, focused runs moving between groups, delayed loading without focus theft, initial
+  and stale read failures, retry focus, empty groups, unknown revisions and long labels.
+  Desktop tables, tablet cards and phone layouts were inspected visually; keyboard checks and
+  no-page-overflow checks pass from 320 to 1440 px, including both sides of the responsive
+  breakpoints. Refresh and retry share one button to retain keyboard focus.
 - The target form is a desktop app (Electron proposed). Do not build the desktop shell or change
   daemon lifecycle yet.
 - The full earlier brief, slice logs and decision history are archived in
@@ -105,7 +128,8 @@ see what happened, without learning internal field names or hunting for controls
 ## Implementation sequence
 
 Continue the browser-served React UI one complete slice at a time, following the checks in
-[AGENTS.md](AGENTS.md). Graph and Form authoring with their shared checker are built; next is Runs.
+[AGENTS.md](AGENTS.md). Graph and Form authoring with their shared checker and the grouped Runs
+page are built; next is run details.
 Complete the remaining approved editor, Runs and run-detail interactions before rewriting the
 user guide.
 

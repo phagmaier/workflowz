@@ -581,6 +581,10 @@ and classic shell assets return 404; there is one implementation. Builds remove 
 `scripts/build-web.mjs` have been removed.
 
 The app uses the existing browser API, cookie, pairing and header contract without additions.
+The approved Workbench Runs page groups the shared `runs` read into waiting, ready, running
+and finished sections. `#/runs?group=waiting` (also `ready`, `running`, `finished`) opens and
+focuses that section; `#/runs` shows the same groups from the page heading. These are browser
+hash parameters, not daemon query strings. Run-detail addresses remain `#/runs/<runId>`.
 Run details read `status`, cursor-paged `events` (1000 per page), `reports` when a report is
 accepted, `load` plus read-only `draft` of the run's revision for the map, and `run-edit` while
 paused. Polling is every 2 s while running/pausing and 5 s otherwise, skipped in hidden tabs.

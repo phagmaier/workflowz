@@ -1,5 +1,6 @@
 /** Hash routes, so browser back/forward works without daemon route changes. */
 import { useEffect, useState } from "react";
+import { RUN_GROUPS, type RunGroupId } from "./lib/run-copy.ts";
 import type { ExampleId } from "./lib/workflow-edit.ts";
 
 export type EditorTab = "steps" | "project" | "rules" | "yaml" | "map";
@@ -10,7 +11,7 @@ export type EditorTarget =
   | { kind: "run"; runId: string };
 
 export type Route =
-  | { view: "runs" }
+  | { view: "runs"; group: RunGroupId | null }
   | { view: "run"; runId: string; tab: "details" | "map" }
   | { view: "workflows" }
   | { view: "new-workflow"; example: ExampleId | null }
@@ -24,7 +25,8 @@ const tabOf = (part: string | undefined): EditorTab | null =>
   part === undefined ? "steps" : EDITOR_TABS.has(part) ? (part as EditorTab) : null;
 
 export function parseRoute(hash: string): Route {
-  const parts = hash
+  const [path, query = ""] = hash.split("?");
+  const parts = (path ?? "")
     .replace(/^#\/?/, "")
     .split("/")
     .filter(Boolean)
@@ -37,7 +39,11 @@ export function parseRoute(hash: string): Route {
     });
   const [section, id, tab, extra] = parts;
   const missing = { view: "missing", hash } as const;
-  if (!section || (section === "runs" && !id)) return { view: "runs" };
+  if (!section || (section === "runs" && !id)) {
+    const group = new URLSearchParams(query).get("group");
+    const known = RUN_GROUPS.find((candidate) => candidate.id === group);
+    return group && !known ? missing : { view: "runs", group: known?.id ?? null };
+  }
   if (section === "runs" && id) {
     if (tab === "edit") {
       const editorTab = tabOf(extra);
@@ -73,6 +79,9 @@ export function parseRoute(hash: string): Route {
 
 export const runHref = (runId: string, tab: "details" | "map" = "details") =>
   `#/runs/${encodeURIComponent(runId)}${tab === "map" ? "/map" : ""}`;
+
+export const runsHref = (group: RunGroupId | null = null) =>
+  `#/runs${group ? `?group=${group}` : ""}`;
 
 export function editorHref(target: EditorTarget, tab: EditorTab = "steps"): string {
   const suffix = tab === "steps" ? "" : `/${tab}`;

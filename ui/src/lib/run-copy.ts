@@ -17,12 +17,44 @@ export const STATUS: Record<RunStatus, { label: string; tone: Tone }> = {
 export const needsAttention = (status: RunStatus) =>
   status === "paused" || status === "interrupted";
 
+export type RunGroupId = "waiting" | "ready" | "running" | "finished";
+
 /** Sidebar and Runs grouping: every status belongs to exactly one group. */
-export const RUN_GROUPS: readonly { label: string; statuses: readonly RunStatus[] }[] = [
-  { label: "Waiting for you", statuses: ["paused", "interrupted"] },
-  { label: "Ready to start", statuses: ["draft", "ready"] },
-  { label: "Running", statuses: ["running", "pausing"] },
-  { label: "Finished", statuses: ["completed", "stopped"] },
+export const RUN_GROUPS: readonly {
+  id: RunGroupId;
+  label: string;
+  description: string;
+  empty: string;
+  statuses: readonly RunStatus[];
+}[] = [
+  {
+    id: "waiting",
+    label: "Waiting for you",
+    description: "Paused runs and interrupted work that need your decision.",
+    empty: "Nothing is waiting for you.",
+    statuses: ["paused", "interrupted"],
+  },
+  {
+    id: "ready",
+    label: "Ready to start",
+    description: "Prepared runs. Open one to review it and choose Start.",
+    empty: "No runs are ready to start.",
+    statuses: ["draft", "ready"],
+  },
+  {
+    id: "running",
+    label: "Running",
+    description: "Work in progress. Runs keep going if you close this browser.",
+    empty: "No runs are running.",
+    statuses: ["running", "pausing"],
+  },
+  {
+    id: "finished",
+    label: "Finished",
+    description: "Completed and stopped runs. Open one to see what happened.",
+    empty: "No finished runs yet.",
+    statuses: ["completed", "stopped"],
+  },
 ];
 
 const quote = (text: string) => `“${text}”`;

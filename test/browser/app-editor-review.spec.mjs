@@ -180,7 +180,9 @@ test("canceling a pending creation leaves the prepared run without redirecting",
   await expect(page).toHaveURL(new RegExp(`#/workflows/${revisionId}$`));
   await expect(page.getByRole("button", { name: "Create run…" })).toBeFocused();
   await page.getByRole("link", { name: "Runs", exact: true }).first().click();
-  await expect(page.locator(`a[href="#/runs/${createdRun}"]`)).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: `Open run ${createdRun}`, exact: true }),
+  ).toBeVisible();
   const created = await app.status(createdRun);
   expect(created.run.status).toBe("ready");
   expect(created.activeAttempt).toBeNull();

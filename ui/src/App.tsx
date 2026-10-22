@@ -19,7 +19,7 @@ function Screens() {
   useEffect(() => releaseSessionAliases(activeKey), [activeKey, registryVersion]);
   switch (route.view) {
     case "runs":
-      return <RunsPage />;
+      return <RunsPage group={route.group} />;
     case "workflows":
       return <WorkflowsPage />;
     case "new-workflow":

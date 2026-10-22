@@ -4,7 +4,7 @@ import { useConnection } from "../connection.tsx";
 import { unsavedDrafts, useSessionRegistry } from "../editor-session.ts";
 import { RUN_GROUPS } from "../lib/run-copy.ts";
 import { groupWorkflows } from "../lib/workflow-edit.ts";
-import { editorHref, useRoute } from "../route.ts";
+import { editorHref, runsHref, useRoute } from "../route.ts";
 import { useRuns } from "../runs-data.tsx";
 import { PlusIcon } from "./icons.tsx";
 import { Feedback, type FeedbackState } from "./ui.tsx";
@@ -48,7 +48,7 @@ export function Shell({
   children: ReactNode;
 }) {
   const { online, closing, driveFailure, busy, mutate, loggedOut } = useConnection();
-  const { runs, saved, names } = useRuns();
+  const { runs, saved, names, error: runsError } = useRuns();
   const route = useRoute();
   useSessionRegistry();
   const perRevision = new Map<number, number>();
@@ -143,9 +143,13 @@ export function Shell({
         </div>
         <div className="side-group">
           <a
-            href="#/runs"
+            href={runsHref()}
             className={`side-head ${section === "runs" ? "current" : ""}`}
-            aria-current={section === "runs" ? "page" : undefined}
+            aria-current={route.view === "runs" && route.group === null ? "page" : undefined}
+            onClick={() => {
+              if (route.view === "runs" && route.group === null)
+                main.current?.querySelector<HTMLElement>("h1")?.focus();
+            }}
           >
             Runs
             <span aria-hidden="true">All</span>
@@ -153,10 +157,20 @@ export function Shell({
           <ul className="side-list">
             {RUN_GROUPS.map((group) => {
               const count = runs?.filter((run) => group.statuses.includes(run.status)).length;
-              const waiting = group === RUN_GROUPS[0] && Boolean(count);
+              const waiting = group.id === "waiting" && Boolean(count);
+              const current = route.view === "runs" && route.group === group.id;
               return (
-                <li key={group.label}>
-                  <a className={`side-item ${waiting ? "waiting" : ""}`} href="#/runs">
+                <li key={group.id}>
+                  <a
+                    className={`side-item ${waiting ? "waiting" : ""} ${current ? "current" : ""}`}
+                    href={runsHref(group.id)}
+                    aria-current={current ? "location" : undefined}
+                    onClick={() => {
+                      if (current)
+                        main.current?.querySelector<HTMLElement>(`#runs-${group.id}`)?.focus();
+                    }}
+                    title={runsError ? "Last known count; runs could not be refreshed" : undefined}
+                  >
                     <span className="side-name">{group.label}</span>
                     <span className={`side-count ${waiting ? "badge" : ""}`}>{count ?? "–"}</span>
                   </a>

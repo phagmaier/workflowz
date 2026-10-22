@@ -164,10 +164,15 @@ test("pair, follow a run from ready to completed, read history and the map", asy
   );
 
   await page.getByRole("link", { name: "Runs", exact: true }).first().click();
-  await page.getByRole("button", { name: /^Finished/ }).click();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: /^Finished/ })
+    .click();
+  await expect(page.locator("#runs-finished")).toBeFocused();
   await expect(page.getByRole("row", { name: /Completed/ })).toContainText(runId);
-  await page.getByRole("button", { name: /^Needs attention/ }).click();
-  await expect(page.getByText("No runs match")).toBeVisible();
+  await page.getByRole("link", { name: /^Waiting for you/ }).click();
+  await expect(page.locator("#runs-waiting")).toBeFocused();
+  await expect(page.getByText("Nothing is waiting for you.")).toBeVisible();
   await page.getByRole("link", { name: "Workflows", exact: true }).click();
   await expect(page.getByRole("cell", { name: "Implement and review" })).toBeVisible();
   await policy();

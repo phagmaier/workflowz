@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { RUN_STATUSES } from "../../../src/contracts/run-state.ts";
-import { parseRoute, runHref } from "../route.ts";
+import { parseRoute, runHref, runsHref } from "../route.ts";
 import type { BrowserRunStatus, ResolvedTransition, RunStatus } from "../types.ts";
 import { duration, humanize } from "./format.ts";
 import { layoutMap } from "./map-layout.ts";
@@ -46,8 +46,8 @@ function status(state: RunStatus, extra: Partial<BrowserRunStatus["run"]> = {}):
 
 describe("hash routes", () => {
   it("parses run views and rejects unknown paths", () => {
-    assert.deepEqual(parseRoute(""), { view: "runs" });
-    assert.deepEqual(parseRoute("#/runs"), { view: "runs" });
+    assert.deepEqual(parseRoute(""), { view: "runs", group: null });
+    assert.deepEqual(parseRoute(runsHref()), { view: "runs", group: null });
     assert.deepEqual(parseRoute("#/workflows"), { view: "workflows" });
     assert.deepEqual(parseRoute(runHref("run a/b")), {
       view: "run",
@@ -57,6 +57,23 @@ describe("hash routes", () => {
     assert.deepEqual(parseRoute(runHref("r1", "map")), { view: "run", runId: "r1", tab: "map" });
     assert.equal(parseRoute("#/runs/r1/raw").view, "missing");
     assert.equal(parseRoute("#/settings").view, "missing");
+  });
+
+  it("links each Runs group without taking a run ID and rejects unknown groups", () => {
+    for (const group of RUN_GROUPS) {
+      assert.deepEqual(parseRoute(runsHref(group.id)), { view: "runs", group: group.id });
+      assert.deepEqual(parseRoute(runHref(group.id)), {
+        view: "run",
+        runId: group.id,
+        tab: "details",
+      });
+    }
+    assert.equal(parseRoute("#/runs?group=unknown").view, "missing");
+    assert.deepEqual(parseRoute(runHref("r?group=ready")), {
+      view: "run",
+      runId: "r?group=ready",
+      tab: "details",
+    });
   });
 });
 
