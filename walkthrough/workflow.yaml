@@ -1,0 +1,59 @@
+version: 1
+name: Owner walkthrough — OpenCode greeting
+project:
+  root: project
+start: baseline
+limits:
+  max_wall_time_seconds: 1800
+  max_step_executions: 8
+defaults:
+  report_correction_attempts: 0
+  on:
+    system.error: { pause: true }
+steps:
+  baseline:
+    kind: command
+    argv: [node, check.mjs, before]
+    timeout_seconds: 10
+    on:
+      complete: { goto: edit_greeting }
+      failed: { pause: true }
+  edit_greeting:
+    kind: agent
+    harness: opencode
+    model: opencode/deepseek-v4.1-flash-free
+    session: fresh
+    timeout_seconds: 300
+    prompt: |
+      This is a disposable owner-led Workflowz walkthrough. Work only in the
+      current project directory. Change greeting.txt from exactly
+      "Hello from Workflowz." to exactly "Hello from Workflowz and OpenCode."
+      Keep its one trailing newline. Change no other files. Do not install
+      anything, use subagents, contact other services, commit, or push.
+      Run node check.mjs after to check your edit. Do not run the finish mode
+      or create receipt.txt; the owner will explicitly resume that later.
+      If the check passes, submit:
+      wf report complete --summary "Updated greeting.txt; local check passed"
+      Otherwise submit wf report blocked --summary "Describe the problem".
+      Use the injected wf on PATH and wait for its acknowledgment. Never print
+      environment variables, credentials, or report authority.
+    outcomes: [complete, blocked]
+    on:
+      complete: { goto: checkpoint }
+      blocked: { pause: true }
+  checkpoint:
+    kind: command
+    argv: [node, check.mjs, after]
+    timeout_seconds: 10
+    on:
+      complete: { pause: true }
+      failed: { pause: true }
+  finish:
+    kind: command
+    argv: [node, check.mjs, finish]
+    timeout_seconds: 10
+    on:
+      complete: { goto: done }
+      failed: { pause: true }
+  done:
+    kind: end

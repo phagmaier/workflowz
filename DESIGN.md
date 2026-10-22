@@ -2,6 +2,19 @@
 
 ## Status
 
+- Owner-led real-provider walkthrough (2026-10-22): the prepared exercise in
+  [walkthrough/](walkthrough/README.md) completed once with OpenCode and
+  `opencode/deepseek-v4.1-flash-free`, using a one-line disposable project and isolated
+  Workflowz/OpenCode state. The owner explicitly started, applied a continuation to `finish`,
+  and resumed; the run completed and the final greeting and receipt matched expectations.
+  The two unreachable-step warnings correctly described the manual continuation. The lab was
+  shut down and cleaned. The owner reported that navigating back to the run map after completion
+  was unclear; see the [verification record](walkthrough/VERIFICATION.md) and separate owner
+  note. One successful live execution confirms access and report/tool behavior for this run;
+  rate limits and repeatability remain unverified. Desktop packaging remains deferred.
+  Preparation verification remains separate: typecheck/lint, 857 standard tests and 59 offline
+  Chromium checks passed, including the exact workflow with a scripted adapter. Native CLI,
+  command and link checks passed; desktop/phone screenshots were inspected.
 - The React UI built in the previous round was rejected on usability and appearance. The engine,
   saved state and execution contracts are unchanged and remain the baseline.
 - Direction C (Workbench) was selected and its main screens approved on 2026-10-21 (see
@@ -220,6 +233,32 @@ historical context. Engine contracts remain available there as technical referen
 - **2026-10-21:** Effort uses sensible per-harness defaults. The owner can change each harness's
   default, and custom values entered before are offered again. These are app settings, not
   workflow fields.
+
+## Future product proposals (not implemented or scoped)
+
+- **2026-10-22: Named agent profiles.** Let owners create reusable, named profiles such as
+  `reviewer`, each storing a harness, model and effort combination. Selecting a profile while
+  configuring an agent step fills those settings, while keeping the chosen values visible and
+  editable. Profiles are user-created shortcuts, not built-in roles or runtime agents.
+- **2026-10-22: Assisted workflow drafting.** Given a project specification, its supporting
+  documentation and a high-level request, an authoring assistant could propose a sensible
+  deterministic graph, choose where implementation, review and command steps belong, assign
+  available agent profiles or explicit model settings, and produce importable YAML. It should
+  surface assumptions and validate exact harness/model/effort selections rather than silently
+  substitute. The owner reviews the YAML in Graph/Form and the Checker; generating a workflow
+  does not save, create a run or start execution. The saved workflow remains the sole authority
+  for runtime routing; this proposal does not add a supervisor LLM. These ideas are recorded for
+  future scoping and do not authorize implementation.
+- **2026-10-22: Harness-aware model and effort selection.** After an owner selects a harness,
+  offer its locally configured models; after model selection, show only effort levels that
+  harness/model combination advertises. Keep catalog discovery separate from live provider
+  reachability, which cannot be inferred from a listed choice alone.
+- **2026-10-22: Harness-native skill selection and support.** Make skills discoverable to each
+  selected harness visible while configuring an agent step, with a way to choose or explicitly
+  request applicable skills. Preserve each harness's native skill discovery and supporting files
+  rather than treating every skill as plain prompt text. Make the effective harness tools,
+  configuration and permission mode clear for a Workflowz run. These are future proposals, not
+  current behavior or implementation authorization.
 
 ## Deferred desktop behavior
 

@@ -14,6 +14,8 @@ through running, inspection and recovery. Desktop packaging and automatic servic
 remain future work; a real-provider walkthrough is separate.
 
 - [USER_GUIDE.md](USER_GUIDE.md): end-user instructions and advanced usage reference.
+- [Owner walkthrough](walkthrough/README.md): disposable OpenCode exercise, prepared offline;
+  real-provider execution remains pending with the owner.
 - [DESIGN.md](DESIGN.md): approved UI requirements, decisions and implementation status.
 - [AGENTS.md](AGENTS.md): contribution instructions and runtime boundaries.
 - [Development reference](archive/development.md): additional commands and browser provisioning.
