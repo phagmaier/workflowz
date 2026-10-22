@@ -103,7 +103,7 @@ describe("visual workflow edits checked by the daemon", () => {
     assert.equal(outcomeRows(fixed, ok, "work")[2]?.effective?.action.kind, "pause");
     assert.equal(
       addOutcome(fixed, "work", "needs_info"),
-      "“needs_info” is already a result of this step.",
+      "“needs_info” is already an outcome of this step.",
     );
     assert.match(String(addOutcome(fixed, "work", "system.x")), /reserved/);
   });

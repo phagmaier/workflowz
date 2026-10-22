@@ -7,9 +7,10 @@ A local browser interface and the `wf` CLI control the same daemon.
 ## UI implementation status
 
 The approved direction is **Workbench (C)**. The first slice is built: a shared dark theme,
-a sidebar with workflows and run groups, and the Workflows table with file import. The editor,
-Runs and run details retain their previous layouts until their slices. Next is the workflow
-editor's Graph view and checker panel. Desktop packaging and service lifecycle changes are deferred.
+a sidebar with workflows and run groups, and the Workflows table with file import. Slice 2 adds
+Graph authoring with step settings, Outcome connections, automatic layout and a bottom checker.
+Parsed imports open in Graph; malformed YAML stays editable as text. The full Form redesign,
+Runs and run details follow next. Desktop packaging and service lifecycle changes are deferred.
 
 - [DESIGN.md](DESIGN.md): approved UI requirements, decisions and implementation status.
 - [AGENTS.md](AGENTS.md): contribution instructions and runtime boundaries.

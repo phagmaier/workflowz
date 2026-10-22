@@ -381,7 +381,7 @@ function Advanced({
             hint="Given to the agent after the project's instruction files."
           />
           {otherAgents.length ? (
-            <fieldset className="checks">
+            <fieldset className="checks" id={fieldId(stepId, "context")} tabIndex={-1}>
               <legend>Give the agent the latest report from</legend>
               {otherAgents.map(([id]) => {
                 const included = step.context?.include_reports?.includes(id) ?? false;
@@ -645,7 +645,7 @@ export function StepForm({
     <>
       {origin && doc.steps[origin.from] ? (
         <p className="result-line">
-          New step, reached when {humanize(origin.from)}'s result is <code>{origin.outcome}</code>.{" "}
+          New step, reached when {humanize(origin.from)}'s outcome is <code>{origin.outcome}</code>.{" "}
           <button type="button" className="link" onClick={() => onSelect(origin.from, true)}>
             Back to {humanize(origin.from)}
           </button>
@@ -679,13 +679,13 @@ export function StepForm({
         <p className="hint">A finish step ends the run as completed. Nothing runs after it.</p>
       ) : (
         <section aria-labelledby={`${stepId}-next`}>
-          <h3 className="h3" id={`${stepId}-next`}>
-            What happens next
+          <h3 className="h3" id={`${stepId}-next`} tabIndex={-1}>
+            Outcomes
           </h3>
           <p className="hint">
             {step.kind === "agent"
-              ? "The agent reports one of these results. Choose where the run goes after each."
-              : "Choose where the run goes after each result."}
+              ? "The agent reports one of these outcomes. Choose where the run goes after each."
+              : "Choose where the run goes after each outcome."}
           </p>
           <ul className="rules-edit">
             {rows.map((row) => (
@@ -710,7 +710,7 @@ export function StepForm({
                 </span>
               </summary>
               <p className="hint">
-                Technical failures are crashes, time limits or missing reports — not results the{" "}
+                Technical failures are crashes, time limits or missing reports — not outcomes the{" "}
                 {step.kind === "agent" ? "agent" : "command"} chose. Specific failure rules take
                 priority over “any technical failure” at every level. If no exact or fallback rule
                 applies, the run pauses.

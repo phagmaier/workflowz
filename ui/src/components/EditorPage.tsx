@@ -14,24 +14,24 @@ import { setFlash } from "../flash.ts";
 import { humanize, plural } from "../lib/format.ts";
 import { type Doc, problems as explain, type Problem } from "../lib/workflow-edit.ts";
 import { type EditorTab, type EditorTarget, editorHref, runHref, sessionKey } from "../route.ts";
-import { graphOf } from "../run-data.ts";
 import { useRuns } from "../runs-data.tsx";
 import type { BrowserRunEdit, BrowserRunStatus, TaskImportPreview } from "../types.ts";
+import { CheckerDock } from "./CheckerDock.tsx";
 import { focusField } from "./editor-fields.tsx";
+import { GraphTab } from "./GraphTab.tsx";
 import { RevisionChanges } from "./RevisionChanges.tsx";
 import { RulesTab } from "./RulesTab.tsx";
-import { RunMap } from "./RunMap.tsx";
 import { Shell } from "./Shell.tsx";
 import { StepsTab } from "./StepsTab.tsx";
 import { Feedback, type FeedbackState, forgetDraft, rememberDraft, useDraft } from "./ui.tsx";
 import { YamlTab } from "./YamlTab.tsx";
 
 const TABS: { id: EditorTab; label: string }[] = [
-  { id: "steps", label: "Steps" },
+  { id: "map", label: "Graph" },
+  { id: "steps", label: "Form" },
   { id: "project", label: "Project" },
   { id: "rules", label: "Rules & limits" },
   { id: "yaml", label: "YAML" },
-  { id: "map", label: "Map" },
 ];
 
 /** A completed request still updates saved state, but cannot redirect a screen already left. */
@@ -784,6 +784,13 @@ export function EditorPage({ target, tab }: { target: EditorTarget; tab: EditorT
   const runs = useRuns();
   const [saveFb, setSaveFb] = useState<FeedbackState>(null);
   const [creating, setCreating] = useState(false);
+  const [fixTarget, setFixTarget] = useState<{ tab: EditorTab; id: string } | null>(null);
+  useEffect(() => {
+    if (fixTarget && fixTarget.tab === tab) {
+      focusField(fixTarget.id, fixTarget.tab === "map" ? "step-title" : undefined);
+      setFixTarget(null);
+    }
+  }, [fixTarget, tab]);
   const routeKey = sessionKey(target);
   const savedKey = session?.key;
   // The currently visible editor owns navigation after a save. It may be a new mount of the
@@ -945,6 +952,46 @@ export function EditorPage({ target, tab }: { target: EditorTarget; tab: EditorT
   );
 
   const href = (t: EditorTab) => editorHref(target, t);
+  const fix = (problem: Problem) => {
+    let destination: EditorTab = "map";
+    let id = "step-title";
+    if (state.mode === "text" || problem.place === "yaml") {
+      destination = "yaml";
+      id = "workflow-yaml";
+      if (state.mode !== "text") session.enterText();
+    } else if (problem.code === "unbounded_cycle" || problem.place === "rules") {
+      destination = "rules";
+      id = problem.code === "unbounded_cycle" ? "limits-title" : (problem.field ?? "shared-title");
+    } else if (
+      problem.code === "tasks_required" ||
+      problem.place === "project" ||
+      problem.place === "name"
+    ) {
+      destination = "project";
+      id =
+        problem.place === "name"
+          ? "workflow-name"
+          : problem.code === "tasks_required"
+            ? "project-tasks"
+            : `project-${problem.field ?? "root"}`;
+    } else if (problem.place === "start") id = "start-step";
+    else if (problem.stepId && doc?.steps[problem.stepId]) {
+      session.set({ selected: problem.stepId });
+      const field = problem.outcome ?? problem.field;
+      id =
+        field === "outcomes"
+          ? `${problem.stepId}-next`
+          : field && !["on", "kind"].includes(field)
+            ? `f-${problem.stepId}-${field}`
+            : "step-title";
+    } else {
+      destination = "yaml";
+      id = "workflow-yaml";
+      session.enterText();
+    }
+    setFixTarget({ tab: destination, id });
+    window.location.hash = href(destination);
+  };
   return (
     <Shell
       section={runMode ? "runs" : "workflows"}
@@ -1017,37 +1064,11 @@ export function EditorPage({ target, tab }: { target: EditorTarget; tab: EditorT
       ) : tab === "yaml" ? (
         <YamlTab session={session} state={state} />
       ) : (
-        <EditorMap session={session} state={state} target={target} />
+        <GraphTab key={state.opened} session={session} state={state} problems={list} />
       )}
+      {tab !== "steps" ? (
+        <CheckerDock session={session} state={state} problems={list} onFix={fix} />
+      ) : null}
     </Shell>
-  );
-}
-
-function EditorMap({
-  session,
-  state,
-  target,
-}: {
-  session: Session;
-  state: SessionState;
-  target: EditorTarget;
-}) {
-  const graph = state.draft ? graphOf(state.draft) : null;
-  const pending = state.checking || state.checked !== state.generation;
-  return (
-    <RunMap
-      graph={graph}
-      graphError={
-        graph || pending
-          ? null
-          : "The map appears once the workflow's routes can be worked out. Fix the problems on the Steps tab first."
-      }
-      caption={pending ? "Updating…" : "Read-only. Edit steps on the Steps tab."}
-      onEdit={(stepId) => {
-        session.set({ selected: stepId });
-        window.location.hash = editorHref(target, "steps");
-        focusField("step-title");
-      }}
-    />
   );
 }

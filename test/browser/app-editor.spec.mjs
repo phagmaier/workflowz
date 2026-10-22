@@ -74,10 +74,10 @@ test("create a workflow from an example, connect results directly, save, then pr
   await expect(form).toContainText("Codex:");
 
   // A new result is unconnected until a destination is chosen, and the checks say so in context.
-  await form.getByLabel("New result name").fill("needs info");
-  await form.getByRole("button", { name: "Add result" }).click();
+  await form.getByLabel("New outcome name").fill("needs info");
+  await form.getByRole("button", { name: "Add outcome" }).click();
   await expect(form).toContainText("Added “needs_info”");
-  const needsInfo = form.getByLabel("When the result is needs_info, then");
+  const needsInfo = form.getByLabel("When the outcome is needs_info, then");
   await expect(needsInfo).toBeFocused();
   await expect(checks).toContainText("Implement: choose what happens after “needs_info”");
   await expect(form).toContainText("Not connected yet");
@@ -87,21 +87,23 @@ test("create a workflow from an example, connect results directly, save, then pr
   await expect(checks).toContainText("All good");
 
   // "New step…" creates the destination directly and opens it.
-  await form.getByLabel("When the result is blocked, then").selectOption({ label: "＋ New step…" });
+  await form
+    .getByLabel("When the outcome is blocked, then")
+    .selectOption({ label: "＋ New step…" });
   await form.getByLabel("Name", { exact: true }).fill("Ask for help");
-  await form.getByRole("button", { name: "Ask an agent" }).click();
+  await form.getByRole("button", { name: "Agent" }).click();
   await expect(form.getByRole("heading", { level: 2 })).toHaveText("Ask for help");
-  await expect(form).toContainText("New step, reached when Implement's result is blocked");
+  await expect(form).toContainText("New step, reached when Implement's outcome is blocked");
   await expect(checks).toContainText("Ask for help: write a prompt.");
   await expect(checks).toContainText("More checks run once these are fixed.");
-  await expect(form.getByLabel("When the result is complete, then")).toHaveAttribute(
+  await expect(form.getByLabel("When the outcome is complete, then")).toHaveAttribute(
     "aria-invalid",
     "true",
   );
   const prompt = form.getByLabel("Prompt text");
   await prompt.fill("Explain what blocked {{task.text}}");
   await form
-    .getByLabel("When the result is complete, then")
+    .getByLabel("When the outcome is complete, then")
     .selectOption({ label: "Go to Mark done" });
   await expect(checks).toContainText("All good");
   await expect(prompt).toHaveValue("Explain what blocked {{task.text}}");
@@ -122,8 +124,8 @@ test("create a workflow from an example, connect results directly, save, then pr
   await page.getByRole("link", { name: "YAML" }).click();
   await expect(page.locator("pre.yaml")).toContainText("ask_for_help:");
   await expect(page.locator("pre.yaml")).toContainText("needs_info:");
-  await page.getByRole("link", { name: "Map" }).click();
-  await expect(page.getByRole("group", { name: /Workflow map with 5 steps/ })).toBeVisible();
+  await page.getByRole("link", { name: "Graph" }).click();
+  await expect(page.getByRole("region", { name: "Workflow graph", exact: true })).toBeVisible();
   await shot(page, "e06-map");
 
   // Create run prepares a run and opens it with a confirmation; Start stays separate.

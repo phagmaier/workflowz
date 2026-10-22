@@ -96,7 +96,9 @@ export function RulesTab({
           ) : null}
         </section>
         <section className="pane" aria-labelledby="defaults-title">
-          <h2 id="defaults-title">Workflow defaults</h2>
+          <h2 id="defaults-title" tabIndex={-1}>
+            Workflow defaults
+          </h2>
           <p className="muted">
             Used when no step or shared rule chooses a destination. Unrouted technical failures
             pause.

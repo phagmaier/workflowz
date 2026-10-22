@@ -61,7 +61,7 @@ test("author shared rules, defaults and limits; inspect all failures and reorder
   );
   await second.getByRole("button", { name: "Remove shared rule 2" }).click();
   await expect(save).toBeEnabled();
-  await page.getByRole("link", { name: "Steps", exact: true }).click();
+  await page.getByRole("link", { name: "Form", exact: true }).click();
   await work.click();
   const form = page.getByRole("region", { name: "Selected step" });
   await form.getByText("If something goes wrong technically", { exact: false }).click();
@@ -108,7 +108,7 @@ test("edit exact YAML through invalid text, delayed replies and failed checks", 
   await expect(page.getByRole("button", { name: "Return to visual editor" })).toBeDisabled();
   await page.getByRole("region", { name: "YAML checks" }).getByRole("button").first().click();
   await expect(yaml).toBeFocused();
-  await page.getByRole("link", { name: "Steps", exact: true }).click();
+  await page.getByRole("link", { name: "Form", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Visual editing is paused" })).toBeVisible();
   await page.getByRole("link", { name: "Continue editing YAML" }).click();
   await expect(yaml).toHaveValue("version: [");
@@ -171,7 +171,7 @@ test("edit exact YAML through invalid text, delayed replies and failed checks", 
   await expect(page.locator("pre.yaml")).toHaveText(exact);
   await page.getByRole("button", { name: "Check again" }).click();
   await expect(page.locator("pre.yaml")).toHaveText(exact);
-  await page.getByRole("link", { name: "Steps", exact: true }).click();
+  await page.getByRole("link", { name: "Form", exact: true }).click();
   await expect(
     page.getByRole("region", { name: "Selected step" }).getByRole("heading", { level: 2 }),
   ).toBeVisible();

@@ -41,8 +41,9 @@ test("saving keeps earlier revision addresses immutable and preserves a collidin
   await expect(save).toBeEnabled();
   await save.click();
   await expect(page.getByText(/Saved as revision/)).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`#/workflows/${revisionId}/yaml$`));
-  await expect(text).toHaveValue(WORKFLOW);
+  await expect(page).toHaveURL(new RegExp(`#/workflows/${revisionId}/map$`));
+  await page.getByRole("link", { name: "YAML", exact: true }).click();
+  await expect(page.locator("pre.yaml")).toHaveText(WORKFLOW);
   await page.getByRole("link", { name: "Workflows", exact: true }).first().click();
   await page.getByRole("region", { name: "Unsaved drafts in this tab" }).getByRole("link").click();
   await page.getByRole("link", { name: "Continue editing YAML" }).click();
@@ -78,7 +79,7 @@ test("invalid step time limits cannot save or create a run and survive editor na
   await expect(panel.getByRole("button", { name: "Create run", exact: true })).toBeDisabled();
   await panel.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.getByRole("link", { name: "Project", exact: true }).click();
-  await page.getByRole("link", { name: /^Steps/ }).click();
+  await page.getByRole("link", { name: /^Form/ }).click();
   await form.getByText("Advanced", { exact: false }).click();
   await expect(limit).toHaveValue("thirty");
   await expect(save).toBeDisabled();
@@ -153,7 +154,7 @@ steps:
   await expect(form.locator(".field-err")).toBeVisible();
   await expect(save).toBeDisabled();
   await page.getByRole("link", { name: "Project", exact: true }).click();
-  await page.getByRole("link", { name: /^Steps/ }).click();
+  await page.getByRole("link", { name: /^Form/ }).click();
   await form.getByText("Advanced", { exact: false }).click();
   await expect(env).toHaveValue("NAME=value\nUNFINISHED");
   await env.fill("NAME=value\nFINISHED=other value");

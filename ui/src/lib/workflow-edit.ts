@@ -24,7 +24,7 @@ export const HARNESSES = ["codex", "claude", "opencode", "pi", "omp"] as const;
 const IDENTIFIER = /^[a-z][a-z0-9_]{0,63}$/;
 
 export const KIND_HINT: Record<StepKind, string> = {
-  agent: "A coding agent works on a prompt and reports one of the results you list.",
+  agent: "A coding agent works on a prompt and reports one of the outcomes you list.",
   command:
     "Runs a program in the project folder. Exit code 0 is “complete”, anything else “failed”.",
   "task.next":
@@ -399,14 +399,14 @@ export function addOutcome(doc: Doc, stepId: string, raw: string): Doc | string 
     .trim()
     .toLowerCase()
     .replace(/[\s-]+/g, "_");
-  if (!name) return "Type a result name first, for example needs_info.";
+  if (!name) return "Type an outcome name first, for example needs_info.";
   if (name.startsWith("system.")) return "Names starting with “system.” are reserved.";
   if (!IDENTIFIER.test(name))
     return "Use lowercase letters, digits and _ only, starting with a letter (up to 64).";
   const next = clone(doc);
   const step = next.steps[stepId];
-  if (step?.kind !== "agent") return "Only agent steps choose their own results.";
-  if (step.outcomes.includes(name)) return `“${name}” is already a result of this step.`;
+  if (step?.kind !== "agent") return "Only agent steps choose their own outcomes.";
+  if (step.outcomes.includes(name)) return `“${name}” is already an outcome of this step.`;
   step.outcomes = [...step.outcomes, name];
   return next;
 }
@@ -553,7 +553,7 @@ const FIELD_LABEL: Record<string, string> = {
   argv: "command",
   cwd: "working folder",
   env: "environment",
-  outcomes: "results",
+  outcomes: "outcomes",
   instructions: "instruction files",
   context: "report context",
   timeout_seconds: "time limit",
@@ -578,7 +578,7 @@ export function problems(diagnostics: readonly Diagnostic[], doc: Doc | null): P
         outcome = /outcome '([^']+)'/.exec(d.message)?.[1] ?? null;
         text = `${name}: choose what happens after “${outcome}”.`;
       } else if (d.code === "unreachable_step")
-        text = `${name}: nothing leads here, so it never runs. Choose it as a destination for another step's result.`;
+        text = `${name}: nothing leads here, so it never runs. Choose it as a destination for another step's outcome.`;
       else if (d.code === "unbounded_cycle") {
         const loop = /steps (.+) form a loop/.exec(d.message)?.[1]?.split(", ").map(humanize);
         text = `${loop ? loop.join(", ") : name} can repeat forever: no step or time limit is set, so a run loops until you pause or stop it.`;
@@ -639,6 +639,14 @@ export function problems(diagnostics: readonly Diagnostic[], doc: Doc | null): P
     return {
       ...base,
       text: where ? `${where}: ${d.message}` : capitalize(d.message),
+      field:
+        head === "limits"
+          ? "limits-title"
+          : head === "defaults"
+            ? "defaults-title"
+            : head === "policies"
+              ? `policy-${second}-scope`
+              : null,
       stepId: null,
       place: where ? ("rules" as const) : ("yaml" as const),
     };

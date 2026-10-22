@@ -67,7 +67,7 @@ export function RuleRow({
       </span>
       <div className="rule-then">
         <label className="sr-only" htmlFor={id}>
-          {failure ? `If ${outcomeLabel(row.outcome)}` : `When the result is ${row.outcome}`}, then
+          {failure ? `If ${outcomeLabel(row.outcome)}` : `When the outcome is ${row.outcome}`}, then
         </label>
         <RuleDestination
           doc={doc}
@@ -98,8 +98,8 @@ export function RuleRow({
         <button
           type="button"
           className="btn-icon"
-          aria-label={`Remove result ${row.outcome}`}
-          title={`Remove result ${row.outcome}`}
+          aria-label={`Remove outcome ${row.outcome}`}
+          title={`Remove outcome ${row.outcome}`}
           disabled={step.outcomes.length <= 1}
           onClick={() => session.edit((d) => removeOutcome(d, stepId, row.outcome))}
         >
@@ -132,19 +132,19 @@ export function AddResult({ ctx, stepId }: { ctx: Ctx; stepId: string }) {
   return (
     <form className="row add-result" onSubmit={submit}>
       <label className="sr-only" htmlFor={id}>
-        New result name
+        New outcome name
       </label>
       <input
         id={id}
         value={name}
-        placeholder="New result, e.g. needs_info"
+        placeholder="New outcome, e.g. needs_info"
         onChange={(event) => {
           setName(event.target.value);
           setFeedback(null);
         }}
       />
       <button type="submit" className="btn btn-sm">
-        Add result
+        Add outcome
       </button>
       <Feedback value={feedback} />
       <span className="hint full">The agent is told these names and must report one of them.</span>

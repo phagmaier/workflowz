@@ -6,9 +6,10 @@ export const TYPING = 400;
 export const fieldId = (stepId: string, field: string) => `f-${stepId}-${field}`;
 
 /** Moves focus to a field once the selected step's form has rendered. */
-export function focusField(id: string) {
+export function focusField(id: string, fallbackId?: string) {
   requestAnimationFrame(() => {
-    const element = document.getElementById(id);
+    const element =
+      document.getElementById(id) ?? (fallbackId ? document.getElementById(fallbackId) : null);
     // Diagnostics can target fields inside Advanced or technical-failure disclosures.
     for (let parent = element?.parentElement; parent; parent = parent.parentElement)
       if (parent instanceof HTMLDetailsElement) parent.open = true;

@@ -16,8 +16,8 @@ const HARNESS: Record<string, string> = {
 export const harnessLabel = (id: string) => HARNESS[id] ?? id;
 
 export const KIND_LABEL: Record<string, string> = {
-  agent: "Ask an agent",
-  command: "Run a command",
+  agent: "Agent",
+  command: "Command",
   "task.next": "Pick the next task",
   "task.complete": "Mark task done",
   end: "Finish",

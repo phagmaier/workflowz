@@ -31,9 +31,11 @@ test("old app bookmarks redirect with their hash; imported YAML keeps exact sour
   await page.getByLabel("Workflow folder").press("Tab");
   await expect(page.getByRole("button", { name: "Open draft" })).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.getByLabel("Workflow YAML", { exact: true })).toHaveValue(original);
-  await expect(page.getByText("Checked · valid", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/map$/);
   await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
+  await page.getByRole("link", { name: "YAML", exact: true }).click();
+  await expect(page.locator("pre.yaml")).toHaveText(original);
+  await expect(page.getByText("Checked · valid", { exact: true })).toBeVisible();
   await shot(page, "migration-import-desktop");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText(/Saved as revision/)).toBeVisible();

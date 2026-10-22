@@ -1,5 +1,6 @@
 import { type FormEvent, useRef, useState } from "react";
 import type { Session, SessionState } from "../editor-session.ts";
+import { GRAPH_KIND } from "../lib/editor-graph.ts";
 import { humanize, KIND_LABEL, plural } from "../lib/format.ts";
 import {
   addStep,
@@ -30,11 +31,13 @@ function AddStepForm({
   after,
   onAdded,
   onCancel,
+  plain = false,
 }: {
   ctx: Ctx;
   after: string | null;
   onAdded: (id: string, text: string) => void;
   onCancel: () => void;
+  plain?: boolean;
 }) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<StepKind>("agent");
@@ -45,7 +48,7 @@ function AddStepForm({
     ctx.session.edit(() => added.doc);
     onAdded(
       added.id,
-      `Added “${humanize(added.id)}”${after ? ` after “${humanize(after)}”` : ""}. Connect it by choosing it as a destination for another step's result.`,
+      `Added “${humanize(added.id)}”${after && !plain ? ` after “${humanize(after)}”` : ""}. Connect it by choosing it as a destination for another step's outcome.`,
     );
   };
   return (
@@ -69,7 +72,7 @@ function AddStepForm({
         >
           {KINDS.map((k) => (
             <option key={k} value={k}>
-              {KIND_LABEL[k]}
+              {plain ? GRAPH_KIND[k] : KIND_LABEL[k]}
             </option>
           ))}
         </select>
@@ -86,14 +89,16 @@ function AddStepForm({
   );
 }
 
-function AddStep({
+export function AddStep({
   ctx,
   after,
   onAdded,
+  plain = false,
 }: {
   ctx: Ctx;
   after: string | null;
   onAdded: (id: string, text: string) => void;
+  plain?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
@@ -102,6 +107,7 @@ function AddStep({
       <AddStepForm
         ctx={ctx}
         after={after}
+        plain={plain}
         onAdded={(id, text) => {
           setOpen(false);
           onAdded(id, text);
@@ -119,7 +125,7 @@ function AddStep({
       className="btn btn-sm add-step"
       onClick={() => setOpen(true)}
     >
-      ＋ Add step{after ? ` after “${humanize(after)}”` : ""}
+      ＋ Add step{after && !plain ? ` after “${humanize(after)}”` : ""}
     </button>
   );
 }

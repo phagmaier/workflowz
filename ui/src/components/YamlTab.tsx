@@ -64,24 +64,11 @@ export function YamlTab({ session, state }: { session: Session; state: SessionSt
               Edit as text
             </button>
           )}
-          <button
-            type="button"
-            className="btn btn-quiet"
-            disabled={pending}
-            onClick={() => session.recheck()}
-          >
-            Check again
-          </button>
         </div>
         {editing ? (
           <p className="callout">
             Text is the source of truth. Visual editing is paused until you return to it. Your text
             is kept when you leave this page.
-          </p>
-        ) : null}
-        {state.checkError ? (
-          <p className="inline-alert" role="alert">
-            {state.checkError}
           </p>
         ) : null}
         {editing ? (

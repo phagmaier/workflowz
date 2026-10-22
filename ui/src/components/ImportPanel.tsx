@@ -84,11 +84,12 @@ export function ImportPanel({ focused }: { focused: boolean }) {
     session.read = read;
     await session.open(text);
     // Even unreadable YAML or an unavailable daemon must leave the imported text editable.
-    session.set({ mode: "text" });
+    const visual = session.current && !!session.state.model;
+    if (!visual) session.set({ mode: "text" });
     pending.current = false;
     // A cancelled import stays listed under unsaved drafts instead.
     if (generation.current === mine)
-      window.location.hash = editorHref({ kind: "draft", key }, "yaml");
+      window.location.hash = editorHref({ kind: "draft", key }, visual ? "map" : "yaml");
   };
   const cancel = () => {
     generation.current += 1;

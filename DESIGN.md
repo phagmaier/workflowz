@@ -10,9 +10,33 @@
   connection), and the Workflows page with import as a drop zone. Other screens keep their
   earlier layout in the dark theme until their slices. Fonts fall back to system faces; bundling
   Manrope/JetBrains Mono needs a `font-src 'self'` CSP addition, not yet approved.
-- Next slice: the workflow editor's Graph view with its checker panel. The Form editor, Runs
-  and run details still need their approved layouts. Sidebar run groups currently open the same
-  Runs page; imported files open in YAML until Graph view exists.
+- Slice 2 (2026-10-21): editable Graph view with automatic layout, Tidy up/Fit/zoom, declared
+  Outcomes and their destinations on every nonterminal node, branch and return connections,
+  and selected-step settings. Owners can add, rename, delete and configure steps, add Outcomes,
+  choose destinations (including creating a destination step), and choose the first step.
+  Missing destinations remain visible and repairable. Graph, Form and YAML use the same draft
+  and daemon validation; graph layout never changes execution order or the saved document.
+- The bottom checker dock is available in Graph, Project, Rules & limits and YAML. Its Fix
+  actions open the relevant step/outcome, first-step selector, project field, rules/limits or
+  YAML; advanced fields open before focus moves. Pending/failed checks cannot enable stale
+  fixes or saving. Valid imports open in Graph, as do parsed imports with routing problems;
+  malformed/schema-invalid YAML and failed import checks retain the exact text in YAML.
+- Remaining editor work: Form still has its earlier list/form/checks layout, and Graph reuses
+  those step fields. The full Form redesign (including natural one-line command entry and
+  harness effort defaults) follows. Existing saved/new-workflow links still open Form; Graph
+  is the first view choice and the import landing view. Runs and run details also need their
+  approved layouts; sidebar run groups currently open the same Runs page.
+- Graph limitations: manual placement is deferred. Large graphs use local scrolling and zoom;
+  Fit can make labels small. On narrow screens, settings stack below the graph. Technical
+  failure rules and policies remain accessible in step settings and Rules & limits; the graph
+  draws normal Outcome destinations. Inherited routes are shown only from a current daemon
+  check, with an explicit “check needed” label when unresolved. System fonts and CSP are unchanged.
+- Slice 2 verification: typecheck and full lint pass (the existing CSS warning remains), core
+  tests pass, and offline browser checks cover branches, loops, missing destinations, checker
+  navigation, delayed/failed checks, shared draft state, exact imported text, keyboard use,
+  long labels and narrow screens. Desktop and phone screenshots were inspected visually.
+- Graph return lanes have left canvas padding for every outcome, including fourth-outcome
+  self-loops and returns to the first column; regression checks cover their full SVG bounds.
 - The target form is a desktop app (Electron proposed). Do not build the desktop shell or change
   daemon lifecycle yet.
 - The full earlier brief, slice logs and decision history are archived in
@@ -65,8 +89,9 @@ see what happened, without learning internal field names or hunting for controls
 ## Implementation sequence
 
 Continue the browser-served React UI one complete slice at a time, following the checks in
-[AGENTS.md](AGENTS.md). Next is the Graph editor and checker; complete the remaining approved
-editor, Runs and run-detail interactions before rewriting the user guide.
+[AGENTS.md](AGENTS.md). Graph authoring and its checker are built; next is the Form redesign.
+Complete the remaining approved editor, Runs and run-detail interactions before rewriting the
+user guide.
 
 Bundled Manrope/JetBrains Mono fonts and the required CSP change remain undecided and do not
 block layout work. Use system fonts until that decision is resolved. Desktop packaging,
