@@ -27,6 +27,11 @@ export const browserRequestSchema = z.discriminatedUnion("op", [
   z.strictObject({ op: z.literal("status"), ...run }),
   z.strictObject({ op: z.literal("reports"), ...run }),
   z.strictObject({
+    op: z.literal("output"),
+    ...run,
+    attemptId: z.string().min(1).max(512),
+  }),
+  z.strictObject({
     op: z.literal("events"),
     ...run,
     after: z.number().int().nonnegative(),

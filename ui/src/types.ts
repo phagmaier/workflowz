@@ -1,5 +1,9 @@
 // Response shapes come from the daemon source; the browser imports types only, never runtime code.
-export type { BrowserDraft, BrowserRunEdit } from "../../src/app/browser-service.ts";
+export type {
+  BrowserAttemptOutput,
+  BrowserDraft,
+  BrowserRunEdit,
+} from "../../src/app/browser-service.ts";
 export type { BrowserEvents, BrowserRunStatus } from "../../src/app/management-service.ts";
 export type { BrowserRequest } from "../../src/contracts/browser.ts";
 export type { RunStatus } from "../../src/contracts/run-state.ts";

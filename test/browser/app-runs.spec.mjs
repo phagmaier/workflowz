@@ -104,7 +104,7 @@ test("pair, follow a run from ready to completed, read history and the map", asy
   await expect(page.getByLabel("Work's result", { exact: true })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("ArrowUp");
-  const resume = choices.getByRole("radio", { name: /Resume — run Work again/ });
+  const resume = choices.getByRole("radio", { name: /Run this step again/ });
   await expect(resume).toBeChecked();
   await expect(choices).toContainText("Agents keep unrestricted permissions");
   const reason = page.getByLabel(/^Reason/);
@@ -127,6 +127,14 @@ test("pair, follow a run from ready to completed, read history and the map", asy
   });
   const history = page.getByRole("region", { name: "What happened" });
   const task1 = history.getByRole("button", { name: /^Task 1:/ });
+  // Inspecting the blocked attempt pins it, so its task stays open after later work finishes.
+  await expect(task1).toHaveAttribute("aria-expanded", "true");
+  await expect(detail).toContainText("Paused — the workflow pauses on “blocked”");
+  await expect(history.getByRole("button", { name: /Work blocked/ })).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
+  await task1.click();
   await expect(task1).toHaveAttribute("aria-expanded", "false");
   await task1.click();
   await history.getByRole("button", { name: /Resumed/ }).click();

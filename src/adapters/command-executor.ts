@@ -6,7 +6,12 @@
 import type { SystemOutcome } from "../contracts/identifiers.js";
 import type { ProcessIdentity } from "../contracts/process-identity.js";
 import { childEnvironment } from "./environment.js";
-import { type ProcessResult, type RunningProcess, startProcess } from "./process.js";
+import {
+  type ProcessResult,
+  processDiagnostics,
+  type RunningProcess,
+  startProcess,
+} from "./process.js";
 
 export interface CommandSpec {
   readonly argv: readonly string[];
@@ -18,7 +23,7 @@ export interface CommandSpec {
   readonly logPath?: string | undefined;
 }
 
-export type CommandOutcome =
+type CommandResult =
   | {
       readonly kind: "outcome";
       readonly outcome: "complete" | "failed";
@@ -32,6 +37,10 @@ export type CommandOutcome =
       readonly stdout: string;
     }
   | { readonly kind: "terminated"; readonly stdout: string };
+
+export type CommandOutcome = CommandResult & {
+  readonly diagnostics?: ReturnType<typeof processDiagnostics>;
+};
 
 export interface RunningCommand {
   readonly pid: number | null;
@@ -56,7 +65,12 @@ export function startCommand(spec: CommandSpec): RunningCommand {
   return {
     pid: running.pid,
     processIdentity: running.processIdentity,
-    completed: running.completed.then(commandOutcome),
+    completed: running.completed.then((result) => {
+      const outcome = commandOutcome(result);
+      return result.stderr || result.stdoutTruncated || result.stderrTruncated
+        ? { ...outcome, diagnostics: processDiagnostics(result) }
+        : outcome;
+    }),
     terminate: running.terminate,
   };
 }

@@ -230,7 +230,7 @@ test("explain incompatible continuation, review a revision, then resume explicit
   await expect(page.getByRole("button", { name: "Resume run", exact: true })).toBeVisible();
   expect((await app.status(runId)).run.status).toBe("paused");
   expect(mutations).toEqual(["revise"]);
-  await expect(page.getByRole("radio", { name: /Resume — continue with Done/ })).toBeChecked();
+  await expect(page.getByRole("radio", { name: /Continue with Done/ })).toBeChecked();
   await page.getByLabel(/^Reason \(saved/).fill("Execute the revised finish step");
   await noSideScroll(page);
   await shot(page, "a5-guided-resume-mobile");

@@ -506,7 +506,14 @@ export class RunStore {
     return row ? toAttempt(row) : undefined;
   }
 
-  /** Attempts of one step within one task (or without a task), including settled ones. */
+  /** Saved capture only; never reads the attempt's private log file. */
+  attemptStdout(runId: string, attemptId: string): string | null | undefined {
+    const row = this.database
+      .prepare("SELECT stdout_text AS stdout FROM attempts WHERE run_id = ? AND attempt_id = ?")
+      .get(runId, attemptId) as { stdout: string | null } | undefined;
+    return row?.stdout;
+  }
+
   /** Records bounded stdout and the log location for an attempt that has finished running. */
   setAttemptOutput(attemptId: string, output: { stdout: string; logPath: string | null }): void {
     this.database

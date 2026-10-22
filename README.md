@@ -12,7 +12,10 @@ Graph authoring with step settings, Outcome connections, automatic layout and a 
 Parsed imports open in Graph; malformed YAML stays editable as text. Slice 3 adds the Form steps
 table and settings panel, the shared checker, natural command entry and browser effort
 preferences. Slice 4 groups Runs by status, with direct sidebar navigation and explicit Open
-actions. Run details is next. Desktop packaging and service lifecycle changes are deferred.
+actions. Slice 5 adds the Run details overview, paused decisions, history with Report / Output
+tabs, and the execution-path map. The main Workbench screens and final interface review are
+complete. The new user guide, desktop packaging and service lifecycle changes remain separate
+future work.
 
 - [DESIGN.md](DESIGN.md): approved UI requirements, decisions and implementation status.
 - [AGENTS.md](AGENTS.md): contribution instructions and runtime boundaries.

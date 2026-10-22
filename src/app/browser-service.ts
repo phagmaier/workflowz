@@ -1,5 +1,6 @@
 /** Drafts and a narrow execution allowlist delegate all run authority to management. */
 import { parseDocument, stringify } from "yaml";
+import { boundedText } from "../adapters/output.js";
 import type { BrowserRequest, BrowserSource } from "../contracts/browser.js";
 import type { Diagnostic } from "../contracts/diagnostics.js";
 import { SYSTEM_OUTCOMES } from "../contracts/identifiers.js";
@@ -47,6 +48,13 @@ export interface BrowserRunEdit {
   }[];
   tasks: { taskId: string; title: string; state: TaskState }[];
 }
+/** At most 64 KiB of the already captured stdout; no private log/session locations. */
+export interface BrowserAttemptOutput {
+  runId: string;
+  attemptId: string;
+  stdout: string | null;
+  truncated: boolean;
+}
 export class BrowserService {
   constructor(private readonly management: ManagementService) {}
 
@@ -74,6 +82,18 @@ export class BrowserService {
   }
 
   async handle(request: BrowserRequest): Promise<unknown> {
+    if (request.op === "output") {
+      this.management.service.coordinator.run(request.runId);
+      const stdout = this.management.store.attemptStdout(request.runId, request.attemptId);
+      if (stdout === undefined) throw new Error("Attempt output is unavailable for this run.");
+      const capture = stdout === null ? null : boundedText(stdout, 64 * 1024);
+      return {
+        runId: request.runId,
+        attemptId: request.attemptId,
+        stdout: capture?.text ?? null,
+        truncated: capture?.truncated ?? false,
+      } satisfies BrowserAttemptOutput;
+    }
     if (request.op === "run-edit") {
       const run = this.paused(request.runId, request.expectedEventId);
       const coordinator = this.management.service.coordinator;

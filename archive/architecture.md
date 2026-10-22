@@ -562,7 +562,7 @@ retained. This is bounded Chromium/390px coverage, not cross-browser coverage or
 
 
 
-### 8.7 React app at `/ui/` (UI overhaul slices 1–4)
+### 8.7 React app at `/ui/` (UI overhaul slices 1–5)
 
 The redesigned interface is a React + TypeScript app in `ui/`, built by project-local Vite into
 `dist/ui-app/` (`scripts/build-ui.mjs`, run by `npm run build`). The build also writes
@@ -580,7 +580,8 @@ and classic shell assets return 404; there is one implementation. Builds remove 
 `dist/web/` outputs from earlier checkouts before generating the app. `src/web/` and
 `scripts/build-web.mjs` have been removed.
 
-The app uses the existing browser API, cookie, pairing and header contract without additions.
+The app keeps the browser cookie, pairing, header and CSP contracts. Slice 5 adds the narrow
+read-only output operation described below; execution authority is unchanged.
 The approved Workbench Runs page groups the shared `runs` read into waiting, ready, running
 and finished sections. `#/runs?group=waiting` (also `ready`, `running`, `finished`) opens and
 focuses that section; `#/runs` shows the same groups from the page heading. These are browser
@@ -615,6 +616,28 @@ read leaves its snapshot invalidated and retries at the next inspection poll, ev
 acceptance event has been consumed; this never retries a mutation.
 Historical step details load the event's immutable revision via the existing `load`/`draft`
 reads instead of describing old executions with the run's latest step definition.
+
+Slice 5 presents status/facts, deliberate controls, History and Map in the Workbench theme.
+Each history attempt has Report / Output tabs. The strict browser operation
+`{op: "output", runId, attemptId}` reads only the matching attempt's saved `stdout_text` from
+SQLite, returning `{runId, attemptId, stdout, truncated}`. The response is capped at 64 KiB on
+a UTF-8 boundary; `truncated` means that this read shortened the saved capture. A null stdout
+means no capture has been saved; an empty string means an empty capture. Earlier process
+capture limits still apply. No filesystem path parameter or private log/session file is read
+or returned. Pairing and the same Host/Origin/header requirements apply. Output reads add no
+events, writes, management operation or recovery control. The UI ignores late replies for a
+previously selected attempt and preserves the retry button's focus on completion.
+
+Commands now retain `processDiagnostics` in their existing `invocation_settled` event, as agents
+already do: at most 4096 UTF-8 bytes of stderr plus capture truncation flags. Normalized command
+outcomes, process/group/stream settlement, stop/timeout supervision and routing are unchanged.
+The Output tab shows this saved diagnostic excerpt beside bounded stdout; it does not stream.
+Capture-truncation flags from the latest settled invocation explain when output is incomplete.
+Earlier invocation diagnostics stay in event evidence rather than carrying into a clean
+correction's display. Interacting with history details pins that attempt through background
+progress; its Report/Output choice lasts for the page load, including navigation through Map.
+Manual paused-run changes use Apply and stay paused. The given reason is carried into the
+separate Resume form; newer choices/reasons typed during an outstanding Apply are retained.
 
 Slice 3 adds the Rules & limits view and explicit YAML text mode. Text-mode checks omit `model`;
 exact text stays authoritative, and visual edits are blocked until the user returns after a

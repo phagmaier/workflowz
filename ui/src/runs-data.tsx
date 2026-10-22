@@ -18,6 +18,8 @@ interface RunsValue {
   names: ReadonlyMap<number, string>;
   /** Saved revisions; reread on navigation, since saving happens on other screens. */
   saved: SavedWorkflow[] | null;
+  /** Explicit workflow reads also update the sidebar's revision list. */
+  refreshSaved: () => Promise<void>;
   error: string | null;
   refresh: () => void;
 }
@@ -72,8 +74,8 @@ export function RunsProvider({ children }: { children: ReactNode }) {
     [saved],
   );
   const value = useMemo(
-    () => ({ runs, names, saved, error, refresh }),
-    [runs, names, saved, error, refresh],
+    () => ({ runs, names, saved, error, refresh, refreshSaved: loadSaved }),
+    [runs, names, saved, error, refresh, loadSaved],
   );
   return <Runs.Provider value={value}>{children}</Runs.Provider>;
 }

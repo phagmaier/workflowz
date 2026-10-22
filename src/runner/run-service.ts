@@ -401,6 +401,7 @@ export class RunService {
       exitCode: result.kind === "outcome" ? result.exitCode : null,
       timedOut: result.kind === "system" && result.code === "system.timeout",
       failure: result.kind === "system" ? result.code : undefined,
+      ...(result.diagnostics ? { diagnostics: result.diagnostics } : {}),
     });
     this.coordinator.recordOutput(attemptId, {
       stdout: result.stdout,

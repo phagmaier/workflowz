@@ -60,6 +60,20 @@ describe("commandOutcome (exit-code normalization)", () => {
 });
 
 describe("startCommand", () => {
+  it("retains a bounded stderr excerpt without changing the command's outcome", async () => {
+    const outcome = await startCommand({
+      argv: ["node", "-e", "console.log('saved stdout'); process.stderr.write('🙂'.repeat(2000));"],
+      cwd: os.tmpdir(),
+      env: {},
+    }).completed;
+    assert.equal(outcome.kind === "outcome" && outcome.outcome, "complete");
+    assert.equal(outcome.stdout, "saved stdout\n");
+    assert.ok(outcome.diagnostics);
+    assert.equal(outcome.diagnostics.stderrTruncated, true);
+    assert.ok(Buffer.byteLength(outcome.diagnostics.stderr) <= 4096);
+    assert.doesNotMatch(outcome.diagnostics.stderr, /\ufffd/);
+  });
+
   it("reports empty argv and invalid spawn arguments as spawn errors without throwing", async () => {
     for (const argv of [[], [""], ["node", "bad\0argument"]]) {
       const outcome = await startCommand({ argv, cwd: os.tmpdir(), env: {} }).completed;

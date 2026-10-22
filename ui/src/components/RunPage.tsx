@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { clearFlash, peekFlash } from "../flash.ts";
 import { clock, duration, humanize, KIND_LABEL } from "../lib/format.ts";
 import { buildHistory, type HistoryItem, redact } from "../lib/history.ts";
 import { describeRun } from "../lib/run-copy.ts";
-import { runHref } from "../route.ts";
+import { editorHref, runHref } from "../route.ts";
 import { type RunData, useRunData } from "../run-data.ts";
 import { useRuns } from "../runs-data.tsx";
 import { History, StepDetail } from "./History.tsx";
@@ -34,7 +34,13 @@ function Facts({ data }: { data: RunData }) {
         </dd>
       </div>
       <div>
-        <dt>{finished ? "Last step" : run.status === "running" ? "Current step" : "Next step"}</dt>
+        <dt>
+          {finished
+            ? "Last step"
+            : ["running", "pausing"].includes(run.status)
+              ? "Current step"
+              : "Next step"}
+        </dt>
         <dd>
           {humanize(run.cursorStepId)}
           {step ? <span className="muted"> · {KIND_LABEL[step.kind]}</span> : null}
@@ -106,7 +112,7 @@ function ReadyPlan({ data }: { data: RunData }) {
       {status.tasks.length ? (
         <>
           <h3 className="h3">Tasks imported when the run was created</h3>
-          <ol className="task-list">
+          <ol className="task-list compact">
             {status.tasks.map((task) => (
               <li key={task.taskId}>{task.title}</li>
             ))}
@@ -119,11 +125,24 @@ function ReadyPlan({ data }: { data: RunData }) {
 
 export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" }) {
   const data = useRunData(runId);
-  const { names } = useRuns();
+  const { names, refresh: refreshRuns } = useRuns();
   const control = useControl(runId, data.refresh);
   const { status, events, reports } = data;
+  const runStatus = status?.run.status;
+  useEffect(() => {
+    if (runStatus) refreshRuns();
+  }, [runStatus, refreshRuns]);
   const items = useMemo<HistoryItem[]>(() => buildHistory(events, reports), [events, reports]);
   const [picked, setPicked] = useState<string | null>(null);
+  const focusDetail = useRef(false);
+  const initialRetry = useRef<HTMLButtonElement | null>(null);
+  useLayoutEffect(() => {
+    const previous = initialRetry.current;
+    if (!previous || previous.isConnected) return;
+    initialRetry.current = null;
+    if (document.activeElement === document.body)
+      document.getElementById("run-refresh")?.focus({ preventScroll: true });
+  });
   // A confirmation from the page that sent us here (a created run, an applied change).
   const [flash, setFlash] = useState(() => peekFlash(runId));
   useEffect(() => {
@@ -142,6 +161,14 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
   // Follow the newest step until the user picks something to read.
   const latest = [...items].reverse().find((item) => item.type === "step") ?? items.at(-1);
   const selected = items.find((item) => item.id === picked) ?? latest;
+  useEffect(() => {
+    if (!focusDetail.current || tab !== "details") return;
+    const heading = document.getElementById("detail-title");
+    if (heading) {
+      heading.focus();
+      focusDetail.current = false;
+    }
+  }, [tab]);
   const name = data.graph?.name ?? (status ? names.get(status.run.revisionId) : undefined) ?? "Run";
   const crumbs = [{ label: "Runs", href: "#/runs" }, { label: `${name} · ${runId}` }];
 
@@ -155,7 +182,17 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
           <div className="state-panel" role="alert">
             <p>{data.error}</p>
             <p>
-              <button type="button" className="btn" onClick={data.refresh}>
+              <button
+                type="button"
+                className="btn"
+                onFocus={(event) => {
+                  initialRetry.current = event.currentTarget;
+                }}
+                onBlur={(event) => {
+                  if (event.currentTarget.isConnected) initialRetry.current = null;
+                }}
+                onClick={data.refresh}
+              >
                 Try again now
               </button>{" "}
               <a href="#/runs">Back to runs</a>
@@ -173,130 +210,154 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
   const showInHistory = (stepId: string) => {
     const item = [...items].reverse().find((i) => i.type === "step" && i.stepId === stepId);
     if (item) setPicked(item.id);
+    focusDetail.current = true;
     window.location.hash = runHref(runId);
   };
 
   return (
     <Shell section="runs" crumbs={crumbs} pageKey={`run:${runId}`}>
-      {flash ? (
-        <div className="result-line flash" role="status">
-          <span className="fb fb-ok">{flash.text}</span>
-          <button type="button" className="link" onClick={() => setFlash(null)}>
-            Dismiss
-          </button>
-        </div>
-      ) : null}
-      <section className="run-head">
-        <div className="run-title">
-          <div className="kind-label">
-            {name} · <span className="mono">{runId}</span> · revision {status.run.revisionId}
-            {status.run.startTime ? ` · started ${clock(status.run.startTime)}` : ""}
+      <div className="run-details">
+        {flash ? (
+          <div className="result-line flash" role="status">
+            <span className="fb fb-ok">{flash.text}</span>
+            <button type="button" className="link" onClick={() => setFlash(null)}>
+              Dismiss
+            </button>
           </div>
-          <h1 tabIndex={-1}>
-            <StatusChip status={status.run.status} /> {copy.headline}
-          </h1>
-          <p className="lede">{copy.detail}</p>
-          {data.error ? (
-            <p className="inline-alert" role="alert">
-              {data.error} Showing the last known state.
-            </p>
-          ) : null}
-        </div>
-        <Facts data={data} />
-      </section>
-
-      <RunControls data={data} control={control} items={items} />
-
-      <details className="disclosure pane">
-        <summary>Run information</summary>
-        <dl className="kv">
-          <dt>Project folder</dt>
-          <dd className="mono">{status.run.projectRoot}</dd>
-          <dt>Created</dt>
-          <dd>{status.run.createdAt}</dd>
-        </dl>
-        {status.tasks.length ? (
-          <section aria-label="Imported tasks">
-            <h2 className="h3">Imported tasks</h2>
-            {status.tasks.map((task) => (
-              <details className="disclosure" key={task.taskId}>
-                <summary>
-                  {task.title} · {task.state}
-                  {task.taskId === status.run.activeTaskId ? " · current" : ""}
-                </summary>
-                <p className="muted">{task.headingPath.join(" / ")}</p>
-                <p className="prose">{task.body}</p>
-                <p className="hint mono">{task.taskId}</p>
-              </details>
-            ))}
-          </section>
         ) : null}
-        <section aria-label="Attention records">
-          <h2 className="h3">Attention records</h2>
-          <p className="hint">
-            Historical notices stay here after a decision. The current status tells you whether the
-            run needs attention now.
-          </p>
-          {status.attention.length ? (
-            <pre className="raw">{JSON.stringify(redact(status.attention), null, 2)}</pre>
-          ) : (
-            <p className="muted">No attention records.</p>
-          )}
+        <section
+          className={`run-overview run-overview-${status.run.status}`}
+          aria-label="Run overview"
+        >
+          <div className="run-overview-top">
+            <div className="run-title">
+              <div className="run-workflow-name">
+                {name} <StatusChip status={status.run.status} />
+              </div>
+              <h1 tabIndex={-1}>{copy.headline}</h1>
+              <p className="lede">{copy.detail}</p>
+              {data.error ? (
+                <p className="inline-alert" role="alert">
+                  {data.error} Showing the last known state.
+                </p>
+              ) : null}
+              <p className="run-meta mono">
+                {runId} · revision {status.run.revisionId}
+                {status.run.startTime ? ` · started ${clock(status.run.startTime)}` : ""}
+              </p>
+            </div>
+            <div className="run-head-actions">
+              <button id="run-refresh" type="button" className="btn btn-sm" onClick={data.refresh}>
+                Refresh run
+              </button>
+              <a
+                className="btn btn-sm"
+                href={editorHref({ kind: "revision", revisionId: status.run.revisionId })}
+              >
+                Open workflow
+              </a>
+            </div>
+          </div>
+          <Facts data={data} />
         </section>
-      </details>
 
-      <nav className="tabs" aria-label="Run views">
-        <a
-          href={runHref(runId)}
-          className={tab === "details" ? "current" : ""}
-          aria-current={tab === "details" ? "page" : undefined}
-        >
-          History
-        </a>
-        <a
-          href={runHref(runId, "map")}
-          className={tab === "map" ? "current" : ""}
-          aria-current={tab === "map" ? "page" : undefined}
-        >
-          Map
-        </a>
-      </nav>
+        <RunControls data={data} control={control} items={items} />
 
-      {data.historyError ? (
-        <p className="inline-alert" role="alert">
-          {data.historyError} Showing the history read so far.{" "}
-          <button type="button" className="link" onClick={data.refresh}>
-            Try loading history again
-          </button>
-        </p>
-      ) : null}
+        <nav className="tabs run-view-tabs" aria-label="Run views">
+          <a
+            href={runHref(runId)}
+            className={tab === "details" ? "current" : ""}
+            aria-current={tab === "details" ? "page" : undefined}
+          >
+            History
+          </a>
+          <a
+            href={runHref(runId, "map")}
+            className={tab === "map" ? "current" : ""}
+            aria-current={tab === "map" ? "page" : undefined}
+          >
+            Map
+          </a>
+          <span className="run-view-hint">
+            {tab === "map" ? "Read-only execution path" : "Steps, outcomes and saved output"}
+          </span>
+        </nav>
 
-      {tab === "map" ? (
-        <RunMap
-          graph={data.graph}
-          graphError={data.graphError}
-          run={{ status, items, onShowInHistory: showInHistory }}
-          caption={`Read-only. Revision ${status.run.revisionId}.`}
-        />
-      ) : status.run.status === "ready" && items.every((i) => i.type === "note") ? (
-        <ReadyPlan data={data} />
-      ) : (
-        <div className="split">
-          <History
-            items={items}
-            tasks={status.tasks}
-            selected={selected?.id ?? null}
-            onSelect={setPicked}
-            caughtUp={data.caughtUp}
-          />
-          <StepDetail
-            item={selected}
-            tasks={status.tasks}
+        {data.historyError ? (
+          <p className="inline-alert" role="alert">
+            {data.historyError} Showing the history read so far.{" "}
+            <button type="button" className="link" onClick={data.refresh}>
+              Try loading history again
+            </button>
+          </p>
+        ) : null}
+
+        {tab === "map" ? (
+          <RunMap
             graph={data.graph}
-            currentRevisionId={status.run.revisionId}
+            graphError={data.graphError}
+            run={{ status, items, onShowInHistory: showInHistory }}
+            caption={`Read-only. Revision ${status.run.revisionId}.`}
           />
-        </div>
-      )}
+        ) : status.run.status === "ready" && items.every((i) => i.type === "note") ? (
+          <ReadyPlan data={data} />
+        ) : (
+          <div className="split run-history-workbench">
+            <History
+              items={items}
+              tasks={status.tasks}
+              selected={selected?.id ?? null}
+              onSelect={setPicked}
+              caughtUp={data.caughtUp}
+            />
+            <StepDetail
+              item={selected}
+              tasks={status.tasks}
+              graph={data.graph}
+              currentRevisionId={status.run.revisionId}
+              runId={runId}
+              onInspect={() => selected && setPicked(selected.id)}
+            />
+          </div>
+        )}
+        <details className="disclosure pane run-information">
+          <summary>Run information</summary>
+          <dl className="kv">
+            <dt>Project folder</dt>
+            <dd className="mono">{status.run.projectRoot}</dd>
+            <dt>Created</dt>
+            <dd>{status.run.createdAt}</dd>
+          </dl>
+          {status.tasks.length ? (
+            <section aria-label="Imported tasks">
+              <h2 className="h3">Imported tasks</h2>
+              {status.tasks.map((task) => (
+                <details className="disclosure" key={task.taskId}>
+                  <summary>
+                    {task.title} · {task.state}
+                    {task.taskId === status.run.activeTaskId ? " · current" : ""}
+                  </summary>
+                  <p className="muted">{task.headingPath.join(" / ")}</p>
+                  <p className="prose">{task.body}</p>
+                  <p className="hint mono">{task.taskId}</p>
+                </details>
+              ))}
+            </section>
+          ) : null}
+          <section aria-label="Attention records">
+            <h2 className="h3">Attention records</h2>
+            <p className="hint">
+              Historical notices stay here after a decision. The current status tells you whether
+              the run needs attention now.
+            </p>
+            {status.attention.length ? (
+              <pre className="raw">{JSON.stringify(redact(status.attention), null, 2)}</pre>
+            ) : (
+              <p className="muted">No attention records.</p>
+            )}
+          </section>
+        </details>
+      </div>
     </Shell>
   );
 }

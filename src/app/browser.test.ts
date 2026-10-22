@@ -8,7 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { AgentAdapter } from "../adapters/agent-adapter.js";
 import { parseWorkflowText } from "../contracts/parse-workflow.js";
 import { ScriptedAgentAdapter } from "../test-support/scripted-agent.js";
-import type { BrowserDraft, BrowserRunEdit } from "./browser-service.js";
+import type { BrowserAttemptOutput, BrowserDraft, BrowserRunEdit } from "./browser-service.js";
 import { startDaemon } from "./daemon.js";
 import { managementRequest } from "./management-client.js";
 import type { BrowserEvents, BrowserRunStatus } from "./management-service.js";
@@ -127,6 +127,47 @@ async function editableTaskRun(
 }
 
 describe("localhost browser shell boundary", () => {
+  it("reads only a run's saved bounded attempt output, without log access or mutations", async (t) => {
+    const f = await editableTaskRun(t);
+    await f.start();
+    const paused = await f.until((state) => state.run.status === "paused");
+    const [attempt] = f.owner.management.store.listAttempts(f.runId);
+    assert.ok(attempt);
+    const request = { op: "output", runId: f.runId, attemptId: attempt.attemptId };
+    const output = async () => {
+      const response = await f.post("/ui/api", request);
+      assert.equal(response.status, 200);
+      return (await response.json()) as BrowserAttemptOutput;
+    };
+    assert.equal(typeof (await output()).stdout, "string");
+    // Use the canonical writer to supply a large synthetic UTF-8 capture in this disposable run.
+    f.owner.management.service.coordinator.recordOutput(attempt.attemptId, {
+      stdout: `hello\n${"🙂".repeat(20_000)}`,
+      logPath: "/private/logs/never-read-this-file",
+    });
+    const captured = await output();
+    assert.equal(captured.truncated, true);
+    assert.ok(Buffer.byteLength(captured.stdout ?? "") <= 64 * 1024);
+    assert.match(captured.stdout ?? "", /^hello\n/);
+    assert.doesNotMatch(captured.stdout ?? "", /\ufffd/);
+    assert.deepEqual(Object.keys(captured).sort(), ["attemptId", "runId", "stdout", "truncated"]);
+    const another = await f.post("/ui/api", { op: "create", ...f.selection });
+    const otherRun = (await another.json()) as { runId: string };
+    assert.equal((await f.post("/ui/api", { ...request, runId: otherRun.runId })).status, 400);
+    assert.equal(
+      (await f.post("/ui/api", { ...request, attemptId: "../logs/private" })).status,
+      400,
+    );
+    assert.equal(
+      (await f.post("/ui/api", { ...request, path: "/private/logs/anything" })).status,
+      422,
+    );
+    assert.equal((await f.status()).expectedEventId, paused.expectedEventId);
+    assert.equal((await f.post("/ui/api", request, { origin: "http://evil.invalid" })).status, 403);
+    await f.post("/ui/api", { op: "logout" });
+    assert.equal((await f.post("/ui/api", request)).status, 401);
+  });
+
   it("serves inert assets but requires separate cookie authority and exact origin/host for API", async (t) => {
     const f = await fixture(t);
     const page = await fetch(`${f.url}/ui/`);

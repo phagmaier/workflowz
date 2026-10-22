@@ -57,6 +57,39 @@ steps:
   done: {kind: end, label: All tasks done}
 `;
 
+it("shows the latest settled invocation's diagnostics without carrying earlier stderr into a clean correction", () => {
+  const event = (eventId: number, type: EventRow["type"], data: EventRow["data"]): EventRow => ({
+    eventId,
+    type,
+    data,
+    runId: "run-correction",
+    attemptId: "attempt-correction",
+    revisionId: 1,
+    timestamp: new Date(eventId * 1000).toISOString(),
+  });
+  const events = [
+    event(1, "attempt_started", { stepId: "work" }),
+    event(2, "invocation_settled", {
+      invocation: 0,
+      exitCode: 0,
+      timedOut: false,
+      diagnostics: { stderr: "Earlier diagnostic", stdoutTruncated: true, stderrTruncated: true },
+    }),
+    event(3, "invocation_settled", { invocation: 1, exitCode: 0, timedOut: false }),
+  ];
+  assert.equal((buildHistory(events.slice(0, 2), [])[0] as StepItem).stderr, "Earlier diagnostic");
+  const corrected = buildHistory(events, [])[0] as StepItem;
+  assert.equal(corrected.stderr, null);
+  assert.equal(corrected.exitCode, 0);
+  assert.equal(corrected.timedOut, false);
+  assert.equal(corrected.stdoutTruncated, false);
+  assert.equal(corrected.stderrTruncated, false);
+  assert.ok(
+    corrected.events.some((entry) => entry.data.diagnostics),
+    "earlier evidence is retained",
+  );
+});
+
 describe("run history from real engine events", { timeout: 30_000 }, () => {
   it("groups by task, records your actions, redacts private paths and draws the path", async (t) => {
     const root = mkdtempSync(path.join(os.tmpdir(), "wf-ui-history-"));

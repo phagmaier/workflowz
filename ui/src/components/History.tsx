@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useEffect, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useId, useState } from "react";
 import { describeReadFailure } from "../api.ts";
 import { useConnection } from "../connection.tsx";
 import {
@@ -14,6 +14,8 @@ import {
 import { groupHistory, type HistoryItem, redact, type StepItem } from "../lib/history.ts";
 import type { RunGraph } from "../run-data.ts";
 import type { BrowserDraft, TaskRow } from "../types.ts";
+import { AttemptOutput } from "./AttemptOutput.tsx";
+import { useDraft } from "./ui.tsx";
 
 const WARN = /^(blocked|failed|revise|needs_|error|reject)/;
 
@@ -74,6 +76,7 @@ export function History({
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const now = Date.now();
   const steps = items.filter((item) => item.type === "step").length;
+  const selectedItem = items.find((item) => item.id === selected);
 
   const keys = (event: KeyboardEvent<HTMLOListElement>) => {
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -154,6 +157,20 @@ export function History({
           })}
         </ol>
       )}
+      {selectedItem ? (
+        <div className="history-selection">
+          <span className="muted small">
+            Selected: {selectedItem.type === "step" ? humanize(selectedItem.stepId) : "Run event"}
+          </span>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => document.getElementById("detail-title")?.focus()}
+          >
+            View selected step
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -205,11 +222,15 @@ export function StepDetail({
   tasks,
   graph,
   currentRevisionId,
+  runId,
+  onInspect,
 }: {
   item: HistoryItem | undefined;
   tasks: readonly TaskRow[];
   graph: RunGraph | null;
   currentRevisionId: number;
+  runId: string;
+  onInspect: () => void;
 }) {
   const { read } = useConnection();
   const revisionId = item?.events[0]?.revisionId ?? currentRevisionId;
@@ -263,9 +284,16 @@ export function StepDetail({
 
   if (item.type === "note")
     return (
-      <section className="pane detail-pane" aria-labelledby="detail-title">
+      <section
+        className="pane detail-pane"
+        aria-labelledby="detail-title"
+        onFocusCapture={onInspect}
+        onPointerDownCapture={onInspect}
+      >
         <div className="kind-label">{context}</div>
-        <h2 id="detail-title">{item.text}</h2>
+        <h2 id="detail-title" tabIndex={-1}>
+          {item.text}
+        </h2>
         {item.reason ? (
           <p>
             Reason: <q>{item.reason}</q>
@@ -290,9 +318,16 @@ export function StepDetail({
     : undefined;
   const report = item.report;
   return (
-    <section className="pane detail-pane" aria-labelledby="detail-title">
+    <section
+      className="pane detail-pane"
+      aria-labelledby="detail-title"
+      onFocusCapture={onInspect}
+      onPointerDownCapture={onInspect}
+    >
       <div className="kind-label">{context}</div>
-      <h2 id="detail-title">{humanize(item.stepId)}</h2>
+      <h2 id="detail-title" tabIndex={-1}>
+        {humanize(item.stepId)}
+      </h2>
       {who ? <div className="muted mono who">{who}</div> : null}
       <p className="hint">Definition from revision {revisionId}.</p>
       {historical && !saved ? (
@@ -325,91 +360,85 @@ export function StepDetail({
           Stopped before it finished. The process was ended and cleaned up; file changes were kept.
         </div>
       ) : null}
-      {report || item.outcome || item.state === "done" || item.state === "skipped" ? (
-        <dl className="kv">
-          {item.outcome ? (
-            <>
-              <dt>Result</dt>
-              <dd>
-                <code>{item.outcome}</code>
-                {isSystemOutcome(item.outcome) ? ` — ${outcomeLabel(item.outcome)}` : ""}
-                {item.byYou
-                  ? " — set by you"
-                  : item.state === "skipped"
-                    ? " — step skipped by its task settings"
-                    : ""}
-              </dd>
-            </>
-          ) : null}
-          {typeof manual === "string" ? (
-            <>
-              <dt>Your reason</dt>
-              <dd>{manual}</dd>
-            </>
-          ) : null}
-          {report ? (
-            <>
-              <dt>Summary</dt>
-              <dd className="prose">{report.summary}</dd>
-              {report.issue ? (
-                <>
-                  <dt>Issue</dt>
-                  <dd className="prose">{report.issue}</dd>
-                </>
-              ) : null}
-              {report.handoff ? (
-                <>
-                  <dt>Handoff</dt>
-                  <dd className="prose">{report.handoff}</dd>
-                </>
-              ) : null}
-            </>
-          ) : null}
-          {item.exitCode !== null && spec?.kind === "command" ? (
-            <>
-              <dt>Exit code</dt>
-              <dd>{item.exitCode}</dd>
-            </>
-          ) : null}
-          {item.timedOut ? (
-            <>
-              <dt>Time limit</dt>
-              <dd>Stopped because it ran too long</dd>
-            </>
-          ) : null}
-          {item.failureDetail ? (
-            <>
-              <dt>Failure</dt>
-              <dd className="prose">{item.failureDetail}</dd>
-            </>
-          ) : null}
-          {item.stderr ? (
-            <>
-              <dt>Error output</dt>
-              <dd>
-                <pre className="out">{item.stderr}</pre>
-              </dd>
-            </>
-          ) : null}
-          {thenText(item) ? (
-            <>
-              <dt>Then</dt>
-              <dd>{thenText(item)}</dd>
-            </>
-          ) : null}
-        </dl>
-      ) : null}
-      {report ? (
-        <details className="disclosure">
-          <summary>Accepted report</summary>
-          <p className="hint">
-            Acceptance doesn't finish the step; its process and streams must settle first.
-          </p>
-          <section aria-label="Accepted report JSON">
-            <pre className="raw">{JSON.stringify(redact(report), null, 2)}</pre>
-          </section>
-        </details>
-      ) : null}
+      <AttemptTabs key={item.id} item={item} runId={runId} command={spec?.kind === "command"}>
+        {report || item.outcome || item.state === "done" || item.state === "skipped" ? (
+          <dl className="kv">
+            {item.outcome ? (
+              <>
+                <dt>Result</dt>
+                <dd>
+                  <code>{item.outcome}</code>
+                  {isSystemOutcome(item.outcome) ? ` — ${outcomeLabel(item.outcome)}` : ""}
+                  {item.byYou
+                    ? " — set by you"
+                    : item.state === "skipped"
+                      ? " — step skipped by its task settings"
+                      : ""}
+                </dd>
+              </>
+            ) : null}
+            {typeof manual === "string" ? (
+              <>
+                <dt>Your reason</dt>
+                <dd>{manual}</dd>
+              </>
+            ) : null}
+            {report ? (
+              <>
+                <dt>Summary</dt>
+                <dd className="prose">{report.summary}</dd>
+                {report.issue ? (
+                  <>
+                    <dt>Issue</dt>
+                    <dd className="prose">{report.issue}</dd>
+                  </>
+                ) : null}
+                {report.handoff ? (
+                  <>
+                    <dt>Handoff</dt>
+                    <dd className="prose">{report.handoff}</dd>
+                  </>
+                ) : null}
+              </>
+            ) : null}
+            {item.exitCode !== null && spec?.kind === "command" ? (
+              <>
+                <dt>Exit code</dt>
+                <dd>{item.exitCode}</dd>
+              </>
+            ) : null}
+            {item.timedOut ? (
+              <>
+                <dt>Time limit</dt>
+                <dd>Stopped because it ran too long</dd>
+              </>
+            ) : null}
+            {item.failureDetail ? (
+              <>
+                <dt>Failure</dt>
+                <dd className="prose">{item.failureDetail}</dd>
+              </>
+            ) : null}
+            {thenText(item) ? (
+              <>
+                <dt>Then</dt>
+                <dd>{thenText(item)}</dd>
+              </>
+            ) : null}
+          </dl>
+        ) : null}
+        {report ? (
+          <details className="disclosure">
+            <summary>Accepted report</summary>
+            <p className="hint">
+              Acceptance doesn't finish the step; its process and streams must settle first.
+            </p>
+            <section aria-label="Accepted report JSON">
+              <pre className="raw">{JSON.stringify(redact(report), null, 2)}</pre>
+            </section>
+          </details>
+        ) : null}
+      </AttemptTabs>
       {spec && (spec.kind === "agent" || spec.kind === "command") ? (
         <details className="disclosure">
           <summary>Step definition</summary>
@@ -422,5 +451,83 @@ export function StepDetail({
       ) : null}
       <RawEvents item={item} />
     </section>
+  );
+}
+
+function AttemptTabs({
+  item,
+  runId,
+  command,
+  children,
+}: {
+  item: StepItem;
+  runId: string;
+  command: boolean;
+  children: ReactNode;
+}) {
+  const id = useId();
+  const [picked, setPicked] = useDraft(`${runId}:attempt:${item.id}:tab`);
+  const [openedOutput, setOpenedOutput] = useState(false);
+  const tab = picked === "report" || picked === "output" ? picked : command ? "output" : "report";
+  const select = (value: "report" | "output") => {
+    setPicked(value);
+    if (value === "output" || tab === "output") setOpenedOutput(true);
+  };
+  const keys = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const next =
+      event.key === "Home"
+        ? "report"
+        : event.key === "End"
+          ? "output"
+          : tab === "report"
+            ? "output"
+            : "report";
+    select(next);
+    event.currentTarget
+      .querySelector<HTMLButtonElement>(`#${CSS.escape(`${id}-${next}-tab`)}`)
+      ?.focus();
+  };
+  return (
+    <div className="attempt-details">
+      <div className="attempt-tabs" role="tablist" aria-label="Attempt details" onKeyDown={keys}>
+        {(["report", "output"] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            id={`${id}-${value}-tab`}
+            aria-controls={`${id}-${value}`}
+            aria-selected={tab === value}
+            tabIndex={tab === value ? 0 : -1}
+            onClick={() => select(value)}
+          >
+            {value === "report" ? "Report" : "Output"}
+          </button>
+        ))}
+      </div>
+      <div
+        id={`${id}-report`}
+        role="tabpanel"
+        aria-labelledby={`${id}-report-tab`}
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: Tab enters the Report panel to read its static result.
+        tabIndex={0}
+        hidden={tab !== "report"}
+      >
+        {children}
+        {!item.report && !item.outcome ? (
+          <p className="muted">No report or outcome has been recorded yet.</p>
+        ) : null}
+      </div>
+      <div
+        id={`${id}-output`}
+        role="tabpanel"
+        aria-labelledby={`${id}-output-tab`}
+        hidden={tab !== "output"}
+      >
+        {openedOutput || tab === "output" ? <AttemptOutput runId={runId} item={item} /> : null}
+      </div>
+    </div>
   );
 }

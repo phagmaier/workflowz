@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { describeReadFailure } from "../api.ts";
-import { useConnection } from "../connection.tsx";
 import { unsavedDrafts, useSessionRegistry } from "../editor-session.ts";
-import { ago, plural } from "../lib/format.ts";
+import { ago, plural, sentence } from "../lib/format.ts";
 import { EXAMPLES, groupWorkflows } from "../lib/workflow-edit.ts";
 import { editorHref, runHref } from "../route.ts";
 import { useRuns } from "../runs-data.tsx";
@@ -72,20 +71,17 @@ function latestRun(runs: readonly RunRow[], revisions: readonly SavedWorkflow[])
 }
 
 export function WorkflowsPage({ importing = false }: { importing?: boolean }) {
-  const { read } = useConnection();
-  const { runs } = useRuns();
+  const { runs, saved, error: runsError, refresh: refreshRuns, refreshSaved } = useRuns();
   useSessionRegistry();
-  const [saved, setSaved] = useState<SavedWorkflow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on request.
   useEffect(() => {
     let alive = true;
-    read<SavedWorkflow[]>({ op: "workflows" }).then(
-      (list) => {
+    refreshSaved().then(
+      () => {
         if (!alive) return;
-        setSaved(list);
         setError(null);
       },
       (failure: unknown) => alive && setError(describeReadFailure(failure)),
@@ -93,7 +89,7 @@ export function WorkflowsPage({ importing = false }: { importing?: boolean }) {
     return () => {
       alive = false;
     };
-  }, [read, attempt]);
+  }, [refreshSaved, attempt]);
 
   const perRevision = new Map<number, number>();
   for (const run of runs ?? [])
@@ -110,27 +106,49 @@ export function WorkflowsPage({ importing = false }: { importing?: boolean }) {
       }
       pageKey={importing ? "import-workflow" : "workflows"}
     >
-      <div className="page-head">
-        <h1 tabIndex={-1}>Workflows</h1>
-        <p className="lede">
-          Saved workflows. Open one to check it, edit it or create a run. Every save is kept as a
-          numbered revision.
-        </p>
+      <div className="page-head workflows-page-head">
+        <div>
+          <h1 tabIndex={-1}>Workflows</h1>
+          <p className="lede">
+            Saved workflows. Open one to check it, edit it or create a run. Every save is kept as a
+            numbered revision.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() => {
+            setAttempt(attempt + 1);
+            refreshRuns();
+          }}
+        >
+          {error ? "Try again now" : "Refresh workflows"}
+        </button>
       </div>
       <Drafts />
+      {error ? (
+        <div className="state-panel workflows-read-error" role="alert">
+          <h2>
+            {groups === null ? "Workflows couldn't be loaded" : "Workflows couldn't be refreshed"}
+          </h2>
+          <p>
+            {sentence(error)}
+            {groups !== null ? " The workflows below may be out of date." : ""}
+          </p>
+        </div>
+      ) : null}
+      {runsError && !error ? (
+        <p className="inline-alert" role="alert">
+          Run status couldn't be refreshed. {sentence(runsError)} Latest run details may be out of
+          date.
+        </p>
+      ) : null}
       {groups === null ? (
-        error ? (
-          <div className="state-panel" role="alert">
-            <p>{error}</p>
-            <button type="button" className="btn" onClick={() => setAttempt(attempt + 1)}>
-              Try again now
-            </button>
-          </div>
-        ) : (
+        !error ? (
           <p className="muted" role="status">
             <span className="spinner" aria-hidden="true" /> Loading workflows…
           </p>
-        )
+        ) : null
       ) : groups.length === 0 ? (
         <div className="state-panel">
           <h2>No saved workflows yet</h2>
@@ -193,6 +211,10 @@ export function WorkflowsPage({ importing = false }: { importing?: boolean }) {
                             {` · ${plural(group.runs, "run")}`}
                           </span>
                         </a>
+                      ) : runs === null ? (
+                        <span className="muted">
+                          {runsError ? "Run status unavailable" : "Loading run status…"}
+                        </span>
                       ) : (
                         <span className="muted">No runs yet</span>
                       )}

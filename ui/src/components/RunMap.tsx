@@ -98,7 +98,7 @@ export function RunMap({
     <div className="map-split">
       <section className="pane map-pane" aria-label="Workflow map">
         <div className="pane-head">
-          <h2>Map</h2>
+          <h2>Execution path</h2>
           <span className="muted small">{caption}</span>
         </div>
         <div className="map-scroll">
@@ -221,7 +221,7 @@ export function RunMap({
           <span>
             <i className="lg shared" /> shared rule
           </span>
-          <span>“blocked → pause” lists results that pause or retry</span>
+          <span>Outcomes that pause or retry appear on their step.</span>
           <span>Technical failures pause unless a rule says otherwise.</span>
         </p>
       </section>
@@ -247,7 +247,7 @@ export function RunMap({
         ) : null}
         {(graph.transitions[focus] ?? []).filter((t) => !t.outcome.startsWith("system.")).length ? (
           <>
-            <h3 className="h3">What happens after each result</h3>
+            <h3 className="h3">Outcomes</h3>
             <ul className="rules">
               {(graph.transitions[focus] ?? [])
                 .filter((t) => !t.outcome.startsWith("system."))

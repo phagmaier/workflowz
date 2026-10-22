@@ -7,7 +7,7 @@ import { runHref } from "../route.ts";
 import type { RunData } from "../run-data.ts";
 import { useRuns } from "../runs-data.tsx";
 import type { BrowserRequest, BrowserRunStatus } from "../types.ts";
-import { Feedback, type FeedbackState, forgetDraft, useDraft } from "./ui.tsx";
+import { Feedback, type FeedbackState, forgetDraft, rememberDraft, useDraft } from "./ui.tsx";
 
 type Control = Extract<BrowserRequest, { expectedEventId: number }>;
 export interface LastResult {
@@ -222,6 +222,7 @@ function Decision({
   const [outcome, setOutcome] = useDraft(`${runId}:skip-outcome`);
   const [target, setTarget] = useDraft(`${runId}:jump-target`);
   const [taskValue, setTask] = useDraft(`${runId}:task`);
+  const editingVersion = useRef(0);
   const cursor = status.run.cursorStepId;
   const step = humanize(cursor);
   const edit = data.runEdit;
@@ -241,7 +242,7 @@ function Decision({
   const options: { key: Choice; title: string; text: string }[] = [
     {
       key: "resume",
-      title: again ? `Resume — run ${step} again` : `Resume — continue with ${step}`,
+      title: again ? "Run this step again" : `Continue with ${step}`,
       text: again
         ? `${step} starts again from the beginning. Anything it already changed stays changed.`
         : `The run continues from ${step}.`,
@@ -256,13 +257,13 @@ function Decision({
   if (jumpTargets.length)
     options.push({
       key: "jump",
-      title: "Go to a different step",
+      title: "Continue from another step",
       text: "Choose where the run continues. Nothing runs now; the run stays paused.",
     });
   if (openTasks.length)
     options.push({
       key: "complete-task",
-      title: "Mark a task done",
+      title: "Mark this task done",
       text: "Records a task as done without running its remaining steps. The run stays paused.",
     });
   options.push({
@@ -288,8 +289,10 @@ function Decision({
   const keys = ["resume", "skip", "jump", "complete-task"];
   const submit = async (event: FormEvent<HTMLFormElement>, key: Choice) => {
     event.preventDefault();
-    const reason = reasonOf(event.currentTarget);
+    const form = event.currentTarget;
+    const reason = reasonOf(form);
     if (!reason) return;
+    const sentVersion = editingVersion.current;
     let ok = false;
     if (key === "resume")
       ok = await control.send(
@@ -328,9 +331,16 @@ function Decision({
         );
       }
     }
-    if (ok) {
+    if (ok && sentVersion === editingVersion.current) {
       forgetDraft(`${runId}:reason:${key}`);
-      setChoice("");
+      if (key !== "resume") rememberDraft(`${runId}:reason:resume`, reason);
+      setChoice(key === "resume" ? "" : "resume");
+      if (key !== "resume")
+        requestAnimationFrame(() => {
+          // Inspection stays available during Apply. Never pull focus away from that work.
+          if (document.activeElement === document.body || form.contains(document.activeElement))
+            document.getElementById(`${runId}-reason-resume`)?.focus();
+        });
     }
   };
   const feedback = (key: string) =>
@@ -339,12 +349,12 @@ function Decision({
 
   return (
     <>
-      {keys.includes(control.result.key) && !choice ? (
+      {keys.includes(control.result.key) && control.result.key !== choice ? (
         <p className="result-line">
           <Feedback value={control.result.value} />
         </p>
       ) : null}
-      <fieldset className="choices">
+      <fieldset className="choices" onChangeCapture={() => editingVersion.current++}>
         <legend>What should happen next?</legend>
         {!edit && data.runEditError ? (
           <p className="inline-alert">
@@ -475,9 +485,9 @@ function Decision({
                       {
                         {
                           resume: "Resume run",
-                          skip: "Record result",
-                          jump: "Move the run",
-                          "complete-task": "Mark done",
+                          skip: "Apply",
+                          jump: "Apply",
+                          "complete-task": "Apply",
                         }[option.key]
                       }
                     </button>

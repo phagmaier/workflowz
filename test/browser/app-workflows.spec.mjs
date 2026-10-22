@@ -69,3 +69,62 @@ test("sidebar lists workflows and run groups; a dropped file waits for a folder 
   await shot(page, "w3-workflows-phone");
   await policy();
 });
+
+test("workflow reads retain retry focus, show stale rows on failure and refresh saved revisions", async ({
+  page,
+  app,
+}) => {
+  await app.seed({ workflowText: WORKFLOW });
+  let fail = true;
+  await page.route("**/ui/api", async (route) => {
+    if (route.request().postDataJSON()?.op === "workflows" && fail)
+      return route.fulfill({ status: 503, json: { error: "Temporary workflow read failure" } });
+    return route.continue();
+  });
+  await pairApp(page, app, "#/workflows");
+  const main = page.getByRole("main");
+  await expect(main.getByRole("alert")).toContainText("Temporary workflow read failure");
+  fail = false;
+  await main.getByRole("button", { name: "Try again now" }).click();
+  const row = main.getByRole("row", { name: /Implement and review/ });
+  await expect(row).toBeVisible();
+  const refresh = main.getByRole("button", { name: "Refresh workflows" });
+  await expect(refresh).toBeFocused();
+  fail = true;
+  await refresh.click();
+  await expect(main.getByRole("alert")).toContainText("may be out of date");
+  await expect(row).toBeVisible();
+  await expect(main.getByRole("button", { name: "Try again now" })).toBeFocused();
+  await page.setViewportSize({ width: 320, height: 800 });
+  await noSideScroll(page);
+  await shot(page, "review-workflows-stale-320");
+  fail = false;
+  await app.request({
+    op: "import",
+    workflowText: WORKFLOW.replace("Implement and review", "A newly saved workflow"),
+    workflowDir: app.root,
+  });
+  await main.getByRole("button", { name: "Try again now" }).click();
+  await expect(main.getByRole("row", { name: /A newly saved workflow/ })).toBeVisible();
+  await expect(refresh).toBeFocused();
+  await noSideScroll(page);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(
+    page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", {
+      name: "A newly saved workflow",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await shot(page, "review-workflows-refreshed-1440");
+  // Import navigation keeps this page mounted. Its table must follow the same saved list
+  // as the sidebar when another workflow has been saved elsewhere.
+  await app.request({
+    op: "import",
+    workflowText: WORKFLOW.replace("Implement and review", "Saved while browsing"),
+    workflowDir: app.root,
+  });
+  await page.getByRole("link", { name: "Import file…", exact: true }).click();
+  await expect(main.getByRole("row", { name: /Saved while browsing/ })).toBeVisible();
+  await expect(page.getByLabel("Workflow YAML file")).toBeFocused();
+  expect(app.children).toEqual([]);
+});

@@ -50,9 +50,36 @@
   last known rows/counts with an out-of-date notice and a retry action, including when the last
   successful list was empty. Tables become cards with two columns on tablets and stack into
   labelled rows on phones, keeping long workflow names and run identifiers readable.
-- Remaining UI work: run details needs its approved status, next-action, history/output and
-  execution-path presentation. Saved/new-workflow links open Form; Graph remains the first view
-  choice and the import landing view.
+- Slice 5 (2026-10-21): Run details uses the Workbench status overview and fact strip, explicit
+  execution/paused-run controls, a history workspace and a read-only execution-path map. The
+  ready view previews the authored steps, Outcome destinations and imported tasks. Run metadata,
+  imported task bodies and historical attention stay in Run information. History selections
+  retain their immutable revision definitions; the map links back to the selected step in history.
+- Attempts have keyboard-accessible Report / Output tabs. Commands open on Output; agents open
+  on Report. Output reads at most 64 KiB of saved standard output and available error diagnostics,
+  with distinct loading, empty, unavailable and failed-read states. This is saved capture from
+  settled invocations, not live streaming or access to private log files. Command stderr now uses
+  the same bounded diagnostic excerpt as agent stderr. No process/routing behavior changes.
+- Paused choices use plain labels and Apply for manual results, another step or task completion.
+  Apply leaves the run paused, selects Resume and carries the given reason forward for review;
+  Resume remains a separate explicit action. Successful delayed replies preserve newer choices
+  and reasons. Failed requests keep the form and never resend themselves. On smaller screens,
+  history and details stack, with View selected step moving keyboard focus to the details.
+- Final whole-interface review (2026-10-21): the completed Workbench screens were reviewed
+  together for correctness, usability, accessibility and visual consistency. Workflows now has
+  a persistent Refresh/retry action, keeps saved rows visible after failed refreshes, distinguishes
+  unavailable run status from no runs, and updates the sidebar's saved revisions on refresh.
+  Recovering an initial run read keeps retry focus unless the owner has moved elsewhere. Status
+  changes in run details refresh the sidebar counts without waiting for its next regular poll.
+- Interacting with an attempt's details pins that history selection through background progress.
+  Report/Output choices are remembered per attempt for this page load, including returning from
+  Map. Report's static result panel is reachable by Tab. Output identifies stdout/diagnostic
+  capture limits outside the output scrollers and shows the latest settled invocation's
+  diagnostics; a clean correction no longer inherits earlier stderr. Earlier invocation evidence
+  stays in Technical details.
+- The main Workbench screens and final interface review are complete. The new user guide remains
+  separate future work. Saved/new-workflow links open Form; Graph remains the first view choice
+  and import view.
 - Graph limitations: manual placement is deferred. Large graphs use local scrolling and zoom;
   Fit can make labels small. On narrow screens, settings stack below the graph. Technical
   failure rules and policies remain accessible in step settings and Rules & limits; the graph
@@ -76,6 +103,21 @@
   Desktop tables, tablet cards and phone layouts were inspected visually; keyboard checks and
   no-page-overflow checks pass from 320 to 1440 px, including both sides of the responsive
   breakpoints. Refresh and retry share one button to retain keyboard focus.
+- Slice 5 verification: typecheck and lint pass (the existing CSS warning remains), with 856
+  standard tests and 54 offline browser checks passing. Full suites ran sequentially with
+  four-CPU affinity. Coverage includes output read authority/scope/UTF-8 bounds, command stderr,
+  inert output text, late replies, retained tab contents, retry focus, Apply versus Resume,
+  newer drafts and inspection focus during pending actions, immutable historical definitions,
+  stale reads and interrupted recovery guidance. Ready, paused, output and map screenshots were
+  inspected on desktop, tablet and phone; keyboard and overflow checks cover 320–1440 px.
+- Final review verification: typecheck and lint pass (the existing CSS specificity warning
+  remains), with 857 standard tests and 58 offline browser checks passing. Seven focused
+  workflow/import/run-navigation checks also pass on the final shared workflow list. Full suites
+  ran sequentially with four-CPU affinity. Fresh desktop, tablet and phone screenshots were
+  inspected across Workflows/import, Graph/Form/checker, grouped Runs, ready/paused/completed
+  details, Output and Map. Keyboard/focus and overflow checks cover 320–1440 px. Documentation
+  links and the narrow output request example were checked. Browser verification is Chromium
+  only; agent execution uses offline fixtures, without live provider calls.
 - The target form is a desktop app (Electron proposed). Do not build the desktop shell or change
   daemon lifecycle yet.
 - The full earlier brief, slice logs and decision history are archived in
@@ -128,10 +170,9 @@ see what happened, without learning internal field names or hunting for controls
 ## Implementation sequence
 
 Continue the browser-served React UI one complete slice at a time, following the checks in
-[AGENTS.md](AGENTS.md). Graph and Form authoring with their shared checker and the grouped Runs
-page are built; next is run details.
-Complete the remaining approved editor, Runs and run-detail interactions before rewriting the
-user guide.
+[AGENTS.md](AGENTS.md). Graph and Form authoring with their shared checker, the grouped Runs page
+and run details are built and have completed the final interface review. The new user guide is
+separate future work and should describe the completed behavior.
 
 Bundled Manrope/JetBrains Mono fonts and the required CSP change remain undecided and do not
 block layout work. Use system fonts until that decision is resolved. Desktop packaging,

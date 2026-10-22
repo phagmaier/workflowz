@@ -43,6 +43,8 @@ export interface StepItem extends Base {
   exitCode: number | null;
   timedOut: boolean;
   stderr: string | null;
+  stdoutTruncated: boolean;
+  stderrTruncated: boolean;
   failureDetail: string | null;
 }
 export interface NoteItem extends Base {
@@ -122,6 +124,8 @@ export function buildHistory(events: readonly EventRow[], reports: readonly Repo
       exitCode: null,
       timedOut: false,
       stderr: null,
+      stdoutTruncated: false,
+      stderrTruncated: false,
       failureDetail: null,
     };
     items.push(item);
@@ -226,11 +230,15 @@ export function buildHistory(events: readonly EventRow[], reports: readonly Repo
       case "invocation_settled":
         if (owner) {
           owner.events.push(event);
-          if (typeof data.exitCode === "number") owner.exitCode = data.exitCode;
-          if (data.timedOut === true) owner.timedOut = true;
-          const diagnostics = data.diagnostics as { stderr?: unknown } | undefined;
+          owner.exitCode = typeof data.exitCode === "number" ? data.exitCode : null;
+          owner.timedOut = data.timedOut === true;
+          const diagnostics = data.diagnostics as
+            | { stderr?: unknown; stdoutTruncated?: unknown; stderrTruncated?: unknown }
+            | undefined;
           const stderr = text(diagnostics?.stderr);
-          if (stderr?.trim()) owner.stderr = stderr;
+          owner.stderr = stderr?.trim() ? stderr : null;
+          owner.stdoutTruncated = diagnostics?.stdoutTruncated === true;
+          owner.stderrTruncated = diagnostics?.stderrTruncated === true;
         }
         break;
       case "attempt_settled":

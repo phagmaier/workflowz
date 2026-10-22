@@ -26,7 +26,7 @@ test("choose what happens next on a phone; stale choices change nothing and are 
   await shot(page, "m1-paused");
 
   const choices = page.getByRole("group", { name: "What should happen next?" });
-  await choices.getByRole("radio", { name: /Go to a different step/ }).check();
+  await choices.getByRole("radio", { name: /Continue from another step/ }).check();
   const target = page.getByLabel("Continue at", { exact: true });
   // Only task-compatible steps are offered.
   await expect(target.locator("option")).toHaveText(["Choose a step…", "Review", "Finish", "Done"]);
@@ -47,7 +47,7 @@ test("choose what happens next on a phone; stale choices change nothing and are 
     if (route.request().postDataJSON()?.op === "override") await held;
     await route.continue();
   });
-  const record = page.getByRole("button", { name: "Record result", exact: true });
+  const record = page.getByRole("button", { name: "Apply", exact: true });
   await record.click();
   await expect(choices.getByRole("status")).toContainText("Recording…");
   await expect(record).toBeDisabled();

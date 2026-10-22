@@ -222,7 +222,7 @@ test.describe("task overrides", () => {
     const before = await app.status(runId);
     const reports = await app.request({ op: "reports", runId });
     await page.getByText("Run information", { exact: true }).click();
-    await expect(page.locator(".kv").first()).toContainText(app.root);
+    await expect(page.locator(".run-information .kv").first()).toContainText(app.root);
     await page.getByText("First task · active · current", { exact: true }).click();
     await expect(page.getByRole("region", { name: "Imported tasks" })).toContainText(body);
     await expect(
@@ -235,10 +235,10 @@ test.describe("task overrides", () => {
     await noSideScroll(page);
     await shot(page, "migration-run-information-mobile");
     const choices = page.getByRole("group", { name: "What should happen next?" });
-    await choices.getByRole("radio", { name: /Go to a different step/ }).check();
+    await choices.getByRole("radio", { name: /Continue from another step/ }).check();
     await page.getByLabel("Continue at", { exact: true }).selectOption("review");
     await page.getByLabel(/^Reason \(saved/).fill("Choose review");
-    await page.getByRole("button", { name: "Move the run", exact: true }).click();
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
     await expect(page.getByRole("heading", { level: 1 })).toContainText("next step is Review");
     for (const step of ["Review", "Finish"]) {
       await choices
@@ -246,7 +246,7 @@ test.describe("task overrides", () => {
         .check();
       await page.getByLabel(`${step}'s result`, { exact: true }).selectOption("complete");
       await page.getByLabel(/^Reason \(saved/).fill(`Skip ${step} without running it`);
-      await page.getByRole("button", { name: "Record result", exact: true }).click();
+      await page.getByRole("button", { name: "Apply", exact: true }).click();
       await expect(page.getByRole("heading", { level: 1 })).toContainText(
         step === "Review" ? "next step is Finish" : "next step is Pick",
       );
@@ -256,11 +256,11 @@ test.describe("task overrides", () => {
       expect(state.run.activeTaskId).toBe(before.run.activeTaskId);
       expect(await app.request({ op: "reports", runId })).toEqual(reports);
     }
-    await choices.getByRole("radio", { name: /Mark a task done/ }).check();
+    await choices.getByRole("radio", { name: /Mark this task done/ }).check();
     const other = before.tasks.find((t) => t.taskId !== before.run.activeTaskId);
     await page.getByLabel("Task", { exact: true }).selectOption(other.taskId);
     await page.getByLabel(/^Reason \(saved/).fill("Accept only the other task");
-    await page.getByRole("button", { name: "Mark done", exact: true }).click();
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "Marked" })).toContainText(
       "Still paused",
     );
