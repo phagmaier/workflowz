@@ -2,6 +2,9 @@
 
 Start at [the project README](../README.md). Current work and finding status live in
 [IMPROVEMENTS.md](../IMPROVEMENTS.md); contributor workflow lives in [AGENTS.md](../AGENTS.md).
+The working beta is complete. A general continuation request starts from that local backlog;
+GitHub issue setup is not required. Read only the current references needed for the selected
+finding, then consult its historical evidence for context.
 
 ## Current product
 
@@ -11,7 +14,8 @@ Start at [the project README](../README.md). Current work and finding status liv
 
 ## Technical references
 
-Verify affected behavior against current source/tests when making changes.
+These are active implemented contracts. Verify affected behavior against current source/tests
+when making changes. Phase numbers retained in them identify completed implementation history.
 
 - [Product/runtime contract](reference/spec.md)
 - [Architecture, authority, lifecycle and recovery](reference/architecture.md)

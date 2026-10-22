@@ -47,7 +47,7 @@ npm run test:browser
 ```
 
 The command builds the real application and runs bounded Chromium scenarios for the React
-interface (`test/browser/app-*.spec.mjs`), sequentially,
+interface (`test/browser/*.spec.mjs`, including the owner-walkthrough regression), sequentially,
 with no test retries. It never installs packages/browsers or invokes a provider. A missing browser
 fails with provisioning guidance. `npm run check` remains browser-independent and offline.
 
@@ -120,6 +120,7 @@ redaction cannot identify every secret loaded by harnesses or tools.
 | `test/browser/` | Disposable daemon/Chromium scenarios |
 | `examples/` | Valid sample definitions and illustrative task inputs |
 | `docs/` | User/design guides, technical references and archived evaluations/history |
+| `.cursor/skills/` | Bundled third-party guidance; use only when relevant to the selected task |
 
 `src/architecture.test.ts` verifies import boundaries. SQLite uses built-in `node:sqlite`; core
 unit/integration tests use `node:test`. Dependency versions are authoritative in `package.json`

@@ -6,14 +6,33 @@ For structural codebase exploration, use the installed `codebase-memory` skill.
 
 ## Current work
 
-Refine the existing Workflowz Workbench using the owner's real-use feedback and the completed
-multi-harness evaluation. Read `README.md`, then `IMPROVEMENTS.md`. Follow the current user
-request to choose the next slice; the backlog is not an instruction to implement everything.
+The working beta is complete. Refine the existing Workflowz Workbench using the owner's
+real-use feedback and the completed multi-harness evaluation. Read `README.md`, then
+`IMPROVEMENTS.md`. Work locally from that backlog; GitHub is primarily repository storage.
+Issues, triage labels, PRs and new planning files are not prerequisites for improvement work.
 The completed sample app and one-off live exercise scaffolding were deliberately removed.
+
+### Starting or continuing work
+
+- Follow the current request. For a general request to continue improving the app, resume an
+  unfinished slice recorded in the backlog; otherwise select the first actionable open finding
+  in priority/table order. Reproduce it before accepting the proposed remedy. Do not ask the
+  owner to choose again when the request and backlog already establish the next step.
+- Read the selected finding's evidence, relevant design/guide sections and affected technical
+  references. Consult history only when it answers a specific question; historical approvals
+  and unfinished phases do not assign new work.
+- Implement one complete, bounded slice at a time. For a planning-only request, record the
+  proposal, acceptance checks and unresolved decisions under that finding in IMPROVEMENTS.md.
+  Ask only when a missing owner decision materially changes behavior or scope; make ordinary
+  implementation choices yourself.
+- If asked to work through several findings, continue after each verified slice within that
+  request. A blocked finding records its blocker; other independent authorized work can continue.
+  Before ending, leave the current checkpoint, checks, remaining limits and exact next action
+  in IMPROVEMENTS.md so a fresh agent can resume without the prior conversation.
 
 Documentation roles:
 
-- `IMPROVEMENTS.md`: single active backlog, finding status and current checkpoint.
+- `IMPROVEMENTS.md`: single active local backlog, finding plans/status and current checkpoint.
 - `docs/DESIGN.md`: approved behavior and design decisions; consult for the selected UI slice.
 - `docs/USER_GUIDE.md`: implemented user-facing operation; update when behavior changes.
 - `docs/reference/`: runtime/schema/adapter contracts and development checks; verify against current source/tests.
@@ -29,8 +48,10 @@ Documentation roles:
    Preserve input/focus and keep feedback beside the action that caused it.
 4. Update the finding in IMPROVEMENTS.md with status, the actual change and verification.
    Update `docs/DESIGN.md` for behavior/decision changes and `docs/USER_GUIDE.md` for operating changes.
-5. Report the result, checks and remaining limits. Keep one active backlog; avoid new root
-   plans, handoffs, status files or session transcripts for routine work.
+5. Mark a finding complete only when its acceptance checks pass; distinguish implemented work
+   from anything still awaiting owner validation. Report the result, checks and remaining limits.
+   Keep one active backlog; avoid new root plans, handoffs, status files or session transcripts
+   for routine work.
 
 Use existing fake adapters and private disposable state for product work. UI changes need
 applicable offline browser, visual, keyboard and responsive checks, alongside typecheck,
@@ -55,6 +76,7 @@ remain deferred. There is no authorization for an engine rewrite or speculative 
 - Arbitrary commands and unrestricted harnesses remain permitted. Explain consequences without inventing isolation, rollback or extra mandatory gates.
 - Keep dependencies project-local; preserve global harness installations/configuration. Never expose credentials, report tokens, pairing codes or private runtime artifacts.
 
-Use current official documentation for version-sensitive integrations. Update the affected
+Use Context7 when available for current library/CLI integration documentation, falling back
+to official documentation when needed. Check the project's pinned versions. Update the affected
 technical reference if a contract changes. Preserve lifecycle/recovery tests; do not weaken
 them to fit a UI change. Treat old commit/push approvals as historical, not current task scope.

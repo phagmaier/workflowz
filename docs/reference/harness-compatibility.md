@@ -1,6 +1,6 @@
 # Harness compatibility reference
 
-> Archived for the UI-focused reset on 2026-10-20. This is reference/history, not the current work plan or agent instructions. Use [DESIGN.md](../DESIGN.md) and [AGENTS.md](../../AGENTS.md) for active direction.
+> Current implemented reference. Select improvement work from [IMPROVEMENTS.md](../../IMPROVEMENTS.md); follow [AGENTS.md](../../AGENTS.md) for the working loop. Historical phase numbers and verification results are evidence, not pending assignments.
 
 This describes the implemented adapters. Version numbers and provider-backed results below
 are recorded evidence from MVP development, not a fresh inspection of installed CLIs or accounts.

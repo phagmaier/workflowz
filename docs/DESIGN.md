@@ -2,7 +2,7 @@
 
 ## Status
 
-The approved Workbench (direction C) is implemented, including Graph/Form authoring, the
+The working beta's approved Workbench (direction C) is implemented, including Graph/Form authoring, the
 checker, grouped Runs, results/history/map, paused decisions and the user guide. The owner
 walkthrough and realistic multi-harness evaluation are complete. Current work is refining
 the product from [IMPROVEMENTS.md](../IMPROVEMENTS.md), one selected slice at a time.

@@ -577,6 +577,10 @@ pass the same `--state-dir` used to start it.
 
 ## Current limitations
 
+Known usability gripes and proposed improvements are tracked in
+[IMPROVEMENTS.md](../IMPROVEMENTS.md). This guide describes the implemented behavior;
+an open suggestion there is not yet a feature.
+
 This release is the browser-served Workbench. Desktop packaging, automatic service
 lifecycle, the operating-system project-folder picker, notifications and desktop
 quit/reopen behavior remain future work. System fonts are used; bundled fonts and

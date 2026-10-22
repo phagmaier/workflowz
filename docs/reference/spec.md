@@ -1,10 +1,10 @@
 # Product and Behavior Specification — Agent Workflow Runner
 
-> Archived for the UI-focused reset on 2026-10-20. This is reference/history, not the current work plan or agent instructions. Use [DESIGN.md](../DESIGN.md) and [AGENTS.md](../../AGENTS.md) for active direction.
+> Current implemented reference. Select improvement work from [IMPROVEMENTS.md](../../IMPROVEMENTS.md); follow [AGENTS.md](../../AGENTS.md) for the working loop. Historical phase numbers and verification results are evidence, not pending assignments.
 
 **Contract:** Implemented workflow v1
 
-**Status:** Working beta; usability refinement follows the [active plan](../DESIGN.md).
+**Status:** Working beta complete; refinement follows the [local improvement backlog](../../IMPROVEMENTS.md) and [approved design](../DESIGN.md).
 
 **Related:** [Architecture](architecture.md) · [Schema reference](schema-v1.md) · [Example workflow](../../examples/overnight.yaml)
 
@@ -315,9 +315,9 @@ No global retry-budget field, provider call, automatic recovery replay or workfl
 ## 7. UI requirements
 
 
-**Workflow editor:** explicit project/instruction/checklist paths, task preview, immutable revision save/load, stage list/connectors, stage details (type, harness, model, prompts, cwd, outcomes), outcome-to-next-step controls, global/tag/step policies with effective-transition preview, canonical YAML validation and ready-run creation. No filesystem picker/browsing or named-workflow CRUD.
+**Workflow editor:** Graph and Form views of one shared draft, a contextual Checker, explicit project/instruction/checklist paths, task preview, immutable revision save/load, stage details (type, harness, model, prompts, cwd, outcomes), outcome-to-next-step controls, global/tag/step policies with effective-transition preview, canonical YAML validation and ready-run creation. Graph placement is automatic. No filesystem picker/browsing or named-workflow CRUD.
 
-**Runner dashboard:** run status; active task/stage and harness; progress when known; paginated events, report details and attention; pause/stop/resume; paused revision/manual intervention. Inspect raw bounded logs locally using invocation paths; no browser log tail. Per-task settings and interrupted recovery remain CLI-only.
+**Runner dashboard:** grouped Runs; run status, active task/stage and harness; progress when known; History with Report/Output tabs and bounded saved capture; read-only execution Map; paginated events and attention; pause/stop/resume; paused revision/manual intervention. Raw bounded log files remain local; saved Output is not a live log tail. Per-task settings and interrupted recovery remain CLI-only. The [user guide](../USER_GUIDE.md) describes current operation.
 
 The browser UI is a client; closing the tab does not terminate the runner. UI is served locally, with no required cloud account. Prefer localhost binding and no open remote administrative interface by default.
 
@@ -351,7 +351,7 @@ This is the canonical scope boundary; "deferred" is not a promise to implement.
 | Interrupted recovery | CLI/service only; no browser recovery decisions. Resolve processes, choose a disposition, then separately resume. No automatic replay. |
 | Extensions | No dynamic third-party plugin loading/marketplace. In-tree adapter additions and their conformance suite are supported. No nested subworkflow interpreter or arbitrary transition code/expressions/dynamic running-graph rewriting. |
 | Reporting | No stdout/file/structured-final-output report fallback. `wf report` is mandatory; one bounded exact-session correction is not an unlimited retry policy. |
-| Presentation/integrations | No polished drag/drop graph canvas, notifications/integrations, cloud sync, enterprise RBAC or autoscaling. AI-generated workflows without review are outside scope. |
+| Presentation/integrations | No manual node placement/drag-and-drop graph positioning, desktop notifications/integrations, cloud sync, enterprise RBAC or autoscaling. AI-generated workflows without review are outside scope. |
 | Isolation (non-goal) | No sandbox/isolation or guaranteed rollback claim. Unrestricted harnesses and explicit commands can modify any user-accessible files; escaped descendants and arbitrary external effects remain outside process-group guarantees. |
 
 **Rationale (Phase 9.5):** These boundaries reconcile the early design sketches
@@ -380,4 +380,4 @@ report, CLI/RPC or recovery behavior change.
 
 ## 10. Engineering choices explicitly delegated to implementation
 
-Use boring, widely supported libraries. Keep database schema migrations modest and testable. Choose exact package versions after checking the installed Node and harness CLI versions. Favor real process-boundary tests with a fake harness over elaborate in-process mocks only. The implementation baseline is complete; follow the active refinement plan in `todo.md`.
+Use boring, widely supported libraries. Keep database schema migrations modest and testable. Choose exact package versions after checking the installed Node and harness CLI versions. Favor real process-boundary tests with a fake harness over elaborate in-process mocks only. The implementation baseline is complete; select refinement work from [IMPROVEMENTS.md](../../IMPROVEMENTS.md) and follow [AGENTS.md](../../AGENTS.md).

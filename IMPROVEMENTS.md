@@ -1,14 +1,36 @@
 # Workflowz improvement backlog
 
-**Checkpoint — 2026-10-22:** the Workbench, owner walkthrough and realistic five-harness trial
-are complete. We are improving the existing product from those findings. Cleanup removed
-the disposable lending app, old live-run setup scripts and rejected prototype assets.
-The useful reports/evidence live under [docs/evaluations/](docs/README.md#evaluations).
-No new product-improvement slice has started.
+**Checkpoint — 2026-10-22:** the working beta, owner walkthrough and realistic five-harness
+trial are complete. Documentation now directs local refinement from this backlog; stale
+pre-redesign instructions and moved reference paths have been corrected. The disposable
+lending app, live-run setup scripts and rejected prototype assets are retired. Useful
+reports/evidence remain under [docs/evaluations/](docs/README.md#evaluations).
+No product-improvement slice is in progress. **Next: OWNER-1**, reproduce completed-run Map
+discoverability using the existing offline fixtures, then improve that navigation.
 
-This is the single active backlog. Select work using the current user request, then update
-its row with status, implementation and verification. Suggested solutions below are inputs
-for a small design/implementation slice, not blanket approval for every feature.
+Documentation audit verification: build and all 10 CLI validation tests pass, including all
+six example workflows. Local Markdown links/anchors resolve. Lint passes with an existing
+CSS specificity warning and informational notices. No application behavior changed; the
+full runtime/browser suites and live providers were not rerun for this documentation slice.
+
+This is the single active local backlog, including small plans and continuation notes.
+GitHub is primarily repository storage; tickets, labels and PRs are optional when specifically
+useful or requested. Keep work selection and status here so a fresh agent needs no issue queue
+or prior conversation. Suggested remedies remain proposals until checked against current behavior.
+
+## Selecting and recording a slice
+
+Follow a specific user request first. A general “continue improving” request means resume an
+unfinished slice here, otherwise take the first actionable open finding in priority/table order.
+Read its linked evidence, reproduce current behavior offline and consult the relevant design
+and runtime contracts. If blocked, record why and choose independent work within the request.
+
+Update the row as work moves through investigation/planning, implementation and verification.
+Keep any longer plan directly below the table under its finding ID: observed behavior,
+bounded proposal, acceptance checks and remaining decisions. Planning alone does not close a
+finding. “Implemented; awaiting owner validation” is distinct from complete, especially OWNER-1.
+Before ending, update the checkpoint with the selected ID, actual changes, checks/results,
+remaining limits and exact next action. Use [AGENTS.md](AGENTS.md) for the working loop.
 
 ## Next improvements
 

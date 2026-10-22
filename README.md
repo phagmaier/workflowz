@@ -4,7 +4,7 @@ A local runner for user-defined coding-agent and command workflows. You choose s
 outcome rules; Workflowz executes them sequentially and saves progress/history in SQLite.
 The browser Workbench and `wf` CLI control the same daemon.
 
-**Current phase: refine Workflowz from real use.** The Workbench redesign, owner walkthrough
+**Current phase: improve the completed working beta.** The Workbench redesign, owner walkthrough
 and five-harness equipment-lending trial are complete. The disposable sample app has been
 removed; its findings and public evidence are archived. Start with
 [IMPROVEMENTS.md](IMPROVEMENTS.md) for current priorities and what we learned.
@@ -54,11 +54,20 @@ An existing state directory must be owned by you with private permissions (`0700
 [the user guide](docs/USER_GUIDE.md) for authoring, running, results and recovery.
 Agents can modify user-accessible files; stopping does not undo their changes.
 
-## Improvement workflow
+## Continuing with an agent
 
-Choose one finding from IMPROVEMENTS.md, reproduce current behavior, implement a complete
-small slice, and verify the affected flow. Update that finding's status/evidence; update
-the design or guide only when behavior changes. Historical reports are evidence, not a new
-assignment or permission to rerun providers. Keep temporary experiments outside the repository
-and preserve only useful findings/regressions afterward. `node_modules/` and `dist/` are
-ignored development/install output, not documentation or archived evidence.
+[AGENTS.md](AGENTS.md) is the shared instruction entry point; `CLAUDE.md` links to it.
+Read this README, then [IMPROVEMENTS.md](IMPROVEMENTS.md) for current gripes, priorities,
+proposed remedies and the latest checkpoint. Work is local; GitHub stores the repository.
+There is no required issue, label or PR workflow.
+
+A fresh agent can start with: **“Continue improving Workflowz from IMPROVEMENTS.md.”**
+It should resume an unfinished slice or choose the first actionable open finding, reproduce
+current behavior, implement and verify a complete small change, then update that finding and
+the checkpoint. For planning, ask it to plan the next finding; the proposal belongs beside
+that finding in the same backlog. See AGENTS.md for the full working loop and runtime boundaries.
+
+Use [docs/README.md](docs/README.md) to find the relevant current guide or contract. Historical
+reports supply evidence, not assignments or permission to rerun providers. Keep disposable
+experiments outside the repository and retain useful findings/regressions after cleanup.
+`node_modules/` and `dist/` are ignored development/install output.

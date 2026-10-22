@@ -1,6 +1,6 @@
 # Technical Architecture — Agent Workflow Runner
 
-> Archived for the UI-focused reset on 2026-10-20. This is reference/history, not the current work plan or agent instructions. Use [DESIGN.md](../DESIGN.md) and [AGENTS.md](../../AGENTS.md) for active direction.
+> Current implemented reference. Select improvement work from [IMPROVEMENTS.md](../../IMPROVEMENTS.md); follow [AGENTS.md](../../AGENTS.md) for the working loop. Historical phase numbers and verification results are evidence, not pending assignments.
 
 **Status:** Implemented beta contracts; current frontend decisions are in [DESIGN.md](../DESIGN.md).
 
@@ -210,7 +210,7 @@ Version-specific behavior is a risk. Use executable compatibility tests against 
 
 The adapter forwards model/reasoning effort, injects the existing report channel and project-local `wf` PATH, and records CLI version/unrestricted mode in invocation-start events. Only base environment plus Codex home/key and report access are selected. Per-invocation config preserves report environment for tools, excludes the API key from their inheritance, and disables shell snapshots; it does not edit global files. No schema migration or workflow control change is needed. Raw scrubbed events use the existing bounded attempt log.
 
-Codex registry status is `conformance_passed`, based on synthetic offline conformance. Recorded live reporting/correction evidence and version-specific limits are in `docs/harness-compatibility.md`. Neither registry status nor old live results establish current account availability.
+Codex registry status is `conformance_passed`, based on synthetic offline conformance. Recorded live reporting/correction evidence and version-specific limits are in [the harness compatibility reference](harness-compatibility.md). Neither registry status nor old live results establish current account availability.
 
 ### 4.2 Pi integration
 
@@ -240,7 +240,7 @@ The factory isolates version/help probes with a temporary Pi config directory, o
 
 The result UUID is the engine's opaque session identity. Missing identity cannot authorize correction. Explicit resume accepts only full UUIDs, uses `--resume <UUID>`, and preserves the requested identity on mismatch. Installed offline missing-UUID evidence confirms a nonzero terminal error without fresh fallback; the adapter maps that known result to unavailable resume. No recent selector, transcript-path lookup, fork or ephemeral flag is used. Same-harness/run/task/revision lookup and one bounded sequential correction remain owned by the runner.
 
-Only the common environment, explicitly selected Claude/Anthropic settings and report access reach the child; known injected auth is scrubbed by the supervisor. Version and selected permission mode are audited. Claude is `conformance_passed` after the full shared offline suite through a synthetic CLI, with additional framing, failure, identity and settlement cases. The runner retains report/routing/session-scope authority. Recorded live evidence and remaining resource/tool compatibility limits are in `docs/harness-compatibility.md`.
+Only the common environment, explicitly selected Claude/Anthropic settings and report access reach the child; known injected auth is scrubbed by the supervisor. Version and selected permission mode are audited. Claude is `conformance_passed` after the full shared offline suite through a synthetic CLI, with additional framing, failure, identity and settlement cases. The runner retains report/routing/session-scope authority. Recorded live evidence and remaining resource/tool compatibility limits are in [the harness compatibility reference](harness-compatibility.md).
 
 ### 4.4 OpenCode integration
 
@@ -264,7 +264,7 @@ nonzero; raw exception messages, API bodies and authorization do not enter these
 
 The supported v2 session permission ruleset is `[{action: "*", resource: "*", effect: "allow"}]`, audited as `session-allow-all` with CLI version. Session rules apply after agent rules; this explicit unrestricted selection overrides session denials, unlike `--auto`'s allow-unless-denied semantics. No global setting is written. Model/variant selection uses existing model/reasoning fields. Runtime selects the common environment plus documented OpenCode/config/provider names; the private server removes its lease password from tool inheritance, and the supervisor scrubs known injected secrets. No isolation or rollback is claimed.
 
-OpenCode is `conformance_passed` after the entire shared offline suite through a synthetic CLI/private API server, plus adapter-specific identity, framing, failure and settlement coverage. The shared missing-identity case now permits a protocol error when identity is required by the transport, while still requiring no correction/fresh fallback. Installed isolated checks independently confirmed CLI create-if-missing, exact API missing-session rejection and terminal invalid-provider failure. Recorded live reporting/correction evidence and unverified resource/tool interactions are distinguished in `docs/harness-compatibility.md`.
+OpenCode is `conformance_passed` after the entire shared offline suite through a synthetic CLI/private API server, plus adapter-specific identity, framing, failure and settlement coverage. The shared missing-identity case now permits a protocol error when identity is required by the transport, while still requiring no correction/fresh fallback. Installed isolated checks independently confirmed CLI create-if-missing, exact API missing-session rejection and terminal invalid-provider failure. Recorded live reporting/correction evidence and unverified resource/tool interactions are distinguished in [the harness compatibility reference](harness-compatibility.md).
 
 ### 4.5 omp integration
 
@@ -324,7 +324,7 @@ This design allows an agent to fix a rejected report *during its original turn* 
 
 ### 5.2 Phase 4 implementation notes
 
-- `src/contracts/report.ts` defines report v1 and bounded JSON validation. The contract version is engine-owned; the body has no authoritative IDs or transition fields. Exact limits and HTTP response codes are recorded in `docs/schema-v1.md` decisions 27–29.
+- `src/contracts/report.ts` defines report v1 and bounded JSON validation. The contract version is engine-owned; the body has no authoritative IDs or transition fields. Exact limits and HTTP response codes are recorded in [the schema reference](schema-v1.md) decisions 27–29.
 - `RunService` owns a private loopback report server for its headless drive lifetime. `bin/wf` reads the endpoint and token from environment and waits for synchronous acknowledgment. Tokens are opaque, memory-only and limited to one attempt invocation, rotated for correction and revoked before routing or on stop. This channel remains separate from the management listener in §8.1.
 - `RunCoordinator.acceptReport` validates and writes the immutable report and `report_accepted` event in one transaction. It never writes a cursor. The runner waits for confirmed process/group/pipe settlement and applies the report only after a clean result. Earlier reports survive process failures for diagnosis.
 - Migration 3 adds a durable correction count (0 or 1); existing session columns store adapter-issued persisted identity. Correction reserves its budget/event before launch and uses a separate log path. A failed follow-up, including timeout/provider/process failure, becomes `system.report_error` with invocation failure metadata. This makes the bounded correction's failure behavior explicit (spec §4.3.6); the original invocation's technical failures keep their technical system codes and never enter correction.
@@ -436,7 +436,7 @@ All management operations use authenticated `POST /api/v1` with a strict discrim
 | `task-overrides` | Same cursor, `taskId`, existing `TaskOverrideEdit` as `edit` |
 | `recovery-terminate`, `recovery-confirm`, `recovery-decide` | `runId`, existing exact-attempt/event/reason contract as `request` |
 
-Replies are JSON: 200 success, 202 shutdown admission, 401 invalid management authority, 404 unknown route, 409 wrong state/stale or settling control, 413 oversized body, 422 invalid request/definition, 400 other operation rejection. Diagnostics preserve code/path/location; transport failures are not retried. Management CLI exits are 0 for success, 1 for control/validation/transport rejection, and 2 for malformed CLI or unreadable input. See `docs/development.md` for commands. CLI local validation and RPC validation share `app/workflow-validation.ts`.
+Replies are JSON: 200 success, 202 shutdown admission, 401 invalid management authority, 404 unknown route, 409 wrong state/stale or settling control, 413 oversized body, 422 invalid request/definition, 400 other operation rejection. Diagnostics preserve code/path/location; transport failures are not retried. Management CLI exits are 0 for success, 1 for control/validation/transport rejection, and 2 for malformed CLI or unreadable input. See [the development reference](development.md) for commands. CLI local validation and RPC validation share `app/workflow-validation.ts`.
 
 `ManagementService` serializes mutations by rejecting overlap during asynchronous control settlement, while durable reads remain available. It checks `expectedEventId` before action and again after offline adapter construction. It delegates lifecycle, overrides, revisions and recovery to existing coordinator/service APIs. Start/resume install selected existing adapter factories lazily and acknowledge the run ID while retaining the drive promise. A new drive is refused until the old drive, report server and stop operation have settled. The coordinator independently enforces one active run and the database enforces one active attempt. The same service instance resets its stop flag only when admitting a subsequent drive. No queue or hidden retry is introduced.
 
@@ -687,7 +687,9 @@ requires its own explicit submission and current event.
 ## 10. Current development direction
 
 The original implementation order is complete and retained in the [archived MVP plan](../history/mvp-plan.md).
-Follow [DESIGN.md](../DESIGN.md) for current interface decisions and the
-[archived React user guide](../history/react-user-guide-2026-10-21.md) for previous UI usage;
-a replacement guide follows the redesign. Historical plans and walkthrough approvals are reference only. Keep these runtime contracts stable unless a concrete user problem requires
-an explicitly documented behavior adjustment. Historical verification is in the [archive](../history/README.md).
+Select the next refinement from [IMPROVEMENTS.md](../../IMPROVEMENTS.md), following the
+local working loop in [AGENTS.md](../../AGENTS.md). [DESIGN.md](../DESIGN.md) holds approved
+interface decisions; the completed [Workbench user guide](../USER_GUIDE.md) describes current
+operation. Keep runtime contracts stable unless the selected problem requires an explicitly
+documented adjustment. Historical plans, approvals and verification remain in the
+[archive](../history/README.md).
