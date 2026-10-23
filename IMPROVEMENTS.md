@@ -1,6 +1,8 @@
 # Workflowz improvement backlog
 
-**Checkpoint — 2026-10-23:** every listed finding except OWNER-1 is complete. UX-2 (compact
+**Checkpoint — 2026-10-23:** every listed finding except OWNER-1 is complete. A code review of
+`d7d76ee..HEAD` found three issues, now fixed with regressions (see the UX-1 and F2 review
+follow-ups); `npm run check` (882) and the full offline Chromium suite (66/66) pass. UX-2 (compact
 running controls) is the latest: normal running controls are one row with Stop apart on the
 right. After F2, F1, UX-1 and UX-2, `npm run check` (881 tests) and the full offline Chromium
 suite (65/65) pass. UX-1 (stale run-control feedback) is complete. Success messages
@@ -170,6 +172,17 @@ unknown results, wording, requests and polling are unchanged.
 **Limits:** if the run has already moved past the resumed step before the next poll, the
 Resume confirmation may never appear; the heading and History then show the change. A step
 that loops back to itself keeps its message. The full browser suite was not rerun for this slice.
+
+**Review follow-up (2026-10-23):** code review of `d7d76ee..HEAD` found that “paused, then
+paused again” counted as still current for every control. So a Resume whose step quickly
+paused again (for example, a rerun check failing at once) kept “Resumed. Check runs again…”
+beside the new decision. The recorded place now includes the run's latest event ID.
+`feedbackCurrent(control, sent, now)` keeps a message for the unchanged read from before the
+control took effect. After that, only Apply (skip/jump/complete-task) keeps it while still
+paused; Start, Pause and Resume keep it only while the same step starts, runs or pauses. The
+unit test now distinguishes the pre-action read from a later pause; the new
+“resume → paused again at the same step” case failed under the previous rule. `npm run check`
+(882 tests) and the full offline Chromium suite (66/66) pass.
 
 ### F1 — command checker guidance
 

@@ -15,18 +15,24 @@ export const STATUS: Record<RunStatus, { label: string; tone: Tone }> = {
   stopped: { label: "Stopped", tone: "neutral" },
   interrupted: { label: "Interrupted", tone: "danger" },
 };
-/** Where a run was when a control was sent: its status and current step. */
+/** Where a run was when a control was sent: its status, current step and latest event. */
 export interface RunPlace {
   status: RunStatus;
   cursor: string;
+  eventId: number;
 }
+
+const APPLY_CONTROLS = new Set(["skip", "jump", "complete-task"]);
 
 /** A control's success message describes the step and state it acted on. Once the run has
  * moved on, the heading and history say what happened instead. */
-export function feedbackCurrent(sent: RunPlace, now: RunPlace) {
+export function feedbackCurrent(control: string, sent: RunPlace, now: RunPlace) {
   if (now.status === "completed" || now.status === "stopped") return true;
-  // Apply keeps the run paused, even when it moves the next step.
-  if (now.status === sent.status) return now.cursor === sent.cursor || now.status === "paused";
+  // The read from before the control took effect.
+  if (now.eventId === sent.eventId) return true;
+  // Apply keeps the run paused, even when it moves the next step. A later pause after
+  // Resume or Start is a new situation, even at the same step.
+  if (APPLY_CONTROLS.has(control)) return now.status === "paused";
   return now.cursor === sent.cursor && (now.status === "running" || now.status === "pausing");
 }
 export const needsAttention = (status: RunStatus) =>

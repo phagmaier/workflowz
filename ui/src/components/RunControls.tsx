@@ -18,7 +18,13 @@ export interface LastResult {
 }
 
 const placeOf = (status: BrowserRunStatus | null): RunPlace | null =>
-  status ? { status: status.run.status, cursor: status.run.cursorStepId } : null;
+  status
+    ? {
+        status: status.run.status,
+        cursor: status.run.cursorStepId,
+        eventId: status.expectedEventId,
+      }
+    : null;
 
 /** Sends one deliberate control and reports the result where it was taken. Never retried. */
 export function useControl(runId: string, refresh: () => void, status: BrowserRunStatus | null) {
@@ -47,7 +53,10 @@ export function useControl(runId: string, refresh: () => void, status: BrowserRu
   };
   const now = placeOf(status);
   const stale =
-    result.value?.kind === "ok" && result.sent && now && !feedbackCurrent(result.sent, now);
+    result.value?.kind === "ok" &&
+    result.sent &&
+    now &&
+    !feedbackCurrent(result.key, result.sent, now);
   return { result: stale ? { key: "", value: null } : result, send, runId };
 }
 type Controller = ReturnType<typeof useControl>;
