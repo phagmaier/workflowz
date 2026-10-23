@@ -95,6 +95,13 @@ and removes owned state and runner output on success or failure. Uncertain clean
 state and fails rather than deleting evidence. No browser profile, trace, video or credential
 artifact is retained.
 
+`npm run test:browser -- app-acceptance.spec.mjs` verifies the optional
+[browser acceptance recipe](../../examples/browser-acceptance/README.md) through ordinary
+command steps. A private synthetic form target has broken/fixed input-retention variants;
+API/page checks pass in both, while the authored browser command fails/passes respectively.
+The fixture supplies the provisioned browser cache explicitly to the runner's private HOME,
+uses fresh contexts, and removes its owned records and in-memory target on settlement.
+
 ## Local application commands
 
 After building, `bin/wf daemon start` starts the explicit foreground owner. A separate terminal

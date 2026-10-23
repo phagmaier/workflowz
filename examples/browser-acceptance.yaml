@@ -1,0 +1,18 @@
+# Optional browser acceptance command. Adapt the script and URL to a disposable application.
+# Provision the pinned Chromium first; this command never installs dependencies or starts agents.
+version: 1
+name: Browser interaction acceptance
+project:
+  root: ".."
+start: browser_acceptance
+steps:
+  browser_acceptance:
+    kind: command
+    argv: [node, examples/browser-acceptance/check.mjs, "http://127.0.0.1:4173/"]
+    timeout_seconds: 45
+    on:
+      complete: { goto: done }
+      failed: { pause: true }
+  done:
+    kind: end
+    label: Configured browser checks passed

@@ -77,6 +77,13 @@ Outcomes and connect every normal Outcome. Give it the
 [schema reference](reference/schema-v1.md) and the intended project path. Read the resulting
 commands, prompts and routes before starting a run.
 
+For workflows building browser applications, the optional
+[browser acceptance recipe](../examples/browser-acceptance/README.md) demonstrates keyboard
+input retention and real create/read/update/delete checks through an ordinary command step.
+Adapt its selectors and journeys to your application, provision the pinned browser, and use
+disposable data. Choose where it runs and how its Outcomes route. Record the checks actually
+executed and the remaining browser/manual limits in reports; the recipe's Output includes both.
+
 ### Start from an example
 
 Choose **New workflow**, enter a **Name** and an absolute **Project folder**, then select:
