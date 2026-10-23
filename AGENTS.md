@@ -25,6 +25,9 @@ The completed sample app and one-off live exercise scaffolding were deliberately
   proposal, acceptance checks and unresolved decisions under that finding in IMPROVEMENTS.md.
   Ask only when a missing owner decision materially changes behavior or scope; make ordinary
   implementation choices yourself.
+- Before implementation, give the selected finding an intended result, scope, observable
+  acceptance checks and any unresolved owner decisions using the backlog's slice template.
+  A finding awaiting owner validation stays pending while the next independent finding proceeds.
 - If asked to work through several findings, continue after each verified slice within that
   request. A blocked finding records its blocker; other independent authorized work can continue.
   Before ending, leave the current checkpoint, checks, remaining limits and exact next action
@@ -55,10 +58,19 @@ Documentation roles:
 
 Use existing fake adapters and private disposable state for product work. UI changes need
 applicable offline browser, visual, keyboard and responsive checks, alongside typecheck,
-lint and meaningful tests. Documentation-only changes need link/example checks, not live
-workflows. Consult `docs/reference/development.md` and package.json for commands.
+lint and meaningful tests. Select checks using `docs/reference/development.md#verification-by-change`
+and package.json. Record the commands, results and remaining verification limits in the backlog.
 Past provider trials do not authorize new live calls; retain the owner's exact requested
 models if a new evaluation is requested. Clean up owned temporary resources after settlement.
+
+## Git checkpoints
+
+Inspect the working tree and index before editing and before committing. After a verified
+slice, update its backlog checkpoint and make a local commit containing only that slice's
+owned changes. Stage explicit paths or hunks, inspect the staged diff and preserve unrelated
+edits. Documentation refinements get their own commit after the applicable link/example checks.
+Implemented work awaiting owner validation may be committed with that pending status recorded.
+Push only when the current user request explicitly authorizes it; preserve existing history.
 
 ## Product and runtime boundaries
 

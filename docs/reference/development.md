@@ -35,6 +35,24 @@ Process tests start real children: `sh`, `sleep`, and `node`. Linux `/proc` is r
 
 `npm run validate` exits 0 for a runnable workflow (warnings allowed), 1 when it has errors, and 2 when the file cannot be read. Diagnostics are printed as `file:line:column: severity [code] path: message`.
 
+## Verification by change
+
+Use this matrix when defining the selected finding's acceptance checks. `package.json` owns
+the command definitions; record the exact commands and results in IMPROVEMENTS.md.
+
+| Change | Required verification | When to expand |
+| --- | --- | --- |
+| Documentation or agent instructions | Check local links/anchors and referenced commands/paths. Validate affected workflow examples offline. | Execute a runnable recipe and its meaningful failure case when adding executable guidance. |
+| Workbench UI | Meaningful regression, `npm run check`, relevant `npm run test:browser -- <specs>`, visual review, keyboard/focus and responsive checks for the changed interaction. | Run the full browser suite when shared shell, navigation, focus or editor changes have effects beyond the focused scenarios. |
+| Runtime, persistence, authority or adapter behavior | Meaningful regression and `npm run check`, including the affected lifecycle, settlement, timeout/Stop, recovery and redaction cases. | Add the relevant offline smoke from Setup and commands when the change crosses its process/service boundary; use browser scenarios for changed UI/API behavior. |
+| Workflow/schema or runnable examples | Validate affected YAML with the actual CLI; exercise changed command behavior in private disposable state. | Include author-facing success/failure evidence and the relevant browser/runtime checks for the executable paths the example promises. |
+
+First run the focused regression against the defect, then verify the fix. Run the core gate
+and Chromium suite sequentially: both launch supervised children, and running them together
+has killed a browser worker under local resource pressure. Once the selected checks pass,
+repeat or broaden them when a new change, failure or uncovered behavior warrants it.
+Record untested browsers, manual owner checks and live-provider limits explicitly.
+
 ## Offline Chromium smoke prerequisites
 
 Use the Playwright version pinned in `package-lock.json`. Install dependencies

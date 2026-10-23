@@ -1,25 +1,21 @@
 # Workflowz improvement backlog
 
-**Checkpoint — 2026-10-22:** F5 is complete. Paused summaries and attempt details identify
-technical execution failures separately from declared agent reports. Known safe OpenCode
-bridge codes appear near the heading; arbitrary stderr remains in Output. Unconfirmed
-execution uses neutral wording, including presentation of older records. Accepted reports,
-raw historical evidence and existing routing/correction/recovery behavior are preserved.
-Design, operating and technical references are updated. OWNER-1 navigation remains implemented
-and verified offline, with **owner discoverability validation pending**.
+**Checkpoint — 2026-10-22:** agent setup clarification is complete. The selected finding now
+gets a bounded proposal and observable acceptance checks before implementation. The development
+reference has a verification matrix; AGENTS.md defines one local commit per verified slice,
+explicit staging of owned changes and separately requested pushes. OWNER-1 and F5 were
+checkpointed together in local commit `da72437` because their documentation edits overlapped.
+OWNER-1 still awaits owner discoverability feedback; F5 is complete.
 
-Verification: `npm run check` passes (build, typecheck, lint and all 873 core tests).
-All 21 related Chromium scenarios pass together, including real bridge/fake local API
-failure cases, reports/output, run details, grouped Runs and the owner walkthrough. Visual,
-keyboard, reload/history and responsive checks cover the changed presentation down to 320px.
-Local Markdown links/anchors resolve. Lint retains one existing CSS specificity warning and
-informational notices. Owned fixtures and processes are cleaned up. The full browser suite,
-extended 310-second wait and live providers were not rerun for this presentation slice.
+Documentation verification: all 19 local links/anchors in the three changed documents resolve;
+all 10 existing CLI validation tests pass, including the six example workflows. No application
+behavior changed in this setup slice, so runtime/browser suites were not repeated. F5's
+873-core/21-browser verification remains recorded below.
 
-**Next independent slice: F6.** Read its evaluation evidence and current example validation
-checks, then add and verify an executable browser acceptance recipe for authored workflows.
-Preserve author choice and deterministic routing. Owner feedback on the Finished → Map/results
-path is still needed before closing OWNER-1; record that feedback when available.
+**Next independent slice: F6.** Execute the bounded proposal below: reproduce the API/page
+versus browser-input gap, deliver the optional executable recipe and verify its pass/fail
+behavior through ordinary workflow command routes. No owner decision is outstanding for that
+scope. Record owner feedback on the Finished → Map/results path when available.
 
 This is the single active local backlog, including small plans and continuation notes.
 GitHub is primarily repository storage; tickets, labels and PRs are optional when specifically
@@ -40,13 +36,24 @@ finding. “Implemented; awaiting owner validation” is distinct from complete,
 Before ending, update the checkpoint with the selected ID, actual changes, checks/results,
 remaining limits and exact next action. Use [AGENTS.md](AGENTS.md) for the working loop.
 
+For the selected finding, record a compact proposal before implementation:
+
+- **Observed:** reproduction/evidence and the behavior that needs improvement.
+- **Result and scope:** the intended user outcome, bounded deliverables and exclusions.
+- **Acceptance:** observable checks, with commands or an explicit owner validation step.
+- **Decisions:** unresolved owner choices; use “none” when ordinary implementation choices suffice.
+
+Expand only the next slice. Completed notes retain the actual result and verification;
+historical evidence stays linked. Follow the verification matrix and local commit policy in
+[development](docs/reference/development.md#verification-by-change) and [AGENTS.md](AGENTS.md#git-checkpoints).
+
 ## Next improvements
 
 | ID | Priority / status | Observed problem | Direction and completion evidence |
 | --- | --- | --- | --- |
 | OWNER-1 | High · implemented; awaiting owner validation | The owner struggled to find the completed run's graph/map again. | Explicit Finished-row Map/results links and a prominent map/results summary action pass offline browser, keyboard and responsive checks. Owner discoverability feedback is still required to close. |
 | F5 | High · complete | A transport/process failure was presented as an agent report/provider failure. | Technical summaries/details, safe bridge causes and neutral settlement wording pass core and browser regressions, including the real bridge through the fake local API, accepted-report/exit-zero failure and no replay. |
-| F6 | High · open | Passing API/page checks missed browser CRUD that continually erased input. | Provide a verified browser acceptance recipe and clear verification limits in authored workflows. Preserve deterministic routing and author choice; no mandatory engine gate. |
+| F6 | High · planned | Passing API/page checks missed browser CRUD that continually erased input. | Add a runnable browser acceptance example, prove it catches input loss missed by API/page checks, and document its limits and optional use in authored workflows. Bounded proposal below. |
 | F3 | Medium · open | Long steps show little activity; 3/3 tasks appeared while integration/audit still remained. | Show current phase and useful attempt/activity timing separately from task totals and paused elapsed time. Do not imply unsupported live output. |
 | F2 | Medium · open | Fit shrank an 18-node graph to unreadable 35%; Form was easier to inspect. | Explore readable selected-path/node focus or collapsed repair sections, keeping every route inspectable. Test the proposed interaction. |
 | F1 | Medium · open | Checker showed an array/string schema error instead of “Close the double quote”. | Carry the useful command-parser message into the checker, suppress duplicate noise and preserve Fix focus. |
@@ -128,6 +135,36 @@ Limits: the full browser suite and the optional 310-second transport test were n
 Unknown/unavailable diagnostics use the normalized result or process exit status. This does
 not recover the historical exception discarded during the original trial or establish provider
 reliability. The next actionable implementation finding is F6.
+
+### F6 — executable browser acceptance guidance
+
+**Observed:** the archived trial's API/page checks passed while actual browser CRUD erased
+input. The current examples validate workflow definitions and illustrate command steps, but
+do not provide an executable input-preservation/browser CRUD acceptance recipe. Reproduce
+that verification gap with a minimal offline fixture before accepting the remedy.
+
+**Result and scope:** provide a small project-local Chromium recipe that an author can adapt
+to their application's labels and journeys, plus an illustrative ordinary command step.
+Use a private synthetic form fixture to prove the recipe; retain no generated sample app or
+live-provider scaffolding. Cover typed-input preservation and create/read/update/delete,
+keyboard use and desktop/phone widths. Document setup, disposable test-data ownership,
+success/failure output, and claims the recipe does not verify. Authors choose where the
+command belongs and how its Outcomes route; engine gates and new report/schema fields are
+outside this slice.
+
+**Acceptance:**
+
+1. API/write/page checks pass against the intentionally broken fixture while the browser
+   recipe fails on erased input, with a clear failure and nonzero exit.
+2. The same browser recipe passes against the repaired fixture, verifies visible CRUD and
+   input retention using keyboard interactions, and cleans up its owned data/browser.
+3. An offline Workflowz command scenario exercises the recipe's pass/fail exit through normal
+   authored routes, with no provider or automatic retry. The example YAML validates via CLI.
+4. Instructions name the tested browser, viewport sizes and journeys and retain unverified
+   app-specific/manual claims. Link/path/example checks and the relevant offline regressions pass.
+
+**Decisions:** none for this bounded example. Application-specific selectors, journeys,
+credentials, extra browsers and routing policy remain the workflow author's choices.
 
 ## Completed and worth preserving
 
