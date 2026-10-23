@@ -9,6 +9,7 @@ import {
   graphRows,
   incomingRoutes,
   layoutEditorGraph,
+  technicalRoutes,
 } from "../lib/editor-graph.ts";
 import { humanize } from "../lib/format.ts";
 import { type Doc, type Problem, stepMeta } from "../lib/workflow-edit.ts";
@@ -47,6 +48,10 @@ export function GraphTab({
     measured,
   );
   const incoming = selected ? incomingRoutes(rows, selected) : [];
+  // Technical-failure routes aren't drawn, but Reached from must still list them.
+  const technical = selected
+    ? technicalRoutes(doc, session.current ? state.draft : null, selected)
+    : [];
   const linked = new Set([
     ...incoming.map((route) => route.from),
     ...(selected ? (rows.get(selected) ?? []).map((row) => row.target) : []),
@@ -311,7 +316,7 @@ export function GraphTab({
               doc={doc}
               stepId={selected}
               outgoing={rows.get(selected) ?? []}
-              incoming={incoming}
+              incoming={[...incoming, ...technical]}
               onFollow={(id) => select(id, true, "graph-routes")}
             />
             <StepForm
@@ -367,7 +372,8 @@ function StepRoutes({
               <code className="graph-route-outcome">{row.outcome}</code>
               <span>
                 {row.target && !row.missing ? step(row.target) : row.label}
-                {row.inherited && !row.missing ? <small> · shared rule</small> : null}
+                {/* Before the check, the label already says it's a shared rule. */}
+                {row.inherited && row.target && !row.missing ? <small> · shared rule</small> : null}
               </span>
             </li>
           ))}
@@ -385,8 +391,13 @@ function StepRoutes({
             <li key={`${route.from}:${route.outcome}`} className="graph-route">
               <span>{step(route.from)}</span>
               <span>
-                <code className="graph-route-outcome">{route.outcome}</code>
+                {route.technical ? (
+                  <span className="graph-route-outcome">{route.outcome}</span>
+                ) : (
+                  <code className="graph-route-outcome">{route.outcome}</code>
+                )}
                 {route.inherited ? <small> · shared rule</small> : null}
+                {route.technical ? <small> · not drawn in the graph</small> : null}
               </span>
             </li>
           ))}

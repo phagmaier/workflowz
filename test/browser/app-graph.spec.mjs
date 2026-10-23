@@ -67,11 +67,8 @@ test("route focus keeps a large graph's routes readable and walkable at Fit", as
   const policy = await watchPolicy(page);
   await page.setViewportSize({ width: 1440, height: 1009 });
   await pairApp(page, app, "#/workflows/import");
-  // The archived 18-step task/review/repair workflow whose Fit was unreadable (F2).
-  const baseline = new URL(
-    "../../docs/evaluations/equipment-lending/workflows/baseline.yaml",
-    import.meta.url,
-  );
+  // The 18-step task/review/repair workflow whose Fit was unreadable (F2).
+  const baseline = new URL("../fixtures/graphs/equipment-lending-baseline.yaml", import.meta.url);
   await importText(page, app, readFileSync(baseline, "utf8"));
   const graph = page.getByRole("region", { name: "Workflow graph", exact: true });
   const panel = page.getByRole("region", { name: "Selected step", exact: true });
@@ -195,6 +192,69 @@ test("route focus keeps a large graph's routes readable and walkable at Fit", as
     await noSideScroll(page);
     await shot(page, `g11-route-focus-${width}`);
   }
+  expect(app.children).toEqual([]);
+  await policy();
+});
+
+test("Routes list technical-failure routes and name a shared rule once before the check", async ({
+  page,
+  app,
+}) => {
+  const policy = await watchPolicy(page);
+  await pairApp(page, app, "#/workflows/import");
+  await importText(
+    page,
+    app,
+    `version: 1
+name: Technical routes
+project: {root: .}
+start: deploy
+policies:
+  - match: {step_ids: [deploy]}
+    on:
+      failed: {goto: repair}
+steps:
+  deploy:
+    kind: command
+    argv: [node, --version]
+    on:
+      complete: {goto: done}
+      system.error: {goto: repair}
+  repair:
+    kind: command
+    argv: [node, --version]
+    on:
+      complete: {goto: done}
+      failed: {pause: true}
+  done: {kind: end}
+`,
+  );
+  const graph = page.getByRole("region", { name: "Workflow graph", exact: true });
+  const checker = page.getByRole("complementary", { name: "Checker", exact: true });
+  const routes = page
+    .getByRole("region", { name: "Selected step", exact: true })
+    .getByRole("region", { name: "Routes", exact: true });
+  await expect(checker).toContainText("All good");
+  await graph.getByRole("button", { name: "Configure Repair", exact: true }).click();
+  // A technical-failure route is a real way in, even though the graph draws only outcomes.
+  await expect(routes.getByRole("list", { name: "Reached from" }).getByRole("listitem")).toHaveText(
+    ["Deployfailed · shared rule", "Deploytechnical failure · not drawn in the graph"],
+  );
+  await expect(routes).not.toContainText("No step leads here yet");
+
+  // While a change waits for its check, a shared route says so once.
+  await page.route("**/ui/api", async (route) => {
+    if (route.request().postDataJSON()?.op === "draft") await route.abort("connectionreset");
+    else await route.continue();
+  });
+  await routes.getByRole("button", { name: "Deploy", exact: true }).first().click();
+  await page.getByLabel("Runs first").selectOption("repair");
+  await expect(checker).toContainText("Not checked");
+  const failed = routes.getByRole("list", { name: "Leads to" }).getByRole("listitem").nth(1);
+  await expect(failed).toHaveText("failedShared rule · check needed");
+  await page.unroute("**/ui/api");
+  await checker.getByRole("button", { name: "Check again", exact: true }).click();
+  await expect(failed).toHaveText("failedRepair · shared rule");
   expect(app.children).toEqual([]);
   await policy();
 });

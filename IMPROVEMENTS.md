@@ -322,6 +322,25 @@ Shared lanes below the nodes remain hard to follow without a selection. Route li
 direct neighbours only, not whole multi-step paths. Owner use has not yet confirmed this is
 easier than Form for checking routes.
 
+**Review follow-up (2026-10-23):** code review of `d7d76ee..HEAD` found two F2 issues and one
+test-coupling concern, all fixed:
+
+- Reached from omitted technical-failure routes (for example `system.error: goto: repair`),
+  because the graph draws only outcomes. A step reached only that way said “No step leads
+  here yet.”, though the daemon accepts it as reachable. `technicalRoutes` in
+  `editor-graph.ts` now lists one “technical failure” entry per source step, marked shared
+  when inherited and “not drawn in the graph”. Wires and outlines still show outcome routes only.
+- Before the daemon check, a shared route read “Shared rule · check needed · shared rule”. The
+  marker now appears only once a destination is known.
+- The F2 scenario read the archived evaluation file. It now uses
+  `test/fixtures/graphs/equipment-lending-baseline.yaml`, a copy with a provenance header.
+
+New scenario `Routes list technical-failure routes and name a shared rule once before the check`
+failed before each fix: the technical route was missing, and separately the duplicate marker
+was present. It passes after. A new unit test covers own and inherited technical routes,
+before and after the check. `npm run check` (882 tests) and the full offline Chromium suite
+(66/66) pass. Remaining limit: technical-failure routes are listed, not drawn.
+
 ### F3 — progress and timing during long steps
 
 **Observed:** reproduced on 2026-10-23 with a new offline Chromium scenario: two imported

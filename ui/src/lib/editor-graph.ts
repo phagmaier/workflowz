@@ -38,6 +38,8 @@ export interface GraphRoute {
   from: string;
   outcome: string;
   inherited: boolean;
+  /** A technical-failure rule; the graph draws only outcome routes. */
+  technical?: boolean;
 }
 
 /** Routes that reach a step, in authored step and outcome order, matching the drawn wires. */
@@ -47,6 +49,26 @@ export function incomingRoutes(rows: ReadonlyMap<string, readonly GraphRow[]>, i
     for (const row of list)
       if (row.target === id && !row.missing)
         routes.push({ from, outcome: row.outcome, inherited: row.inherited });
+  return routes;
+}
+
+/** Steps whose technical-failure rules continue at a step, one entry per source step.
+ * Like outcome routes, inherited rules are known only from the current daemon check. */
+export function technicalRoutes(doc: Doc, checked: BrowserDraft | null, id: string) {
+  const routes: GraphRoute[] = [];
+  for (const from of Object.keys(doc.steps)) {
+    const hits = outcomeRows(doc, checked, from, true).filter((row) => {
+      const action = row.own ? ruleToAction(row.own) : row.effective?.action;
+      return action?.kind === "goto" && action.target === id;
+    });
+    if (hits.length)
+      routes.push({
+        from,
+        outcome: "technical failure",
+        inherited: hits.every((row) => !row.own),
+        technical: true,
+      });
+  }
   return routes;
 }
 

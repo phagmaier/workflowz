@@ -127,7 +127,8 @@ preserve the engine contracts.
   through route focus rather than a larger Fit or collapsed sections. The selected step's inspector lists Leads to and Reached from in
   readable text, with step links that move the selection along a route. The graph highlights
   that step's routes, fades the others and outlines connected steps; zoom keeps it in view.
-  Every route stays drawn. Collapsing repair sections remains an option only if owner use
+  Every outcome route stays drawn; technical-failure routes, which the graph doesn't draw,
+  are still listed in Reached from. Collapsing repair sections remains an option only if owner use
   shows route focus is insufficient. The run Map's separate vertical layout is unchanged.
 - **2026-10-21:** Project folders are pasted as paths in the browser-served UI during development.
   The desktop app must use the operating system's folder picker; this is required, not optional.

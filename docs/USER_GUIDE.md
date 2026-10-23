@@ -117,8 +117,8 @@ too small.
 
 A selected step's settings start with **Routes**, in normal-size text at any zoom.
 **Leads to** lists each Outcome and where it goes. **Reached from** lists every step and
-Outcome that leads to this step, including routes from shared rules, and says when the
-run starts here. Select a step name in either list to move to that step; focus moves to
+Outcome that leads to this step, including routes from shared rules and technical-failure
+rules (which the graph doesn't draw), and says when the run starts here. Select a step name in either list to move to that step; focus moves to
 its Routes, so you can follow a path with the keyboard. In the graph, the selected step's
 routes stay highlighted, other routes fade, and the steps it connects to are outlined.
 Zooming keeps the selected step in view. Selecting steps never edits the workflow.

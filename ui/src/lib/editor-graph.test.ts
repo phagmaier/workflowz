@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BrowserDraft, ResolvedTransition } from "../types.ts";
-import { GRAPH_NODE_WIDTH, graphRows, incomingRoutes, layoutEditorGraph } from "./editor-graph.ts";
+import {
+  GRAPH_NODE_WIDTH,
+  graphRows,
+  incomingRoutes,
+  layoutEditorGraph,
+  technicalRoutes,
+} from "./editor-graph.ts";
 import { type Doc, exampleDoc } from "./workflow-edit.ts";
 
 test("layout handles branches, joins, self loops, disconnected nodes and dangling routes without overlap", () => {
@@ -136,4 +142,49 @@ test("incoming routes list every drawn route into a step, including shared rules
   assert.deepEqual(incomingRoutes(unchecked, "fix"), [
     { from: "fix", outcome: "again", inherited: false },
   ]);
+});
+
+test("technical-failure routes into a step are listed once per source step, own or shared", () => {
+  const doc = {
+    version: 1,
+    name: "Failures",
+    project: { root: "/tmp" },
+    start: "build",
+    steps: {
+      build: { kind: "command", argv: ["make"], on: { complete: { goto: "done" } } },
+      deploy: {
+        kind: "command",
+        argv: ["deploy"],
+        on: {
+          complete: { goto: "done" },
+          "system.error": { goto: "repair" },
+          "system.timeout": { goto: "repair" },
+        },
+      },
+      repair: { kind: "command", argv: ["fix"], on: { complete: { goto: "done" } } },
+      done: { kind: "end" },
+    },
+  } as unknown as Doc;
+  const viaDefaults = {
+    outcome: "system.timeout",
+    action: { kind: "goto", target: "repair" },
+    source: { level: "defaults" },
+    viaSystemError: false,
+  } as ResolvedTransition;
+  const checked = {
+    transitions: { build: [viaDefaults] },
+    diagnostics: [],
+  } as unknown as BrowserDraft;
+  assert.deepEqual(technicalRoutes(doc, checked, "repair"), [
+    { from: "build", outcome: "technical failure", inherited: true, technical: true },
+    { from: "deploy", outcome: "technical failure", inherited: false, technical: true },
+  ]);
+  // Shared failure rules appear only once the daemon check has resolved them.
+  assert.deepEqual(technicalRoutes(doc, null, "repair"), [
+    { from: "deploy", outcome: "technical failure", inherited: false, technical: true },
+  ]);
+  assert.deepEqual(technicalRoutes(doc, checked, "done"), []);
+  // Outcome routes stay separate: repair has no outcome route leading to it.
+  const rows = new Map(Object.keys(doc.steps).map((id) => [id, graphRows(doc, checked, id)]));
+  assert.deepEqual(incomingRoutes(rows, "repair"), []);
 });
