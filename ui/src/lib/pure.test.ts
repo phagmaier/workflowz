@@ -4,9 +4,18 @@ import { RUN_STATUSES } from "../../../src/contracts/run-state.ts";
 import { parseRoute, runHref, runsHref } from "../route.ts";
 import type { BrowserRunStatus, EventRow, ResolvedTransition, RunStatus } from "../types.ts";
 import { duration, humanize } from "./format.ts";
-import { buildHistory } from "./history.ts";
+import { buildHistory, type StepItem } from "./history.ts";
 import { layoutMap } from "./map-layout.ts";
-import { describeRun, needsAttention, RUN_GROUPS, STATUS } from "./run-copy.ts";
+import {
+  attemptActivity,
+  describeRun,
+  needsAttention,
+  pausedMs,
+  RUN_GROUPS,
+  STATUS,
+  statusTime,
+  taskPhase,
+} from "./run-copy.ts";
 
 const goto = (outcome: string, target: string, level = "step"): ResolvedTransition =>
   ({
@@ -165,6 +174,181 @@ describe("status copy", () => {
     assert.deepEqual([...grouped].sort(), [...RUN_STATUSES].sort());
     assert.equal(new Set(grouped).size, grouped.length);
     assert.deepEqual(RUN_GROUPS[0]?.statuses.filter(needsAttention), RUN_GROUPS[0]?.statuses);
+  });
+});
+
+const at = (second: number) => new Date(Date.UTC(2026, 9, 20, 10, 0, second)).toISOString();
+const events = (entries: [number, EventRow["type"], EventRow["data"]][], attempt = "attempt_1") =>
+  entries.map(
+    ([second, type, data], index): EventRow => ({
+      eventId: index + 1,
+      runId: "run_1",
+      revisionId: 3,
+      attemptId: type.startsWith("run_") ? null : attempt,
+      timestamp: at(second),
+      type,
+      data,
+    }),
+  );
+const tasks = (...states: ("pending" | "active" | "completed")[]) =>
+  states.map((state, index) => ({
+    taskId: `task_${index + 1}`,
+    runId: "run_1",
+    sourceOrder: index,
+    sourceIdentity: `t${index}`,
+    title: `Task ${index + 1}`,
+    body: "",
+    headingPath: [],
+    state,
+    sourceLine: null,
+    sourceColumn: null,
+    sourceChecked: null,
+    sourceIndent: null,
+  }));
+const withTasks = (
+  state: RunStatus,
+  list: ReturnType<typeof tasks>,
+  activeTaskId: string | null = null,
+): BrowserRunStatus => ({
+  ...status(state, { activeTaskId }),
+  tasks: list,
+  progress: {
+    completed: list.filter((t) => t.state === "completed").length,
+    total: list.length,
+  },
+});
+
+describe("progress and timing", () => {
+  it("separates the task phase from whether the run has finished", () => {
+    assert.deepEqual(taskPhase(status("running")), { label: "No task list", note: null });
+    assert.equal(taskPhase(withTasks("running", [])).label, "No tasks imported");
+    assert.equal(
+      taskPhase(withTasks("ready", tasks("pending", "pending"))).label,
+      "None started yet",
+    );
+    assert.equal(
+      taskPhase(withTasks("running", tasks("pending", "pending"))).label,
+      "None started yet",
+    );
+    assert.equal(
+      taskPhase(withTasks("running", tasks("completed", "active"), "task_2")).label,
+      "2 of 2 · Task 2",
+    );
+    assert.equal(
+      taskPhase(withTasks("paused", tasks("completed", "pending"))).label,
+      "1 of 2 done · none active",
+    );
+    for (const state of ["running", "pausing", "paused", "interrupted"] as const)
+      assert.deepEqual(taskPhase(withTasks(state, tasks("completed", "completed"))), {
+        label: "All 2 done",
+        note: "Run not finished yet",
+      });
+    assert.deepEqual(taskPhase(withTasks("completed", tasks("completed", "completed"))), {
+      label: "All 2 done",
+      note: null,
+    });
+    assert.equal(
+      taskPhase(withTasks("stopped", tasks("pending", "pending"))).label,
+      "0 of 2 done · none active",
+    );
+  });
+
+  it("says when all tasks are done but the workflow continues, and how long it paused", () => {
+    const running = describeRun(withTasks("running", tasks("completed", "completed")), []);
+    assert.match(
+      running.detail,
+      /All 2 imported tasks are done; the workflow continues with Review\./,
+    );
+    const one = describeRun(withTasks("running", tasks("completed")), []);
+    assert.match(one.detail, /The imported task is done; the workflow continues with Review\./);
+    const active = withTasks("running", tasks("completed", "active"), "task_2");
+    assert.doesNotMatch(describeRun(active, []).detail, /continues with/);
+
+    const history = buildHistory(
+      events([
+        [0, "run_started", {}],
+        [10, "run_paused", { reason: "user_pause" }],
+        [70, "run_resumed", {}],
+        [125, "run_completed", {}],
+      ]),
+      [],
+    );
+    const completed = withTasks("completed", tasks("completed", "completed"));
+    completed.run = { ...completed.run, endTime: at(125) };
+    assert.equal(
+      describeRun(completed, history).detail,
+      "Finished in 2m 05s, including 1m 00s paused. 2 of 2 tasks done.",
+    );
+    assert.equal(
+      describeRun(completed, buildHistory(events([[0, "run_started", {}]]), [])).detail,
+      "Finished in 2m 05s. 2 of 2 tasks done.",
+    );
+  });
+
+  it("counts only recorded pauses, up to a resume, a stop or the status read", () => {
+    const history = buildHistory(
+      events([
+        [0, "run_started", {}],
+        [10, "run_paused", { reason: "user_pause" }],
+        [40, "run_resumed", {}],
+        [50, "run_paused", { reason: "outcome_pause" }],
+        [80, "run_stopped", { reason: "enough" }],
+      ]),
+      [],
+    );
+    assert.equal(pausedMs(history, at(80)), 60_000);
+    assert.equal(pausedMs(history.slice(0, 4), at(65)), 45_000, "an ongoing pause counts to now");
+    assert.equal(pausedMs(history.slice(0, 1), at(65)), 0);
+    assert.equal(pausedMs(history.slice(0, 2), null), 0, "no clock, no guess");
+    // The read's clock comes from the daemon: its start plus elapsed, or the recorded end.
+    assert.equal(statusTime(status("paused")), at(125));
+    assert.equal(statusTime(status("stopped", { endTime: at(80) })), at(80));
+    assert.equal(statusTime(status("ready", { startTime: null })), null);
+  });
+
+  it("names the attempt's last recorded stage without claiming provider activity", () => {
+    const stages = (
+      kind: string | undefined,
+      entries: [number, EventRow["type"], EventRow["data"]][],
+    ) =>
+      entries.map((_, index) => {
+        const item = buildHistory(events(entries.slice(0, index + 1)), [])[0] as StepItem;
+        return attemptActivity(item, kind);
+      });
+    assert.deepEqual(
+      stages("agent", [
+        [0, "attempt_started", { stepId: "review" }],
+        [1, "attempt_prepared", {}],
+        [1, "invocation_dispatching", { invocation: 0 }],
+        [2, "invocation_started", { invocation: 0 }],
+        [300, "invocation_settled", { invocation: 0, exitCode: 0 }],
+        [300, "correction_requested", { invocation: 1 }],
+        [301, "invocation_dispatching", { invocation: 1 }],
+        [302, "invocation_started", { invocation: 1 }],
+        [320, "report_accepted", { reportId: 1, outcome: "complete" }],
+        [325, "invocation_settled", { invocation: 1, exitCode: 0 }],
+      ]),
+      [
+        "Preparing",
+        "Preparing",
+        "Starting the agent",
+        "Agent running",
+        "Process finished; recording the result",
+        "Asking the agent for its missing report",
+        "Asking the agent for its missing report",
+        "Asking the agent for its missing report",
+        "Report received; waiting for the agent to exit",
+        "Process finished; recording the result",
+      ],
+    );
+    assert.deepEqual(
+      stages("command", [
+        [0, "attempt_started", { stepId: "check" }],
+        [1, "invocation_dispatching", { invocation: 0 }],
+        [2, "invocation_started", { invocation: 0 }],
+      ]),
+      ["Preparing", "Starting the command", "Command running"],
+    );
   });
 });
 

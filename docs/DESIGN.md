@@ -55,6 +55,13 @@ The existing History/Map links, inspected result and per-attempt output choice p
 when switching views within the run. These are read-only navigation actions. OWNER-1's
 owner discoverability check remains tracked in [the backlog](../IMPROVEMENTS.md#owner-1--completed-run-navigation).
 
+The run overview keeps task progress, step activity and run time separate. Task names the
+task-loop phase and says **Run not finished yet** once every task is done but the run
+continues. Current step adds the attempt's last recorded stage and time since that attempt
+started. Elapsed states paused time from recorded pause intervals, and **Tasks done** counts
+tasks only. Workflowz shows no overall percentage, remaining-work prediction or live output,
+because it cannot observe them. The design follows F3 in [the backlog](../IMPROVEMENTS.md#f3--progress-and-timing-during-long-steps).
+
 Technical failures are identified beside the paused-run heading and above the selected
 attempt's Report/Output tabs. The summary includes the available safe cause, including
 recognized OpenCode bridge codes. An earlier accepted report remains inspectable and is

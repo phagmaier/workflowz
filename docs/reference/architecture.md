@@ -497,6 +497,10 @@ elapsed time, accepted completion counts (null for graph-only), latest report an
 from shared adapter registry data, even when the cursor is an engine/task/command stage.
 The dashboard displays this selection and host-access implications before Start/Resume;
 invocation events remain separate observed launch evidence, not a pre-run compatibility claim.
+The overview derives its task phase, active-attempt stage/time and paused time in the
+browser from this status and the event history. Paused time is measured from `run_paused` to
+the following `run_resumed`/`run_stopped`, or to the read's own clock (`startTime +
+elapsedMs`). No status field, event or polling interval was added for this presentation.
 
 The client polls status and exclusive-cursor events, fetching reports when acceptance changes.
 History accumulates 1000-event pages, explicitly marking pending history (§8.7). Run selection

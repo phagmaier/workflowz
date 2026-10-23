@@ -1,3 +1,5 @@
+import { writeFileSync } from "node:fs";
+import path from "node:path";
 import { noSideScroll, pairApp, shot, WORKFLOW, watchPolicy } from "./app-helpers.mjs";
 import { expect, test } from "./fixture.mjs";
 
@@ -493,4 +495,149 @@ test("inspecting the automatically selected attempt pins it through background p
     "aria-selected",
     "true",
   );
+});
+
+// Each long step waits for its own release file in the project folder; no timer decides when.
+const WAIT =
+  "const file = process.argv[1]; const timer = setInterval(() => { if (require('node:fs').existsSync(file)) { clearInterval(timer); console.log(file + ' released'); } }, 50);";
+const PHASES = `version: 1
+name: Foundation, tasks and integration
+project: {root: .}
+tasks:
+  source: {kind: markdown_checklist, path: tasks.md}
+start: foundation
+steps:
+  foundation:
+    kind: command
+    argv: [node, -e, "${WAIT}", release-foundation]
+    timeout_seconds: 60
+    on:
+      complete: {goto: pick}
+      failed: {pause: true}
+  pick:
+    kind: task.next
+    on:
+      task_ready: {goto: work}
+      exhausted: {goto: integrate}
+  work:
+    kind: command
+    argv: [node, -e, "console.log('task work')"]
+    on:
+      complete: {goto: finish}
+      failed: {pause: true}
+  finish:
+    kind: task.complete
+    on:
+      complete: {goto: pick}
+  integrate:
+    kind: command
+    argv: [node, -e, "${WAIT}", release-integrate]
+    timeout_seconds: 60
+    on:
+      complete: {goto: done}
+      failed: {pause: true}
+  done: {kind: end, label: Integrated}
+`;
+
+test("long steps show their activity and attempt time; finished tasks don't read as a finished run", async ({
+  page,
+  app,
+}) => {
+  const policy = await watchPolicy(page);
+  const { runId } = await app.seed({ workflowText: PHASES });
+  const mutations = [];
+  page.on("request", (request) => {
+    if (!request.url().endsWith("/ui/api")) return;
+    const body = request.postDataJSON();
+    if (["start", "pause", "resume", "override", "stop"].includes(body?.op))
+      mutations.push(body.op);
+  });
+  await pairApp(page, app, `#/runs/${runId}`);
+  const heading = page.getByRole("heading", { level: 1 });
+  const overview = page.getByRole("region", { name: "Run overview", exact: true });
+  const fact = (label) =>
+    overview
+      .locator(".facts > div")
+      .filter({ has: page.getByText(label, { exact: true }) })
+      .locator("dd");
+  await page.getByRole("button", { name: "Start run", exact: true }).click();
+
+  // Before any task: the step's own activity and attempt time, not just total elapsed.
+  await expect(heading).toContainText("Running — Foundation");
+  await expect(fact("Task")).toHaveText("None started yet");
+  await expect(fact("Tasks done")).toContainText("0/2");
+  await expect(fact("Current step")).toContainText("Foundation · Command");
+  await expect(fact("Current step")).toContainText(/Command running · [2-9]s this attempt/);
+  await expect(fact("Elapsed")).toContainText("since start");
+  await expect(fact("Elapsed")).not.toContainText("paused");
+  await expect(detail(page, "Foundation")).toContainText("Workflowz doesn't show live output");
+  await takeShot(page, "progress-foundation");
+
+  // Pause after the step, then resume: paused time is named, not hidden inside elapsed.
+  await page.getByRole("button", { name: "Pause after this step", exact: true }).click();
+  await expect(heading).toContainText("Pausing after Foundation finishes");
+  await expect(fact("Current step")).toContainText("Command running");
+  writeFileSync(path.join(app.root, "release-foundation"), "release\n");
+  await expect(heading).toContainText("Paused at your request");
+  await expect(fact("Next step")).toHaveText("Pick · Pick the next task");
+  const refresh = page.getByRole("button", { name: "Refresh run", exact: true });
+  await expect(async () => {
+    await refresh.click();
+    await expect(fact("Elapsed")).toContainText(/incl\. [1-9]s paused/, { timeout: 500 });
+  }).toPass();
+  await page.getByRole("radio", { name: /^Continue with Pick/ }).check();
+  await page.getByLabel(/^Reason/).fill("Foundation inspected");
+  await page.getByRole("button", { name: "Resume run", exact: true }).click();
+
+  // All tasks done while integration continues: the run is clearly not finished.
+  await expect(heading).toContainText("Running — Integrate");
+  await expect(fact("Task")).toHaveText(/^All 2 done\s*Run not finished yet$/);
+  await expect(fact("Tasks done")).toContainText("2/2");
+  await expect(page.locator(".lede").first()).toContainText(
+    "All 2 imported tasks are done; the workflow continues with Integrate.",
+  );
+  await expect(fact("Current step")).toContainText(/Command running · (<1s|\d+s) this attempt/);
+  await expect(fact("Elapsed")).toContainText(/incl\. \d+s paused/);
+
+  // Polling keeps the inspected attempt, its Report/Output choice and keyboard focus.
+  await history(page)
+    .getByRole("button", { name: /Foundation complete/ })
+    .click();
+  const foundation = detail(page, "Foundation");
+  const output = foundation.getByRole("tab", { name: "Output", exact: true });
+  await expect(output).toHaveAttribute("aria-selected", "true");
+  await expect(foundation).toContainText("release-foundation released");
+  await output.focus();
+  await page.keyboard.press("ArrowLeft");
+  const report = foundation.getByRole("tab", { name: "Report", exact: true });
+  await expect(report).toBeFocused();
+  // Later polls advance the attempt time without moving the owner's choice or focus.
+  await expect(fact("Current step")).toContainText(/Command running · [2-9]s this attempt/);
+  await expect(report).toBeFocused();
+  await expect(report).toHaveAttribute("aria-selected", "true");
+
+  for (const [width, height] of [
+    [1440, 1000],
+    [390, 844],
+    [320, 740],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await noSideScroll(page);
+    await takeShot(page, `progress-integrate-${width}`);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  writeFileSync(path.join(app.root, "release-integrate"), "release\n");
+  await expect(heading).toContainText("Completed — Integrated");
+  await expect(page.locator(".lede").first()).toContainText(
+    /Finished in \S+( \S+)?, including \S+( \S+)? paused\. 2 of 2 tasks done\./,
+  );
+  await expect(fact("Task")).toHaveText("All 2 done");
+  await expect(fact("Last step")).toHaveText("Done · Finish");
+  await takeShot(page, "progress-completed");
+  await expect(fact("Elapsed")).toContainText("start to finish");
+  await expect(report).toHaveAttribute("aria-selected", "true");
+  await expect(report).toBeFocused();
+  expect(mutations).toEqual(["start", "pause", "resume"]);
+  await policy();
 });

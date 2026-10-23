@@ -1,26 +1,22 @@
 # Workflowz improvement backlog
 
-**Checkpoint — 2026-10-22:** agent setup clarification and F6 are complete. Each selected
-finding gets a bounded proposal and observable acceptance checks; the development reference
-defines checks by change type, and AGENTS.md defines local commits with explicit staging and
-separately requested pushes. These setup changes are in local commit `e780967`; OWNER-1/F5
-were checkpointed together in `da72437`. F6 adds an optional executable browser recipe and
-documents its precise coverage and limits. No engine/schema or Workbench behavior changed.
-The owner has not yet tried the updated Map/results navigation, so OWNER-1 remains pending.
+**Checkpoint — 2026-10-23:** F3 (progress and timing during long steps) is complete; see
+its section below for the change, checks and limits. It is presentation only: the run overview
+separates the task phase, the active attempt's recorded stage/time, elapsed time with its paused
+portion, and tasks done. No server, event, schema or polling change. OWNER-1 remains implemented
+and awaiting the owner's Map/results discoverability feedback. F5/F6 are complete.
 
-F6 verification: typecheck and lint pass (existing CSS warning remains); all 11 CLI validation
-tests pass, including seven example workflows. Both offline Chromium scenarios pass: API/page
-checks miss the synthetic input bug, the actual browser command catches it and pauses, and
-the repaired target completes through the same authored routes. Both clean up owned data,
-processes and private state. Documentation links/anchors resolve. Full core/browser suites
-were not repeated for this examples/guidance slice; F5's 873-core/21-browser results remain below.
-No live provider was called.
+**Verification setup note:** the owner's commit `86927af` (removing `.cursor/skills`) also
+deleted `playwright.config.mjs`. Without it, `npm run test:browser` loses the pinned settings:
+one worker, no retries, `chromium` channel, timeouts, `WF_BROWSER_OUTPUT` and no traces.
+F3's browser checks ran with the last committed config's settings, copied to a private scratch
+path with an absolute `testDir` and no import, and supplied via `--config`. The repository was not changed. Ask the owner whether to
+restore the file before relying on the bare command. `biome.json` and the development
+reference still mention `.cursor/skills`.
 
-**Next independent slice: F3.** Reproduce a long-running step and a run whose task total is
-complete while integration/audit work remains, using existing offline fixtures. Record a
-bounded proposal from the actual timing/activity behavior before implementation. Keep task
-totals and elapsed time accurate, including pauses; do not imply unsupported live output.
-Record owner feedback on the Finished → Map/results path when available.
+**Next independent slice: F2.** Reproduce Fit on a realistic 18-node task/review/repair graph
+offline, then record a bounded proposal for readable selected-path/node focus or collapsed
+repair routes before implementing. Record owner feedback on Finished → Map/results when available.
 
 This is the single active local backlog, including small plans and continuation notes.
 GitHub is primarily repository storage; tickets, labels and PRs are optional when specifically
@@ -59,7 +55,7 @@ historical evidence stays linked. Follow the verification matrix and local commi
 | OWNER-1 | High · implemented; awaiting owner validation | The owner struggled to find the completed run's graph/map again. | Explicit Finished-row Map/results links and a prominent map/results summary action pass offline browser, keyboard and responsive checks. Owner discoverability feedback is still required to close. |
 | F5 | High · complete | A transport/process failure was presented as an agent report/provider failure. | Technical summaries/details, safe bridge causes and neutral settlement wording pass core and browser regressions, including the real bridge through the fake local API, accepted-report/exit-zero failure and no replay. |
 | F6 | High · complete | Passing API/page checks missed browser CRUD that continually erased input. | Optional executable Chromium recipe covers keyboard input and CRUD at desktop/phone widths, reports precise limits, and passes broken/fixed regressions through ordinary command routing. Seven YAML examples validate. |
-| F3 | Medium · open | Long steps show little activity; 3/3 tasks appeared while integration/audit still remained. | Show current phase and useful attempt/activity timing separately from task totals and paused elapsed time. Do not imply unsupported live output. |
+| F3 | Medium · complete | Long steps show little activity; 3/3 tasks appeared while integration/audit still remained. | Overview names the task phase (“Run not finished yet” after all tasks), the attempt's recorded stage and time, elapsed with paused time, and Tasks done. Passes unit, focused and full offline Chromium regressions; no live output or progress estimates are implied. |
 | F2 | Medium · open | Fit shrank an 18-node graph to unreadable 35%; Form was easier to inspect. | Explore readable selected-path/node focus or collapsed repair sections, keeping every route inspectable. Test the proposed interaction. |
 | F1 | Medium · open | Checker showed an array/string schema error instead of “Close the double quote”. | Carry the useful command-parser message into the checker, suppress duplicate noise and preserve Fix focus. |
 | UX-1 | Low · open | “Foundation runs again” feedback stayed visible during later tasks. | Use past tense or clear transient feedback when execution advances. |
@@ -68,6 +64,90 @@ historical evidence stays linked. Follow the verification matrix and local commi
 Sources: [owner walkthrough feedback](docs/evaluations/owner-walkthrough.md#owner-feedback),
 [full trial findings](docs/evaluations/equipment-lending/EVALUATION.md#findings),
 [prioritized critique](docs/evaluations/equipment-lending/EVALUATION.md#prioritized-recommendations-and-limits).
+
+### F3 — progress and timing during long steps
+
+**Observed:** reproduced on 2026-10-23 with a new offline Chromium scenario: two imported
+tasks, a Foundation command and a post-task Integrate command that each wait for their own
+release file, plus a user pause after Foundation. While Foundation ran, the overview showed
+“A command is running”, “0 of 2 done · none active”, total elapsed “2s incl. pauses” and a
+Progress bar at 0/2; the step's own duration appeared only on its History row. While Integrate
+ran after both tasks, the overview showed “All 2 done” and a full “2/2 tasks” Progress bar; only
+the heading showed that work remained. Elapsed always said “incl. pauses”, even with none,
+and never said how much was paused; the completed summary said “Finished in 14s” although
+about 4s of that was paused. Saved Output correctly says it does not stream.
+Available data: the status read's active attempt start time; each attempt's recorded
+preparation, invocation dispatch/start/settlement, accepted report and correction events; and
+pause/resume/stop timestamps. Workflowz has no provider activity stream, so it cannot observe
+what an agent is doing between those events.
+
+**Result and scope:** presentation only, from existing status and event reads; no
+server, engine, schema or polling change.
+
+- The Task fact names the task phase: “None started yet” before any task, the active task,
+  “k of N done · none active” between tasks, and “All N done” with “Run not finished yet” until
+  the run completes or stops. Progress becomes “Tasks done”, so the bar counts tasks only.
+- While running or pausing, Current step adds the attempt's last recorded stage (preparing,
+  starting, agent/command running, report received while the agent exits, asking for a
+  missing report, recording the result) and the time since this attempt started.
+- Elapsed reads “since start”, “start to finish” or “until stopped”, plus “incl. X paused”
+  from recorded pause intervals. The completed summary states paused time.
+- With all tasks done, the running summary says the workflow continues with the current
+  step. A running step's details say its result and saved output arrive after it finishes and
+  that Workflowz doesn't show live output.
+- Excluded: overall percentages, remaining-step or time predictions, live output, provider
+  heartbeats, History row changes and the stale-feedback wording (UX-1).
+
+**Acceptance:**
+
+1. A new `app-run-details.spec.mjs` scenario fails before the change and passes after. It
+   covers the before-task phase with a growing attempt time, the pausing state, paused time
+   after pause/resume, the all-tasks-done phase while Integrate runs, and the completed
+   summary/facts. It also checks that the inspected attempt, its Output tab and keyboard focus
+   survive polling, that only Start/Pause/Resume are sent, and that there is no page overflow
+   at 1440/390/320 px. Screenshots are visually reviewed.
+2. Unit tests derive phase, activity and paused time from realistic event sequences, including
+   report-before-exit, correction, stop while paused, empty and graph-only task lists.
+3. The lifetime scenario shows the agent's recorded “report received” stage while its process
+   continues. Existing status-transition and graph-only scenarios still pass.
+4. `npm run check` and the affected Chromium specs pass when run sequentially. DESIGN and
+   USER_GUIDE describe the facts.
+
+**Decisions:** none; the wording and placement are ordinary implementation choices.
+
+**Implemented:** pure `taskPhase`, `attemptActivity`, `pausedMs` and `statusTime` helpers in
+`ui/src/lib/run-copy.ts` drive the overview facts, running summary, completed summary and the
+running-step callout. The overview facts are now Task, Current step, Elapsed and Tasks done.
+Attempt time uses the active attempt's recorded start; paused time uses only recorded
+pause→resume/stop intervals. Ongoing pauses are measured to the daemon read's own clock.
+
+**Acceptance passed:**
+
+- The new scenario `long steps show their activity and attempt time; finished tasks don't
+  read as a finished run` failed against the unchanged UI. Its first assertion received
+  “0 of 2 done · none active”; a separate observation run also captured “All 2 done”, a full
+  “2/2 tasks” bar during Integrate, and “Finished in 14s” without its pause. After the
+  change it passes. The scenario confirms the growing attempt time while Foundation runs,
+  pausing, paused time, the all-done phase during Integrate and the completed summary/facts.
+  It also confirms that Report choice and focus survive polling, that only Start, Pause and
+  Resume are sent, and that there is no overflow at 1440/390/320 px.
+- The lifetime scenario shows “Report received; waiting for the agent to exit” while the
+  real supervised fake agent process continues after its accepted report.
+- `npm run check`: typecheck, lint (existing CSS warning only) and all 878 offline core tests
+  pass. Four new unit tests cover task phases (including empty and graph-only task lists),
+  the summaries, paused intervals (including stop while paused and missing clocks) and
+  every recorded attempt stage, including report correction.
+- Full offline Chromium suite: all 64 scenarios pass sequentially after the core gate.
+  This was run with the restored config described in the checkpoint. Desktop, foundation,
+  integration, completed and 320 px screenshots were visually inspected. Local links/anchors
+  in the four updated documents resolve. Owned fixtures, processes, listeners and temporary
+  state were removed. No provider was called.
+
+**Limits:** stages come only from Workflowz events, so a long “Agent running” stage cannot
+distinguish productive work from a stall. Times update with the existing 2-second
+running/5-second idle polling. Elapsed includes daemon downtime before an interruption is
+recorded, and paused time counts only explicit pauses. Interrupted and pausing states were
+checked through existing rewritten status reads; there is no live-provider evidence.
 
 ### OWNER-1 — completed-run navigation
 

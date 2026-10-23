@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { clearFlash, peekFlash } from "../flash.ts";
 import { clock, duration, humanize, KIND_LABEL } from "../lib/format.ts";
-import { buildHistory, type HistoryItem, redact } from "../lib/history.ts";
-import { describeRun } from "../lib/run-copy.ts";
+import { buildHistory, type HistoryItem, redact, type StepItem } from "../lib/history.ts";
+import { attemptActivity, describeRun, pausedMs, statusTime, taskPhase } from "../lib/run-copy.ts";
 import { editorHref, runHref } from "../route.ts";
 import { type RunData, useRunData } from "../run-data.ts";
 import { useRuns } from "../runs-data.tsx";
@@ -12,38 +12,42 @@ import { RunMap } from "./RunMap.tsx";
 import { Shell } from "./Shell.tsx";
 import { StatusChip } from "./ui.tsx";
 
-function Facts({ data }: { data: RunData }) {
+function Facts({ data, items }: { data: RunData; items: readonly HistoryItem[] }) {
   const status = data.status;
   if (!status) return null;
-  const { run, progress, tasks } = status;
-  const task = tasks.find((t) => t.taskId === run.activeTaskId);
+  const { run, progress, activeAttempt } = status;
   const finished = run.status === "completed" || run.status === "stopped";
+  const moving = run.status === "running" || run.status === "pausing";
   const step = data.graph?.specs[run.cursorStepId];
+  const phase = taskPhase(status);
+  const attempt =
+    moving && activeAttempt
+      ? items.find(
+          (item): item is StepItem =>
+            item.type === "step" && item.attemptId === activeAttempt.attemptId,
+        )
+      : undefined;
+  const paused = pausedMs(items, statusTime(status));
   return (
     <dl className="facts">
       <div>
         <dt>Task</dt>
         <dd>
-          {task
-            ? `${tasks.indexOf(task) + 1} of ${tasks.length} · ${task.title}`
-            : progress
-              ? progress.completed === progress.total && progress.total > 0
-                ? `All ${progress.total} done`
-                : `${progress.completed} of ${progress.total} done · none active`
-              : "No task list"}
+          {phase.label}
+          {phase.note ? <span className="fact-note">{phase.note}</span> : null}
         </dd>
       </div>
       <div>
-        <dt>
-          {finished
-            ? "Last step"
-            : ["running", "pausing"].includes(run.status)
-              ? "Current step"
-              : "Next step"}
-        </dt>
+        <dt>{finished ? "Last step" : moving ? "Current step" : "Next step"}</dt>
         <dd>
           {humanize(run.cursorStepId)}
           {step ? <span className="muted"> · {KIND_LABEL[step.kind]}</span> : null}
+          {moving && activeAttempt ? (
+            <span className="fact-note">
+              {attempt ? attemptActivity(attempt, step?.kind) : "Running"} ·{" "}
+              {duration(Date.now() - Date.parse(activeAttempt.startedAt))} this attempt
+            </span>
+          ) : null}
         </dd>
       </div>
       <div>
@@ -51,7 +55,15 @@ function Facts({ data }: { data: RunData }) {
         <dd>
           {run.startTime ? (
             <>
-              {duration(status.elapsedMs)} <span className="muted">incl. pauses</span>
+              {duration(status.elapsedMs)}{" "}
+              <span className="muted">
+                {run.status === "completed"
+                  ? "start to finish"
+                  : run.status === "stopped"
+                    ? "until stopped"
+                    : "since start"}
+              </span>
+              {paused ? <span className="fact-note">incl. {duration(paused)} paused</span> : null}
             </>
           ) : (
             "Not started"
@@ -60,14 +72,14 @@ function Facts({ data }: { data: RunData }) {
       </div>
       {progress ? (
         <div>
-          <dt>Progress</dt>
+          <dt>Tasks done</dt>
           <dd className="progress">
             <progress
               max={Math.max(progress.total, 1)}
               value={progress.completed}
               aria-label="Tasks done"
             />{" "}
-            {progress.completed}/{progress.total} tasks
+            {progress.completed}/{progress.total}
           </dd>
         </div>
       ) : null}
@@ -277,7 +289,7 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
               </a>
             </div>
           </div>
-          <Facts data={data} />
+          <Facts data={data} items={items} />
         </section>
 
         <RunControls data={data} control={control} items={items} />

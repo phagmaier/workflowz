@@ -13,6 +13,7 @@ import {
   outcomeLabel,
 } from "../lib/format.ts";
 import { groupHistory, type HistoryItem, redact, type StepItem } from "../lib/history.ts";
+import { attemptActivity } from "../lib/run-copy.ts";
 import type { RunGraph } from "../run-data.ts";
 import type { BrowserDraft, TaskRow } from "../types.ts";
 import { AttemptOutput } from "./AttemptOutput.tsx";
@@ -349,8 +350,9 @@ export function StepDetail({
       {task ? <p className="muted small">{task.title}</p> : null}
       {item.state === "running" ? (
         <div className="callout">
-          <span className="spinner" aria-hidden="true" /> Running. The result appears here when it
-          finishes.
+          <span className="spinner" aria-hidden="true" /> {attemptActivity(item, spec?.kind)} ·{" "}
+          {itemDuration(item, Date.now())} so far. Its result and saved output appear here after it
+          finishes; Workflowz doesn't show live output.
         </div>
       ) : item.state === "interrupted" ? (
         <div className="callout callout-danger">

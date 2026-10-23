@@ -66,6 +66,78 @@ export function taskPosition(status: BrowserRunStatus): string | null {
   return index < 0 ? null : `task ${index + 1} of ${tasks.length}`;
 }
 
+/** The task loop's position, kept apart from whether the run itself has finished. */
+export function taskPhase(status: BrowserRunStatus): { label: string; note: string | null } {
+  const { run, progress, tasks } = status;
+  const index = tasks.findIndex((task) => task.taskId === run.activeTaskId);
+  const task = tasks[index];
+  if (task) return { label: `${index + 1} of ${tasks.length} · ${task.title}`, note: null };
+  if (!progress) return { label: "No task list", note: null };
+  if (progress.total === 0) return { label: "No tasks imported", note: null };
+  const finished = run.status === "completed" || run.status === "stopped";
+  if (progress.completed === progress.total)
+    return {
+      label: `All ${progress.total} done`,
+      note: finished ? null : "Run not finished yet",
+    };
+  if (!finished && tasks.every((t) => t.state === "pending"))
+    return { label: "None started yet", note: null };
+  return { label: `${progress.completed} of ${progress.total} done · none active`, note: null };
+}
+
+/**
+ * The attempt's latest recorded stage. Workflowz sees only its own events, never what the
+ * agent or command is doing between them.
+ */
+export function attemptActivity(item: StepItem, kind: string | undefined): string {
+  const running =
+    kind === "agent" ? "Agent running" : kind === "command" ? "Command running" : "Running";
+  const correcting = "Asking the agent for its missing report";
+  let stage = "Preparing";
+  for (const event of item.events)
+    switch (event.type) {
+      case "invocation_dispatching":
+        stage = event.data.invocation === 1 ? correcting : `Starting the ${kind ?? "step"}`;
+        break;
+      case "invocation_started":
+        stage = event.data.invocation === 1 ? correcting : running;
+        break;
+      case "correction_requested":
+        stage = correcting;
+        break;
+      case "report_accepted":
+        stage = "Report received; waiting for the agent to exit";
+        break;
+      case "invocation_settled":
+        stage = "Process finished; recording the result";
+        break;
+    }
+  return stage;
+}
+
+/** The read's own clock: the run's end, or when the daemon answered the status read. */
+export function statusTime(status: BrowserRunStatus): string | null {
+  const { startTime, endTime } = status.run;
+  if (endTime) return endTime;
+  return startTime ? new Date(Date.parse(startTime) + status.elapsedMs).toISOString() : null;
+}
+
+/** Time between recorded pauses and the resume or stop that ended them, up to `end`. */
+export function pausedMs(items: readonly HistoryItem[], end: string | null): number {
+  let total = 0;
+  let since: number | null = null;
+  for (const item of items) {
+    if (item.type !== "note") continue;
+    if (item.kind === "paused") since ??= Date.parse(item.at);
+    else if ((item.kind === "resumed" || item.kind === "stopped") && since !== null) {
+      total += Date.parse(item.at) - since;
+      since = null;
+    }
+  }
+  if (since !== null && end) total += Date.parse(end) - since;
+  return Number.isFinite(total) ? Math.max(0, total) : 0;
+}
+
 export function describeRun(
   status: BrowserRunStatus,
   items: readonly HistoryItem[],
@@ -104,9 +176,14 @@ export function describeRun(
           : current?.kind === "command"
             ? "A command is running in the project folder."
             : "Moving to the next step.";
+      const progress = status.progress;
+      const tasksDone =
+        progress && progress.total > 0 && progress.completed === progress.total && !position
+          ? ` ${progress.total === 1 ? "The imported task is" : `All ${progress.total} imported tasks are`} done; the workflow continues with ${step}.`
+          : "";
       return {
         headline: `Running — ${step}${position ? `, ${position}` : ""}`,
-        detail: `${who} ${keepsGoing}`,
+        detail: `${who}${tasksDone} ${keepsGoing}`,
       };
     }
     case "pausing":
@@ -166,12 +243,13 @@ export function describeRun(
       const tasks = status.progress
         ? ` ${status.progress.completed} of ${status.progress.total} tasks done.`
         : "";
+      const paused = pausedMs(items, statusTime(status));
       return {
         headline:
           finished?.type === "note" && finished.text.startsWith("Finished: ")
             ? `Completed — ${finished.text.slice("Finished: ".length)}`
             : "Completed",
-        detail: `Finished in ${duration(status.elapsedMs)}.${tasks}`,
+        detail: `Finished in ${duration(status.elapsedMs)}${paused ? `, including ${duration(paused)} paused` : ""}.${tasks}`,
       };
     }
     case "stopped": {

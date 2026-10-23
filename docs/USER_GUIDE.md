@@ -215,8 +215,21 @@ directly. Check the run ID and revision when several runs share a name. Opening 
 start or resume execution. A failed refresh can leave the last known rows and counts visible
 with an out-of-date notice; use the retry action before relying on that state.
 
-Run details shows the current status, next or current step, task progress and elapsed
-time. Elapsed time includes pauses. **Refresh run** updates the view. **Open workflow**
+Run details shows the current status and four facts. Each fact describes one thing only:
+
+| Fact | Meaning |
+| --- | --- |
+| Task | The task loop's position: none started yet, the active task, tasks done with none active, or all done. While the run is still going, “All N done” adds **Run not finished yet**, because later workflow steps can still run. |
+| Current step | The step running now (“Next step” while paused or ready; “Last step” when finished). While a step runs, it adds the attempt's last recorded stage and the time since **this attempt** started, for example “Agent running · 6m 15s this attempt”. |
+| Elapsed | Time **since start** (“start to finish” or “until stopped” when finished), plus **incl. X paused** when the run has paused. Time between a pause and its resume or stop counts as paused. |
+| Tasks done | Imported tasks completed so far. It counts tasks only, not the rest of the workflow. |
+
+Stages come from Workflowz's own records: preparing, starting the agent or command, agent
+or command running, report received while the agent exits, asking the agent for a missing
+report, and recording the result. They show how long it has been, not what an agent is
+doing; there is no overall percentage or estimate of the remaining work. A run's elapsed
+time also includes any time the daemon was down before an interruption was recorded.
+**Refresh run** updates the view. **Open workflow**
 opens the saved revision in the regular editor; use the paused-run change action below
 to change the workflow of an existing run.
 
@@ -244,8 +257,8 @@ Each attempt offers **Report** and **Output**:
   **Accepted report**, **Step definition** and **Technical details** provide more evidence.
 - **Output** shows bounded saved capture from the latest settled invocation, up to
   64 KiB of standard output plus an available diagnostic excerpt of error output.
-  It does **not stream live output**. While a step runs, capture may be unavailable until
-  settlement. Empty output, unavailable capture and a failed read have different messages;
+  It does **not stream live output**. While a step runs, its details show the current
+  stage and time so far; capture may be unavailable until settlement. Empty output, unavailable capture and a failed read have different messages;
   use **Refresh output** or **Try loading output again** as appropriate.
 - Read truncation notices outside the output scrollers. The view may show only the first
   64 KiB, the underlying capture may have reached its own limit, and error diagnostics may

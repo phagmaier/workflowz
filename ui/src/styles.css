@@ -2868,6 +2868,12 @@ button.problem:hover {
 .run-overview .facts dd {
   font-size: 13px;
 }
+.facts .fact-note {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
 .run-overview .progress progress {
   width: 64px;
 }

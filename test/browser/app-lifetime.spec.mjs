@@ -33,8 +33,17 @@ test("disconnection, an ended session and closing the page leave the run going",
   await expect(heading).toContainText("Running — Work");
   const pause = page.getByRole("button", { name: "Pause after this step", exact: true });
   await expect(pause).toBeEnabled();
-  await expect(page.getByRole("region", { name: "Work", exact: true })).toContainText("Running.");
+  await expect(page.getByRole("region", { name: "Work", exact: true })).toContainText(
+    "Workflowz doesn't show live output",
+  );
   const running = await app.until(runId, (s) => s.activeAttempt?.pid && s.latestReport);
+  // The accepted report is recorded while its process is still running; nothing else is claimed.
+  await expect(
+    page
+      .getByRole("region", { name: "Run overview", exact: true })
+      .locator(".facts > div")
+      .filter({ has: page.getByText("Current step", { exact: true }) }),
+  ).toContainText(/Report received; waiting for the agent to exit · \S+ this attempt/);
   const attemptId = running.activeAttempt.attemptId;
   process.kill(running.activeAttempt.pid, 0);
   await page.getByText("Accepted report", { exact: true }).click();
