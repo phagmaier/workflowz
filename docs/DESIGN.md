@@ -48,6 +48,19 @@ see what happened, without learning internal field names or hunting for controls
 - **Runs:** runs grouped by status, with an obvious way to open one.
 - **Run details:** status, what happens next, step history, and the graph showing the path taken.
 
+Finished rows expose **View results** and **Map** directly. A completed or stopped run's
+status summary gives **View map** a prominent action; while on Map, that action becomes
+**View results**. It opens the chosen view and moves keyboard focus into its content.
+The existing History/Map links, inspected result and per-attempt output choice persist
+when switching views within the run. These are read-only navigation actions. OWNER-1's
+owner discoverability check remains tracked in [the backlog](../IMPROVEMENTS.md#owner-1--completed-run-navigation).
+
+Technical failures are identified beside the paused-run heading and above the selected
+attempt's Report/Output tabs. The summary includes the available safe cause, including
+recognized OpenCode bridge codes. An earlier accepted report remains inspectable and is
+identified separately from the execution failure. Process exit status remains evidence;
+an exit of zero can accompany unconfirmed execution. Historical records remain immutable.
+
 ## Must not change
 
 - Save creates an immutable revision. Create run only prepares a run; Start is a separate action.

@@ -1,5 +1,6 @@
 /** Plain-language status headline for a run, derived from its status and readable history. */
 import type { BrowserRunStatus, RunStatus } from "../types.ts";
+import { technicalFailure } from "./failure.ts";
 import { duration, harnessLabel, humanize, sentence } from "./format.ts";
 import type { HistoryItem, StepItem } from "./history.ts";
 
@@ -137,11 +138,20 @@ export function describeRun(
         };
       if (lastStep?.decision === "pause" && lastStep.outcome) {
         const name = humanize(lastStep.stepId);
+        const failure = technicalFailure(
+          lastStep,
+          current?.kind === "agent" ? current.harness : undefined,
+        );
+        if (failure)
+          return {
+            headline: `Paused — ${name} had a technical failure`,
+            detail: `${name} ended with a technical failure. ${failure.cause} Choose what happens next.`,
+          };
         const summary = lastStep.report?.summary;
         const why =
           lastStep.pauseReason === "retry_exhausted"
             ? `${name} used up its retries after ${quote(lastStep.outcome)}.`
-            : `${name} reported ${quote(lastStep.outcome)}${summary ? `: ${sentence(summary)}` : "."}`;
+            : `${name} ${lastStep.report ? "reported" : "finished with"} ${quote(lastStep.outcome)}${summary ? `: ${sentence(summary)}` : "."}`;
         return {
           headline: `Paused — ${name} needs your decision`,
           detail: `${why} Choose what happens next.`,

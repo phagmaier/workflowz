@@ -1,6 +1,7 @@
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useState } from "react";
 import { describeReadFailure } from "../api.ts";
 import { useConnection } from "../connection.tsx";
+import { technicalFailure } from "../lib/failure.ts";
 import {
   between,
   clock,
@@ -317,6 +318,7 @@ export function StepDetail({
     ? item.events.find((event) => event.type === "manual_override")?.data.reason
     : undefined;
   const report = item.report;
+  const technical = technicalFailure(item, spec?.kind === "agent" ? spec.harness : undefined);
   return (
     <section
       className="pane detail-pane"
@@ -360,12 +362,25 @@ export function StepDetail({
           Stopped before it finished. The process was ended and cleaned up; file changes were kept.
         </div>
       ) : null}
+      {technical ? (
+        <div className="callout callout-danger">
+          <strong>Technical failure</strong>
+          <p>{technical.cause}</p>
+          {spec?.kind === "agent" ? (
+            <p>
+              {report
+                ? "An agent report was accepted before the execution failed. It remains available below."
+                : "No agent report was accepted for this attempt."}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       <AttemptTabs key={item.id} item={item} runId={runId} command={spec?.kind === "command"}>
         {report || item.outcome || item.state === "done" || item.state === "skipped" ? (
           <dl className="kv">
             {item.outcome ? (
               <>
-                <dt>Result</dt>
+                <dt>{technical ? "Technical result" : "Result"}</dt>
                 <dd>
                   <code>{item.outcome}</code>
                   {isSystemOutcome(item.outcome) ? ` — ${outcomeLabel(item.outcome)}` : ""}
@@ -416,7 +431,7 @@ export function StepDetail({
             {item.failureDetail ? (
               <>
                 <dt>Failure</dt>
-                <dd className="prose">{item.failureDetail}</dd>
+                <dd className="prose">{technical?.detail ?? item.failureDetail}</dd>
               </>
             ) : null}
             {thenText(item) ? (

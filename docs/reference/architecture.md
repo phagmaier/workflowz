@@ -646,6 +646,19 @@ Capture-truncation flags from the latest settled invocation explain when output 
 Earlier invocation diagnostics stay in event evidence rather than carrying into a clean
 correction's display. Interacting with history details pins that attempt through background
 progress; its Report/Output choice lasts for the page load, including navigation through Map.
+
+F5 separates technical execution results from declared agent reports in the paused summary
+and attempt details. `ui/src/lib/failure.ts` derives presentation from a `system.*` history
+outcome. It promotes only an exact diagnostic line with a known fixed bridge category/code
+from the latest invocation's bounded stderr, and only for an OpenCode step. Arbitrary stderr,
+unknown codes and surrounding text remain in saved Output. Timeout remains visible when a
+bridge error precedes stalled server shutdown. Exit status alone does not establish harness
+success; accepted reports remain separate evidence even after a technical execution failure.
+The shared adapter `providerError` settlement now describes unconfirmed harness execution
+with the same `system.process_error` code. Older provider-blaming detail is normalized only
+for presentation; original event data stays immutable in Technical details. This changes no
+workflow/schema, routing, correction budget, supervision, output-read API or recovery control.
+
 Manual paused-run changes use Apply and stay paused. The given reason is carried into the
 separate Resume form; newer choices/reasons typed during an outstanding Apply are retained.
 

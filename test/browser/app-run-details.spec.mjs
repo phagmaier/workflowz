@@ -289,6 +289,17 @@ test("run statuses and long labels stay readable, including interrupted recovery
     status = value;
     await page.getByRole("button", { name: "Refresh run", exact: true }).click();
     await expect(page.locator(`.run-overview-${value}`)).toBeVisible();
+    const map = page.getByRole("region", { name: "Run overview", exact: true }).getByRole("link", {
+      name: "View map",
+      exact: true,
+    });
+    if (["stopped", "completed"].includes(value)) {
+      await expect(map).toHaveAttribute("href", `#/runs/${runId}/map`);
+      await map.press("Enter");
+      await expect(page.getByRole("region", { name: "Run map", exact: true })).toBeFocused();
+      await page.getByRole("link", { name: "View results", exact: true }).press("Enter");
+      await expect(page.getByRole("region", { name: "Run results", exact: true })).toBeFocused();
+    } else await expect(map).toHaveCount(0);
     for (const width of [1280, 900, 390, 320]) {
       await page.setViewportSize({ width, height: 950 });
       await noSideScroll(page);

@@ -165,7 +165,7 @@ export function RunsPage({ group }: { group: RunGroupId | null }) {
                             <th scope="col">Now at</th>
                             <th scope="col">Created</th>
                             <th scope="col">
-                              <span className="sr-only">Open run</span>
+                              <span className="sr-only">Run views</span>
                             </th>
                           </tr>
                         </thead>
@@ -205,14 +205,31 @@ export function RunsPage({ group }: { group: RunGroupId | null }) {
                                 </time>
                               </td>
                               <td className="run-open-cell">
-                                <a
-                                  className="btn btn-sm run-open"
-                                  href={runHref(run.runId)}
-                                  data-run-link="open"
-                                  aria-label={`Open run ${run.runId}`}
-                                >
-                                  Open <span aria-hidden="true">→</span>
-                                </a>
+                                <div className="run-row-actions">
+                                  <a
+                                    className="btn btn-sm run-open"
+                                    href={runHref(run.runId)}
+                                    data-run-link="open"
+                                    aria-label={
+                                      item.id === "finished"
+                                        ? `View results for run ${run.runId}`
+                                        : `Open run ${run.runId}`
+                                    }
+                                  >
+                                    {item.id === "finished" ? "View results" : "Open"}{" "}
+                                    <span aria-hidden="true">→</span>
+                                  </a>
+                                  {item.id === "finished" ? (
+                                    <a
+                                      className="btn btn-sm run-open"
+                                      href={runHref(run.runId, "map")}
+                                      data-run-link="map"
+                                      aria-label={`View map for run ${run.runId}`}
+                                    >
+                                      Map
+                                    </a>
+                                  ) : null}
+                                </div>
                               </td>
                             </tr>
                           ))}

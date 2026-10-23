@@ -2,7 +2,9 @@
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { BUILT_IN_HARNESSES } from "../../dist/adapters/harness-registry.js";
+import { createOpenCodeAdapter } from "../../dist/adapters/opencode.js";
 import { startDaemon } from "../../dist/app/daemon.js";
 import { readDaemonAccess } from "../../dist/app/state-directory.js";
 import { ScriptedAgentAdapter } from "../../dist/test-support/scripted-agent.js";
@@ -13,8 +15,25 @@ const plans = {
   intervention: { codex: ["blocked"] },
   lifetime: { codex: ["complete"] },
   "owner-walkthrough": { opencode: ["complete"] },
+  "opencode-reset": { opencode: ["complete"] },
+  "opencode-report-error": { opencode: ["complete"] },
 };
 if (!plans[scenario]) throw new Error("unknown offline browser scenario");
+const root = path.dirname(directory);
+const config = path.join(root, "opencode-fixture.json");
+const bridgeMode = {
+  "opencode-reset": "wait-reset",
+  "opencode-report-error": "report-then-error",
+}[scenario];
+if (bridgeMode)
+  writeFileSync(
+    config,
+    JSON.stringify({
+      plan: [{ mode: bridgeMode }],
+      options: {},
+      capture: path.join(root, "opencode-capture.json"),
+    }),
+  );
 
 const send = (message) => {
   if (process.connected) process.send(message);
@@ -27,9 +46,19 @@ for (const [id] of BUILT_IN_HARNESSES) {
     outcome,
     ...(scenario === "lifetime" ? { extra: gate } : {}),
   }));
-  const adapter = new ScriptedAgentAdapter(scripts, {
-    logFile: path.join(directory, "fake-agent.log"),
-  });
+  const adapter =
+    bridgeMode && id === "opencode"
+      ? await createOpenCodeAdapter({
+          binary: process.execPath,
+          prefixArgs: [
+            fileURLToPath(new URL("../fixtures/fake-opencode.mjs", import.meta.url)),
+            config,
+          ],
+          environment: { PATH: process.env.PATH, HOME: root, OPENCODE_CONFIG_DIR: root },
+        })
+      : new ScriptedAgentAdapter(scripts, {
+          logFile: path.join(directory, "fake-agent.log"),
+        });
   let remaining = scripts.length;
   const launch = (input, correction) => {
     // ScriptedAgentAdapter intentionally has a default plan; this boundary must not.

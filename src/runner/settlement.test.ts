@@ -39,6 +39,17 @@ describe("settlementForAgent (spec §4.4 precedence)", () => {
     assert.equal(result.kind === "system" && result.code, "system.process_error");
   });
 
+  it("describes unconfirmed adapter execution without assigning blame to a provider", () => {
+    assert.deepEqual(
+      settlementForAgent({ ...clean, providerError: "private vendor text" }, ALLOWED),
+      {
+        kind: "system",
+        code: "system.process_error",
+        detail: "the harness did not confirm successful execution",
+      },
+    );
+  });
+
   it("does not accept a report when a terminated agent exits cleanly", () => {
     const result = settlementForAgent({ ...clean, terminated: true }, ALLOWED);
     assert.equal(result.kind === "system" && result.code, "system.process_error");

@@ -202,15 +202,23 @@ groups remain visible, with newest runs first within each group:
 | Running | Running; pausing while the current step finishes. |
 | Finished | Completed or stopped. |
 
-Use the workflow name or **Open** on a run to inspect it. Check the run ID and revision
-when several runs share a name. Opening does not start or resume execution. A failed
-refresh can leave the last known rows and counts visible with an out-of-date notice;
-use the retry action before relying on that state.
+Use the workflow name or **Open** on a run to inspect it. In **Finished**, choose
+**View results** for saved history/output, or **Map** to open that run's execution path
+directly. Check the run ID and revision when several runs share a name. Opening does not
+start or resume execution. A failed refresh can leave the last known rows and counts visible
+with an out-of-date notice; use the retry action before relying on that state.
 
 Run details shows the current status, next or current step, task progress and elapsed
 time. Elapsed time includes pauses. **Refresh run** updates the view. **Open workflow**
 opens the saved revision in the regular editor; use the paused-run change action below
 to change the workflow of an existing run.
+
+When a technical failure pauses a run, the summary identifies the step and available safe
+cause, such as an OpenCode connection reset with `ECONNRESET`. The selected attempt also
+shows **Technical failure** above both Report and Output. An earlier accepted report remains
+available with an explanation that execution subsequently failed. **Exit code 0** describes
+the process exit; the harness must also confirm successful execution. Read the technical
+result and saved diagnostics before choosing how to continue.
 
 ### History, Report and Output
 
@@ -247,6 +255,12 @@ revision. Earlier prompts, commands and reports remain historical records.
 **Map** is a read-only view of the current revision and the execution path. Select a step
 to inspect it and use **Show latest result in history** when offered to return to its
 latest recorded result. Changing the map selection does not change execution.
+
+For a completed or stopped run, **View map** in the status summary opens Map, and
+**View results** there returns to History. These actions move keyboard focus into the
+chosen view; on Map, Tab reaches a step and Up/Down moves between steps. The **History**
+and **Map** links below the summary remain available for every run. Switching views within
+a run keeps the inspected history result and its Report/Output choice.
 
 Expand **Run information** for the project folder, creation details, imported task bodies
 and **Attention records**. Attention notices remain as history after a decision; use the
@@ -470,6 +484,11 @@ A command exit code of zero produces `complete`; a nonzero exit produces `failed
 An agent instead submits a structured report containing one of its declared Outcomes.
 Those are normal workflow results. Failure to start a process, a timeout, a process
 failure or a missing/invalid agent report is a separate technical failure.
+
+Technical results use reserved `system.*` codes in History. The summary describes them as
+technical failures; accepted reports retain their declared Outcomes. Safe bridge diagnostics
+appear beside the heading when available. Other saved diagnostics remain in Output and
+Technical details. Older records retain their original event wording in Technical details.
 
 Expand **If something goes wrong technically** in step settings to inspect or override
 technical failure routes. Specific failures such as `system.timeout` take priority over

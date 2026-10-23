@@ -768,6 +768,14 @@ select:focus-visible {
 .runs-table th:last-child {
   width: 90px;
 }
+.run-group-finished .runs-table th:last-child {
+  width: 210px;
+}
+.run-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .run-identity {
   margin-top: 4px;
 }

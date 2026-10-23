@@ -65,8 +65,11 @@ See the current official [browser provisioning](https://playwright.dev/docs/brow
 [isolated fixture](https://playwright.dev/docs/test-fixtures) documentation. The smoke uses the
 full pinned Chromium via its `chromium` channel, not an arbitrary installed Chrome.
 
-Each scenario starts an owned foreground daemon process with explicit test-only fake adapters,
-a temporary project/database, and ordinary UI pairing. Fake reports use the actual supervised
+Each scenario starts an owned foreground daemon process with scripted test adapters or a
+real adapter pointed explicitly at a repository fake CLI, a temporary project/database, and
+ordinary UI pairing. Installed harnesses and providers are never invoked. The failure scenarios
+exercise the real OpenCode bridge against its fake local API server through settlement,
+history, the run heading and saved Output. Fake reports use the actual supervised
 child and `wf report`; no production fake-provider switch or fixture-control endpoint exists.
 Read-only durable inspection occurs after owner exit. Teardown closes owned tabs, stops active
 work through existing controls, reaps the owner/children, checks listener/discovery removal,

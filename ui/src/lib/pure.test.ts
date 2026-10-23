@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { RUN_STATUSES } from "../../../src/contracts/run-state.ts";
 import { parseRoute, runHref, runsHref } from "../route.ts";
-import type { BrowserRunStatus, ResolvedTransition, RunStatus } from "../types.ts";
+import type { BrowserRunStatus, EventRow, ResolvedTransition, RunStatus } from "../types.ts";
 import { duration, humanize } from "./format.ts";
+import { buildHistory } from "./history.ts";
 import { layoutMap } from "./map-layout.ts";
 import { describeRun, needsAttention, RUN_GROUPS, STATUS } from "./run-copy.ts";
 
@@ -105,6 +106,43 @@ describe("map layout", () => {
 });
 
 describe("status copy", () => {
+  it("describes a transport failure as technical and keeps its safe cause beside the headline", () => {
+    const entries: [EventRow["type"], EventRow["data"]][] = [
+      ["attempt_started", { stepId: "review" }],
+      [
+        "invocation_settled",
+        {
+          exitCode: 1,
+          diagnostics: { stderr: "OpenCode bridge failed (ECONNRESET)." },
+        },
+      ],
+      ["attempt_settled", { status: "failed", outcome: "system.process_error" }],
+      [
+        "transition_committed",
+        {
+          from: "review",
+          outcome: "system.process_error",
+          decision: "pause",
+          reason: "outcome_pause",
+        },
+      ],
+      ["run_paused", { reason: "outcome_pause" }],
+    ];
+    const events: EventRow[] = entries.map(([type, data], index) => ({
+      eventId: index + 1,
+      runId: "run_1",
+      revisionId: 3,
+      attemptId: type === "run_paused" ? null : "attempt_1",
+      timestamp: new Date(index * 1000).toISOString(),
+      type,
+      data,
+    }));
+    const copy = describeRun(status("paused"), buildHistory(events, []));
+    assert.match(copy.detail, /technical failure/i);
+    assert.match(copy.detail, /ECONNRESET/);
+    assert.doesNotMatch(copy.detail, /reported/);
+  });
+
   it("has a headline for every status and counts attention", () => {
     for (const state of Object.keys(STATUS) as RunStatus[]) {
       const copy = describeRun(status(state), []);

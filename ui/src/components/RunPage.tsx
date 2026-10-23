@@ -135,6 +135,13 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
   const items = useMemo<HistoryItem[]>(() => buildHistory(events, reports), [events, reports]);
   const [picked, setPicked] = useState<string | null>(null);
   const focusDetail = useRef(false);
+  const view = useRef<HTMLElement>(null);
+  const focusView = useRef<"details" | "map" | null>(null);
+  useEffect(() => {
+    if (focusView.current !== tab) return;
+    view.current?.focus();
+    focusView.current = null;
+  }, [tab]);
   const initialRetry = useRef<HTMLButtonElement | null>(null);
   useLayoutEffect(() => {
     const previous = initialRetry.current;
@@ -247,6 +254,18 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
               </p>
             </div>
             <div className="run-head-actions">
+              {status.run.status === "completed" || status.run.status === "stopped" ? (
+                <a
+                  className="btn btn-primary btn-sm"
+                  href={runHref(runId, tab === "map" ? "details" : "map")}
+                  onClick={(event) => {
+                    if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey)
+                      focusView.current = tab === "map" ? "details" : "map";
+                  }}
+                >
+                  {tab === "map" ? "View results" : "View map"}
+                </a>
+              ) : null}
               <button id="run-refresh" type="button" className="btn btn-sm" onClick={data.refresh}>
                 Refresh run
               </button>
@@ -292,34 +311,36 @@ export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" 
           </p>
         ) : null}
 
-        {tab === "map" ? (
-          <RunMap
-            graph={data.graph}
-            graphError={data.graphError}
-            run={{ status, items, onShowInHistory: showInHistory }}
-            caption={`Read-only. Revision ${status.run.revisionId}.`}
-          />
-        ) : status.run.status === "ready" && items.every((i) => i.type === "note") ? (
-          <ReadyPlan data={data} />
-        ) : (
-          <div className="split run-history-workbench">
-            <History
-              items={items}
-              tasks={status.tasks}
-              selected={selected?.id ?? null}
-              onSelect={setPicked}
-              caughtUp={data.caughtUp}
-            />
-            <StepDetail
-              item={selected}
-              tasks={status.tasks}
+        <section ref={view} tabIndex={-1} aria-label={tab === "map" ? "Run map" : "Run results"}>
+          {tab === "map" ? (
+            <RunMap
               graph={data.graph}
-              currentRevisionId={status.run.revisionId}
-              runId={runId}
-              onInspect={() => selected && setPicked(selected.id)}
+              graphError={data.graphError}
+              run={{ status, items, onShowInHistory: showInHistory }}
+              caption={`Read-only. Revision ${status.run.revisionId}.`}
             />
-          </div>
-        )}
+          ) : status.run.status === "ready" && items.every((i) => i.type === "note") ? (
+            <ReadyPlan data={data} />
+          ) : (
+            <div className="split run-history-workbench">
+              <History
+                items={items}
+                tasks={status.tasks}
+                selected={selected?.id ?? null}
+                onSelect={setPicked}
+                caughtUp={data.caughtUp}
+              />
+              <StepDetail
+                item={selected}
+                tasks={status.tasks}
+                graph={data.graph}
+                currentRevisionId={status.run.revisionId}
+                runId={runId}
+                onInspect={() => selected && setPicked(selected.id)}
+              />
+            </div>
+          )}
+        </section>
         <details className="disclosure pane run-information">
           <summary>Run information</summary>
           <dl className="kv">

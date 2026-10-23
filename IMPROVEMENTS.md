@@ -1,17 +1,25 @@
 # Workflowz improvement backlog
 
-**Checkpoint — 2026-10-22:** the working beta, owner walkthrough and realistic five-harness
-trial are complete. Documentation now directs local refinement from this backlog; stale
-pre-redesign instructions and moved reference paths have been corrected. The disposable
-lending app, live-run setup scripts and rejected prototype assets are retired. Useful
-reports/evidence remain under [docs/evaluations/](docs/README.md#evaluations).
-No product-improvement slice is in progress. **Next: OWNER-1**, reproduce completed-run Map
-discoverability using the existing offline fixtures, then improve that navigation.
+**Checkpoint — 2026-10-22:** F5 is complete. Paused summaries and attempt details identify
+technical execution failures separately from declared agent reports. Known safe OpenCode
+bridge codes appear near the heading; arbitrary stderr remains in Output. Unconfirmed
+execution uses neutral wording, including presentation of older records. Accepted reports,
+raw historical evidence and existing routing/correction/recovery behavior are preserved.
+Design, operating and technical references are updated. OWNER-1 navigation remains implemented
+and verified offline, with **owner discoverability validation pending**.
 
-Documentation audit verification: build and all 10 CLI validation tests pass, including all
-six example workflows. Local Markdown links/anchors resolve. Lint passes with an existing
-CSS specificity warning and informational notices. No application behavior changed; the
-full runtime/browser suites and live providers were not rerun for this documentation slice.
+Verification: `npm run check` passes (build, typecheck, lint and all 873 core tests).
+All 21 related Chromium scenarios pass together, including real bridge/fake local API
+failure cases, reports/output, run details, grouped Runs and the owner walkthrough. Visual,
+keyboard, reload/history and responsive checks cover the changed presentation down to 320px.
+Local Markdown links/anchors resolve. Lint retains one existing CSS specificity warning and
+informational notices. Owned fixtures and processes are cleaned up. The full browser suite,
+extended 310-second wait and live providers were not rerun for this presentation slice.
+
+**Next independent slice: F6.** Read its evaluation evidence and current example validation
+checks, then add and verify an executable browser acceptance recipe for authored workflows.
+Preserve author choice and deterministic routing. Owner feedback on the Finished → Map/results
+path is still needed before closing OWNER-1; record that feedback when available.
 
 This is the single active local backlog, including small plans and continuation notes.
 GitHub is primarily repository storage; tickets, labels and PRs are optional when specifically
@@ -36,8 +44,8 @@ remaining limits and exact next action. Use [AGENTS.md](AGENTS.md) for the worki
 
 | ID | Priority / status | Observed problem | Direction and completion evidence |
 | --- | --- | --- | --- |
-| OWNER-1 | High · open | The owner struggled to find the completed run's graph/map again. | Make Finished → run → Map/results obvious; verify with the owner and keyboard. The agent later finding Map does not resolve owner discoverability. |
-| F5 | High · open | A transport/process failure was presented as an agent report/provider failure. | Distinguish technical failure from declared outcome and show the safe cause near the main heading. Check the repaired bridge's diagnostics end to end. |
+| OWNER-1 | High · implemented; awaiting owner validation | The owner struggled to find the completed run's graph/map again. | Explicit Finished-row Map/results links and a prominent map/results summary action pass offline browser, keyboard and responsive checks. Owner discoverability feedback is still required to close. |
+| F5 | High · complete | A transport/process failure was presented as an agent report/provider failure. | Technical summaries/details, safe bridge causes and neutral settlement wording pass core and browser regressions, including the real bridge through the fake local API, accepted-report/exit-zero failure and no replay. |
 | F6 | High · open | Passing API/page checks missed browser CRUD that continually erased input. | Provide a verified browser acceptance recipe and clear verification limits in authored workflows. Preserve deterministic routing and author choice; no mandatory engine gate. |
 | F3 | Medium · open | Long steps show little activity; 3/3 tasks appeared while integration/audit still remained. | Show current phase and useful attempt/activity timing separately from task totals and paused elapsed time. Do not imply unsupported live output. |
 | F2 | Medium · open | Fit shrank an 18-node graph to unreadable 35%; Form was easier to inspect. | Explore readable selected-path/node focus or collapsed repair sections, keeping every route inspectable. Test the proposed interaction. |
@@ -48,6 +56,78 @@ remaining limits and exact next action. Use [AGENTS.md](AGENTS.md) for the worki
 Sources: [owner walkthrough feedback](docs/evaluations/owner-walkthrough.md#owner-feedback),
 [full trial findings](docs/evaluations/equipment-lending/EVALUATION.md#findings),
 [prioritized critique](docs/evaluations/equipment-lending/EVALUATION.md#prioritized-recommendations-and-limits).
+
+### OWNER-1 — completed-run navigation
+
+Reproduced with the preserved owner-walkthrough Chromium fixture: after completion the
+summary offers Refresh run and Open workflow, while Map is a quieter tab below the summary.
+Finished rows offer only a workflow-name link and generic Open action. The existing Map
+works; the problem is finding the path to it.
+
+Implemented: completed/stopped summaries offer a prominent View map action (View results
+when viewing Map); Finished rows offer explicit View results and Map links. Both use the
+existing routes. The summary action focuses the requested content, while the History/Map
+switch and inspected result/output choice remain available within the run. Navigation
+does not change execution. The new missing-summary-action regression failed before the fix.
+
+Acceptance checks passed:
+
+- `npm run check`: build, strict typecheck, lint and all 866 core tests pass.
+- `npm run test:browser -- app-runs-groups.spec.mjs app-run-details.spec.mjs owner-walkthrough.spec.mjs`:
+  all 16 offline Chromium scenarios pass together. The completed owner fixture exercises
+  summary → Map → results, direct Finished links, retained Finish output, Back/Forward/reload,
+  Tab/Enter/arrow-key navigation, focus retention and no extra execution requests.
+- Existing read-response fixtures verify completed/stopped summary actions, both Finished
+  statuses and status transitions without stealing keyboard focus. Desktop/tablet/mobile
+  layouts, including long labels and 320px width, have no page overflow. Screenshots of the
+  completed summary, Finished rows and map were visually inspected.
+- Local links/anchors resolve in the three updated documents. Disposable fixture owners,
+  children, listeners and state are cleaned up.
+
+Remaining acceptance: the owner must confirm that Map/results are now easy to find. The
+completed path uses real local commands and a scripted agent; stopped states use the
+existing rewritten read fixtures. The full browser suite and live providers were not rerun.
+Keep OWNER-1 pending until owner feedback is recorded. F5 is complete; independent work can proceed with F6.
+
+### F5 — technical failure attribution
+
+Reproduced before the fix with both a small event/history/status-copy regression and the
+real OpenCode adapter/bridge against `fake-opencode.mjs` in Chromium. A reset at the wait
+endpoint produced no accepted report, but the paused summary said “Foundation reported
+system.process_error” and omitted the saved `ECONNRESET` diagnostic. Separately, the shared
+adapter-failure settlement described unconfirmed execution as “the agent provider failed”.
+
+Implemented:
+
+- Paused summaries identify technical failures and show the available safe cause. Step details
+  retain a Technical failure notice above Report/Output, with accepted reports identified
+  separately. Normal results without an accepted report use “finished with”.
+- The UI promotes exact known bridge diagnostic lines only for OpenCode steps. Unknown codes,
+  surrounding text and arbitrary stderr stay in Output. Timeout remains visible when a bridge
+  error precedes stalled shutdown; earlier invocation stderr does not leak into correction results.
+- Shared unconfirmed-execution settlements keep `system.process_error` and use neutral detail.
+  Older provider-blaming detail is normalized for display; original event data stays immutable.
+  No workflow/schema, routing, correction-budget, supervision or recovery change was needed.
+
+Acceptance checks passed:
+
+- `npm run check`: build, strict typecheck, lint and all 873 offline core tests pass. New
+  regressions cover attribution, diagnostic allowlisting/harness scope, ordinary outcomes,
+  historical evidence, correction timing, timeout precedence and neutral settlement detail.
+- `npm run test:browser -- app-failures.spec.mjs app-run-details.spec.mjs app-run-review.spec.mjs app-runs.spec.mjs app-runs-groups.spec.mjs owner-walkthrough.spec.mjs`:
+  all 21 scenarios pass together. The real bridge reset reaches persisted diagnostics,
+  paused heading, step details and Output, survives reload, and creates exactly one session,
+  prompt, wait and invocation. An accepted report followed by failed terminal execution at
+  exit zero stays distinct from the technical result and bypasses correction.
+- Keyboard Output-tab navigation, Map/history return focus, retained inspected output,
+  desktop/tablet/mobile widths through 320px and no page overflow pass. Failure screenshots
+  were visually inspected. Local links/anchors resolve in the five updated documents.
+- All owned fixture processes/listeners/state are cleaned up; no live provider was called.
+
+Limits: the full browser suite and the optional 310-second transport test were not rerun.
+Unknown/unavailable diagnostics use the normalized result or process exit status. This does
+not recover the historical exception discarded during the original trial or establish provider
+reliability. The next actionable implementation finding is F6.
 
 ## Completed and worth preserving
 

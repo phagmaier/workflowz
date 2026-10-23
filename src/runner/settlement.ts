@@ -51,7 +51,11 @@ export function settlementForAgent(
     };
   }
   if (result.providerError) {
-    return { kind: "system", code: "system.process_error", detail: "the agent provider failed" };
+    return {
+      kind: "system",
+      code: "system.process_error",
+      detail: "the harness did not confirm successful execution",
+    };
   }
   if (result.timedOut) {
     return {

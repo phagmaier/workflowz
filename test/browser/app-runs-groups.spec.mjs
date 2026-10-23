@@ -92,6 +92,16 @@ test("all statuses are grouped once; sidebar links focus groups and survive hist
     `run_stopped_example · revision ${fixture.revisionId}`,
     `run_completed_example · revision ${fixture.revisionId}`,
   ]);
+  for (const status of ["completed", "stopped"]) {
+    const runId = `run_${status}_example`;
+    await expect(
+      finished.getByRole("link", { name: `View results for run ${runId}`, exact: true }),
+    ).toHaveAttribute("href", `#/runs/${runId}`);
+    await expect(
+      finished.getByRole("link", { name: `View map for run ${runId}`, exact: true }),
+    ).toHaveAttribute("href", `#/runs/${runId}/map`);
+  }
+  await expect(page.getByRole("link", { name: /^View map for run / })).toHaveCount(2);
   for (const [width, height, name] of [
     [900, 1100, "runs-all-statuses-tablet"],
     [390, 844, "runs-all-statuses-phone"],
@@ -178,7 +188,9 @@ test("a focused run keeps keyboard focus when polling moves it to another group"
   fixture.rows[0].status = "completed";
   await expect(page.locator(".run-group-finished .row-title")).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(open).toBeFocused();
+  await expect(
+    page.getByRole("link", { name: `View results for run ${fixture.runId}`, exact: true }),
+  ).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp(`#/runs/${fixture.runId}$`));
   expect(fixture.mutations).toEqual([]);
@@ -302,7 +314,10 @@ test("long names and unknown revisions stay readable at desktop, tablet and phon
     await noSideScroll(page);
     for (const [, label] of GROUPS) {
       const region = page.getByRole("region", { name: `${label} 1`, exact: true });
-      await expect(region.getByRole("link", { name: /^Open run / })).toBeVisible();
+      if (label === "Finished") {
+        await expect(region.getByRole("link", { name: /^View results for run / })).toBeVisible();
+        await expect(region.getByRole("link", { name: /^View map for run / })).toBeVisible();
+      } else await expect(region.getByRole("link", { name: /^Open run / })).toBeVisible();
     }
     await shot(page, `runs-${name}`);
     const ready = page

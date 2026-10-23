@@ -19,7 +19,19 @@ test("owner walkthrough imports the reviewed model, pauses, and creates a receip
   page.on("request", (request) => {
     if (!request.url().endsWith("/ui/api")) return;
     const body = request.postDataJSON();
-    if (["save", "create", "start", "override", "resume"].includes(body?.op))
+    if (
+      [
+        "save",
+        "create",
+        "start",
+        "override",
+        "resume",
+        "pause",
+        "stop",
+        "revise",
+        "recover",
+      ].includes(body?.op)
+    )
       mutations.push(body.op);
   });
   await pairApp(page, app, "#/workflows/import");
@@ -130,15 +142,72 @@ test("owner walkthrough imports the reviewed model, pauses, and creates a receip
   );
   expect(app.children.filter((child) => child.harness === "opencode")).toHaveLength(1);
   expect(mutations).toEqual(["save", "create", "start", "override", "resume"]);
+  const overview = page.getByRole("region", { name: "Run overview", exact: true });
+  for (const width of [1280, 900, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(overview.getByRole("link", { name: "View map", exact: true })).toBeInViewport();
+    await noSideScroll(page);
+    await shot(page, `owner-completed-${width}`);
+  }
+  // The summary gives a keyboard path directly into the run's map, then back to its results.
+  await overview.getByRole("link", { name: "View map", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("region", { name: "Run map", exact: true })).toBeFocused();
   await noSideScroll(page);
-  await shot(page, "owner-completed-mobile");
-  await page.getByRole("link", { name: "Map", exact: true }).click();
+  await shot(page, "owner-completed-map-mobile");
+  await page.keyboard.press("Tab");
+  await expect(page.locator('svg.map [data-step="baseline"]')).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator('svg.map [data-step="edit_greeting"]')).toBeFocused();
+  await overview.getByRole("link", { name: "View results", exact: true }).press("Enter");
+  await expect(page.getByRole("region", { name: "Run results", exact: true })).toBeFocused();
+  await expect(page.getByRole("region", { name: "Finish", exact: true })).toContainText(
+    "FINISH OK",
+  );
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`#/runs/${runId}/map$`));
+  await page.goForward();
+  await expect(page).toHaveURL(new RegExp(`#/runs/${runId}$`));
+  await overview.getByRole("link", { name: "View map", exact: true }).click();
   await page.locator('svg.map [data-step="finish"]').click();
   await page.getByRole("button", { name: "Show latest result in history" }).click();
   await expect(page.getByRole("region", { name: "Finish", exact: true })).toContainText(
     "FINISH OK",
   );
-  await page.getByRole("link", { name: "Runs", exact: true }).first().click();
-  await expect(page.getByRole("row", { name: /Completed/ })).toContainText(runId);
+  const side = page.getByRole("navigation", { name: "Main", exact: true });
+  await side.getByRole("link", { name: "Finished 1", exact: true }).press("Enter");
+  const finished = page.getByRole("row", { name: /Completed/ });
+  await expect(finished).toContainText(runId);
+  for (const width of [1280, 900, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await noSideScroll(page);
+    await shot(page, `owner-finished-${width}`);
+  }
+  await page.locator("#runs-finished").focus();
+  await page.keyboard.press("Tab"); // workflow name
+  await page.keyboard.press("Tab"); // results
+  const results = finished.getByRole("link", {
+    name: `View results for run ${runId}`,
+    exact: true,
+  });
+  await expect(results).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    finished.getByRole("link", { name: `View map for run ${runId}`, exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(new RegExp(`#/runs/${runId}/map$`));
+  await expect(page.locator("svg.map g.node")).toHaveCount(5);
+  await page.reload();
+  await expect(page.locator("svg.map g.node")).toHaveCount(5);
+  await page.goBack();
+  await expect(page.locator("#runs-finished")).toBeFocused();
+  await results.press("Enter");
+  await expect(page).toHaveURL(new RegExp(`#/runs/${runId}$`));
+  await expect(page.getByRole("region", { name: "Finish", exact: true })).toContainText(
+    "FINISH OK",
+  );
+  expect(mutations).toEqual(["save", "create", "start", "override", "resume"]);
   await policy();
 });
