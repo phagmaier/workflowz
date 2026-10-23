@@ -1,6 +1,9 @@
 # Workflowz improvement backlog
 
-**Checkpoint — 2026-10-23:** UX-1 (stale run-control feedback) is complete. Success messages
+**Checkpoint — 2026-10-23:** every listed finding except OWNER-1 is complete. UX-2 (compact
+running controls) is the latest: normal running controls are one row with Stop apart on the
+right. After F2, F1, UX-1 and UX-2, `npm run check` (881 tests) and the full offline Chromium
+suite (65/65) pass. UX-1 (stale run-control feedback) is complete. Success messages
 clear once the run moves on. F1 (command checker guidance) is complete. The checker and
 field now use the command parser's message, such as “Close the double quote.”, instead of the
 schema's type error; UI wording only. F2 (readable route inspection on large graphs) is complete; see
@@ -18,10 +21,9 @@ offline scenarios with one worker and left no output or fixture state. The devel
 reference no longer lists the removed `.cursor/skills/` directory. Biome's exclusion of
 bundled skill directories is unchanged and harmless.
 
-**Next independent slice: UX-2.** Reproduce the large Pause/Stop panel pushing history and
-results down during normal running, then record a bounded proposal under UX-2 before
-implementing. Record owner feedback on Finished → Map/results (OWNER-1) and, if offered,
-on F2's route focus.
+**Next action:** the owner's validation. Record feedback on Finished → Map/results (OWNER-1)
+and, if offered, on F2's route focus (whether it beats Form for checking routes). No other
+actionable finding remains; new work needs new owner feedback or a new finding.
 
 This is the single active local backlog, including small plans and continuation notes.
 GitHub is primarily repository storage; tickets, labels and PRs are optional when specifically
@@ -64,11 +66,56 @@ historical evidence stays linked. Follow the verification matrix and local commi
 | F2 | Medium · complete | Fit shrank an 18-node graph to unreadable 35%; Form was easier to inspect. | Selected-step route focus: readable Leads to/Reached from links walk routes from the inspector; the graph highlights that step's routes and connected steps; zoom keeps it in view. Passes unit, new 18-step Chromium regression and the full offline suite. |
 | F1 | Medium · complete | Checker showed an array/string schema error instead of “Close the double quote”. | Checker uses the command parser's message for text it can't split; the field shows it once as its error description; Fix focus unchanged. Passes daemon-checked unit and Chromium regressions. |
 | UX-1 | Low · complete | “Foundation runs again” feedback stayed visible during later tasks. | A control's success message clears once the run moves to another step or state; errors stay. Passes unit and extended Chromium regressions. |
-| UX-2 | Low · open | The large Pause/Stop panel pushes history and results down. | Explore compact normal-running controls with Stop still distinct and accessible. |
+| UX-2 | Low · complete | The large Pause/Stop panel pushes history and results down. | Running/pausing controls form one compact row (Pause and feedback left, Stop apart on the right); Stop's confirmation still expands below. Passes extended Chromium regression and full suite. |
 
 Sources: [owner walkthrough feedback](docs/evaluations/owner-walkthrough.md#owner-feedback),
 [full trial findings](docs/evaluations/equipment-lending/EVALUATION.md#findings),
 [prioritized critique](docs/evaluations/equipment-lending/EVALUATION.md#prioritized-recommendations-and-limits).
+
+### UX-2 — compact running controls
+
+**Observed:** reproduced on 2026-10-23 with the F3 Chromium scenario at 1440 px. While running,
+the controls are a full panel between the overview and History: Pause after this step on one
+line, then Stop run now… on its own line, about 120 px tall including padding. History starts
+around 530 px. The evaluation saw results start below about 500 px at a 1000 px height
+([screenshot](docs/evaluations/equipment-lending/evidence/45-maintenance-running-after-navigation.png)).
+
+**Result and scope:** while running or pausing, the controls form one compact row. Pause (or the
+pausing note) and its feedback sit on the left; Stop run now… stays a separate red action at
+the right. Opening Stop still expands its full confirmation with a reason, beneath the row. On
+narrow screens the row wraps. Ready, paused and interrupted panels, the controls themselves,
+their order and keyboard behaviour, wording and requests are unchanged.
+
+**Acceptance:**
+
+1. The F3 scenario is extended and fails before the change. At 1440 px while running, the
+   controls region is at most 72 px tall and Pause and Stop share a row. Opening Stop shows its
+   reason form, and Cancel returns focus to Stop. Pausing keeps the compact row with its note.
+   There is no page overflow at 1440/390/320 px.
+2. Screenshots of running, pausing and Stop open at desktop and phone widths are visually reviewed.
+3. `npm run check` and the run-control browser specs pass, including existing Stop scenarios.
+
+**Decisions:** none; placement within the approved Workbench is an ordinary visual choice.
+
+**Implemented:** running and pausing panels in `RunControls.tsx` use `controls-compact`. The CSS
+lays them out as a wrapping row: Pause or the pausing note first, an earlier confirmation
+inline beside it, then Stop pushed to the right. An opened Stop confirmation takes the full
+width below. DOM and keyboard order, controls, wording and requests are unchanged.
+
+**Acceptance passed:**
+
+- The extended F3 scenario failed on the unchanged UI, with controls 179 px tall while
+  “Started.” showed. After the change it passes. Running controls are at most 72 px tall
+  even with that confirmation, Pause and Stop share a row with Stop clearly apart, and Enter
+  opens Stop's reason form. Cancel returns focus to Stop. Pausing stays within 72 px, and
+  there is no overflow at 1440/390/320 px. Running, pausing, Stop open and phone screenshots
+  were visually reviewed; at 1440 px History starts about 85 px higher.
+- `npm run check`: typecheck, lint (existing CSS warning only) and all 881 core tests pass.
+  Run-control Chromium specs: 38/38. Full offline Chromium suite after F2, F1, UX-1 and UX-2:
+  65/65 pass sequentially (3.9 min).
+
+**Limits:** ready, paused and interrupted panels keep their full layouts; paused decisions
+need that room. On phones Stop wraps to its own line at the right.
 
 ### UX-1 — stale run-control feedback
 

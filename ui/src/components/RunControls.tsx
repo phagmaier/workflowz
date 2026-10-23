@@ -620,7 +620,7 @@ export function RunControls({
       );
     case "running":
       return (
-        <section className="controls" aria-label="Run controls">
+        <section className="controls controls-compact" aria-label="Run controls">
           {orphan(["pause", "stop"])}
           <div className="row">
             <button
@@ -650,7 +650,7 @@ export function RunControls({
       );
     case "pausing":
       return (
-        <section className="controls" aria-label="Run controls">
+        <section className="controls controls-compact" aria-label="Run controls">
           {orphan(["stop"])}
           <p className="muted">Waiting for {step} to finish, then the run pauses.</p>
           <StopControl

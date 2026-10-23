@@ -574,12 +574,32 @@ test("long steps show their activity and attempt time; finished tasks don't read
   await expect(page.getByText("Started. It keeps going if you close this browser.")).toBeVisible();
   await takeShot(page, "progress-foundation");
 
+  // Normal running controls are one compact row, with Stop apart from Pause (UX-2).
+  const controls = page.getByRole("region", { name: "Run controls", exact: true });
+  const pauseButton = controls.getByRole("button", { name: "Pause after this step", exact: true });
+  const stopToggle = controls.getByRole("button", { name: "Stop run now…", exact: true });
+  expect((await controls.boundingBox()).height).toBeLessThanOrEqual(72);
+  const [pauseBox, stopBox] = [await pauseButton.boundingBox(), await stopToggle.boundingBox()];
+  expect(
+    Math.abs(pauseBox.y + pauseBox.height / 2 - (stopBox.y + stopBox.height / 2)),
+  ).toBeLessThan(4);
+  expect(stopBox.x).toBeGreaterThan(pauseBox.x + pauseBox.width + 100);
+  await stopToggle.focus();
+  await page.keyboard.press("Enter");
+  await expect(controls.getByText("Stop this run?")).toBeVisible();
+  await expect(controls.getByLabel(/^Reason/)).toBeVisible();
+  await takeShot(page, "progress-stop-open");
+  await controls.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(stopToggle).toBeFocused();
+
   // Pause after the step, then resume: paused time is named, not hidden inside elapsed.
   await page.getByRole("button", { name: "Pause after this step", exact: true }).click();
   await expect(heading).toContainText("Pausing after Foundation finishes");
   await expect(fact("Current step")).toContainText("Command running");
   const pauseFeedback = page.getByText(/^Pause requested\./);
   await expect(pauseFeedback).toBeVisible();
+  expect((await controls.boundingBox()).height).toBeLessThanOrEqual(72);
+  await takeShot(page, "progress-pausing");
   writeFileSync(path.join(app.root, "release-foundation"), "release\n");
   await expect(heading).toContainText("Paused at your request");
   // Control feedback describes where the run was; once it moves on, it doesn't linger (UX-1).

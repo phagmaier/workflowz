@@ -2939,6 +2939,35 @@ button.problem:hover {
 .run-details .controls > .row {
   padding-top: 4px;
 }
+/* Normal running: one row, so History and results stay high; Stop stays apart on the right. */
+.run-details .controls-compact {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 16px;
+  margin-bottom: 20px;
+}
+.run-details .controls-compact > .row {
+  padding-top: 0;
+}
+.controls-compact > p {
+  margin: 0;
+}
+/* Earlier feedback sits beside Pause; an opened Stop confirmation takes the full width below. */
+.controls-compact > .result-line {
+  order: 1;
+  margin: 0;
+  padding: 6px 10px;
+}
+.controls-compact > .stop {
+  order: 2;
+  margin-left: auto;
+}
+.controls-compact > .stop-form {
+  order: 3;
+  flex-basis: 100%;
+}
 .run-details .choices {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
