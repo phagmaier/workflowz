@@ -1,6 +1,12 @@
 # Workflowz improvement backlog
 
-**Checkpoint — 2026-10-23:** every listed finding except OWNER-1 is complete. A code review of
+**Checkpoint — 2026-10-23:** OWNER-1's offline manual walkthrough is prepared. Opt-in
+`WF_OWNER_REVIEW=1` pauses the existing regression in a visible browser at Finished after
+navigation checks; Inspector Resume runs normal cleanup. See OWNER-1 below for the launch
+command and owner tasks. A Form-scoped locator resolves an observed setup race. Three
+sequential focused regressions and headed pause/inspection/Resume pass, with cleanup proven;
+desktop/phone screenshots were reviewed. Owner discoverability feedback remains pending.
+Every listed finding except OWNER-1 is complete. A code review of
 `d7d76ee..HEAD` found three issues, now fixed with regressions (see the UX-1 and F2 review
 follow-ups); `npm run check` (882) and the full offline Chromium suite (66/66) pass. UX-2 (compact
 running controls) is the latest: normal running controls are one row with Stop apart on the
@@ -23,7 +29,8 @@ offline scenarios with one worker and left no output or fixture state. The devel
 reference no longer lists the removed `.cursor/skills/` directory. Biome's exclusion of
 bundled skill directories is unchanged and harmless.
 
-**Next action:** the owner's validation. Record feedback on Finished → Map/results (OWNER-1)
+**Next action:** launch the OWNER-1 walkthrough below and collect the owner's validation.
+Record feedback on Finished → Map/results (OWNER-1)
 and, if offered, on F2's route focus (whether it beats Form for checking routes). No other
 actionable finding remains; new work needs new owner feedback or a new finding.
 
@@ -426,6 +433,84 @@ recorded, and paused time counts only explicit pauses. Interrupted and pausing s
 checked through existing rewritten status reads; there is no live-provider evidence.
 
 ### OWNER-1 — completed-run navigation
+
+**Walkthrough preparation (2026-10-23):** requested by the owner; validation stays pending.
+
+- **Observed:** the existing `test/browser/owner-walkthrough.spec.mjs` creates and completes
+  the preserved greeting fixture, verifies navigation, then immediately tears it down. It
+  does not leave a completed run available for the owner's inspection.
+- **Result and scope:** add an explicit optional manual pause after the existing regression
+  checks. A visible browser starts the owner's inspection at Finished with the completed
+  fixture; resuming the test runs its existing cleanup. Reuse the scripted adapter and
+  private state. No product behavior or live provider execution changes.
+- **Acceptance:** the normal focused Chromium regression passes and cleans up; the optional
+  headed mode reaches Finished with a completed run, allows Map/results inspection, and
+  cleans up after Resume. Review desktop and phone screenshots; record the exact launch
+  command and a short owner walkthrough here.
+- **Decisions:** none. Only the owner's feedback can close discoverability acceptance.
+
+**Prepared:** `WF_OWNER_REVIEW=1` adds an optional pause at the end of the existing regression.
+After all its assertions, it restores 1280×900 and opens Finished. No test pause occurs
+without that explicit flag. The fixture uses real local commands and a scripted agent;
+the historical model name remains on screen, but no installed harness/provider is called.
+
+From the repository root, with the pinned Chromium provisioned and a desktop display:
+
+```bash
+WF_OWNER_REVIEW=1 pnpm --config.verifyDepsBeforeRun=false run test:browser \
+  owner-walkthrough.spec.mjs --headed --timeout=0
+```
+
+This builds the current app, completes the private greeting fixture and verifies the existing
+navigation checks before pausing. `verifyDepsBeforeRun=false` prevents pnpm's implicit
+dependency-install check; this uses the already installed, lockfile-pinned dependencies.
+Leave the terminal running. Use the app window once the terminal says `OWNER-1 ready at
+Finished`; the other window is Playwright Inspector. The manual session has no timeout.
+When finished, choose **Resume** in Inspector so the normal fixture teardown closes its
+browser/daemon and removes its private state. The next launch creates a fresh fixture.
+
+Owner tasks, before consulting the expected paths:
+
+1. Find the completed greeting run's execution map from Finished.
+2. Find Finish's saved output, then return to the execution map from the completed summary.
+3. Return to Finished and find the saved results directly. Optionally repeat with keyboard
+   navigation or a narrower window.
+4. Report whether the map/results are easy to find, where you hesitated, and any confusing
+   label. This is the remaining acceptance evidence, not another automated pass.
+
+Expected paths if help is needed: Finished's **Map** link opens the five-step execution map;
+**View results** in its summary returns to history, where Finish's Output says `FINISH OK`.
+The completed summary's **View map** opens the map again. Finished's **View results** opens
+saved history/output directly. These actions leave the run Completed. Tab/Enter activate
+links; after entering Map, Tab reaches a step and Up/Down select steps.
+
+**Preparation verification:**
+
+- The initial offline attempt could not launch Chromium inside the sandbox; browser checks
+  ran outside it with only the fake adapters. Two launches then exposed the existing setup
+  race at Configure Edit greeting (one intervening run passed). Graph and Form share that
+  button label; the test now targets it within **Form editor**, waiting for the requested
+  view before the keyboard action. No fixed delay or assertion was removed.
+- `node scripts/smoke-browser.mjs owner-walkthrough.spec.mjs --repeat-each=3`: 3/3 pass
+  sequentially, including keyboard/focus, Back/Forward/reload, saved output, no additional
+  execution requests and no page overflow at 1280/900/390/320 px.
+- `pnpm --config.verifyDepsBeforeRun=false run test:browser owner-walkthrough.spec.mjs`:
+  build and focused regression pass through the documented launcher.
+- Headed mode with `WF_OWNER_REVIEW=1`, `--headed --timeout=0` and a private temporary CDP
+  launch configuration reached Finished. A second connection checked Map, View results,
+  Finish's `FINISH OK`, summary View map and content focus, then resumed the Inspector pause.
+  The test passed; its durable reopen, child/owner exit, listener/discovery removal and
+  temporary-state cleanup checks passed. The temporary verification connection/configuration
+  is not needed by the owner command above.
+- Visually inspected the manual starting screen, desktop completed output and phone Map and
+  Finished screenshots. Biome on the changed spec and `git diff --check` pass. No product
+  code changed; the full core/browser suites and live providers were not rerun.
+- Reviewed the two-file change against the requested preparation scope: no remaining findings.
+  Referenced paths and command options were checked; no workflow example or product contract
+  changed. Temporary verification scripts, screenshots and diagnostic output were removed.
+
+**Remaining:** owner feedback is still required. Automated navigation evidence cannot establish
+the owner's discoverability judgment. Preparation browsers and daemons are closed.
 
 Reproduced with the preserved owner-walkthrough Chromium fixture: after completion the
 summary offers Refresh run and Open workflow, while Map is a quieter tab below the summary.

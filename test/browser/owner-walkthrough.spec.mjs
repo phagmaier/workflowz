@@ -44,7 +44,8 @@ test("owner walkthrough imports the reviewed model, pauses, and creates a receip
   await expect(checker).toContainText("Finish");
   await expect(checker).toContainText("Done");
   await page.getByRole("link", { name: "Form", exact: true }).click();
-  await page.getByRole("button", { name: "Configure Edit greeting", exact: true }).press("Enter");
+  const form = page.getByRole("region", { name: "Form editor", exact: true });
+  await form.getByRole("button", { name: "Configure Edit greeting", exact: true }).press("Enter");
   const settings = page.getByRole("region", { name: "Selected step", exact: true });
   await expect(settings.getByLabel("Agent", { exact: true })).toHaveValue("opencode");
   await expect(settings.getByLabel("Model", { exact: true })).toHaveValue(
@@ -210,4 +211,12 @@ test("owner walkthrough imports the reviewed model, pauses, and creates a receip
   );
   expect(mutations).toEqual(["save", "create", "start", "override", "resume"]);
   await policy();
+  if (process.env.WF_OWNER_REVIEW === "1") {
+    // Opt-in headed walkthrough: Resume in the Inspector lets the fixture tear down normally.
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await side.getByRole("link", { name: "Finished 1", exact: true }).click();
+    await expect(finished).toContainText(runId);
+    console.log("OWNER-1 ready at Finished. Use the browser; Resume in Inspector to clean up.");
+    await page.pause();
+  }
 });
