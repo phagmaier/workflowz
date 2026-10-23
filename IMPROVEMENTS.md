@@ -1,15 +1,15 @@
 # Workflowz improvement backlog
 
-**Checkpoint — 2026-10-23:** all listed findings are complete. After the prepared OWNER-1
-walkthrough, the owner confirmed completed-run navigation is “working and obvious”, closing
-the remaining Map/results discoverability acceptance. The optional offline walkthrough is
-retained below for future use. Its three sequential focused regressions and headed
-pause/inspection/Resume passed, with cleanup proven and desktop/phone screenshots reviewed.
-The latest product checks remain `npm run check` (882 tests) and the full offline Chromium
-suite (66/66), including the UX-1 and F2 review follow-ups. This closeout changes documentation
-only: the backlog status, owner feedback and design reference agree; the local link/anchor
-and `git diff --check` checks pass. No product tests or providers were rerun. F2's optional
-owner comparison with Form remains unverified and does not block its completed acceptance.
+**Checkpoint — 2026-10-23:** TRIAL-JS is prepared for owner review, with execution **not
+authorized**. The owner clarified that this request was setup only. I had prematurely
+started three live agent invocations; the trial is now inactive. Read-only inspection shows
+the saved run paused at Revise design with no active attempt, all four recorded process
+groups gone, no surviving trial processes and no daemon discovery file. Do not restart or
+resume it. YAML/brief/checker inputs are retained in the ignored trial directory. The
+reported crash has no confirmed cause; recent core/OOM checks found no matching record.
+See TRIAL-JS for preparation checks and limits. Earlier product findings, including the
+owner-validated OWNER-1, remain complete; their latest full checks were 882 core tests and
+66/66 offline Chromium scenarios. No product code changed in this preparation.
 
 **Verification setup restored:** commit `86927af` (removing `.cursor/skills`) had also deleted
 `playwright.config.mjs`, which pins the browser suite: one worker, no retries, the `chromium`
@@ -19,8 +19,9 @@ offline scenarios with one worker and left no output or fixture state. The devel
 reference no longer lists the removed `.cursor/skills/` directory. Biome's exclusion of
 bundled skill directories is unchanged and harmless.
 
-**Next action:** wait for new owner feedback or a new finding; no actionable backlog work
-remains. Record F2 route-focus feedback if offered (whether it beats Form for checking routes).
+**Next action:** review the prepared TRIAL-JS YAML and brief with the owner. Make setup
+changes as requested; do not create/start/resume any workflow or make live model calls
+without an explicit subsequent execution instruction.
 
 This is the single active local backlog, including small plans and continuation notes.
 GitHub is primarily repository storage; tickets, labels and PRs are optional when specifically
@@ -56,6 +57,7 @@ historical evidence stays linked. Follow the verification matrix and local commi
 
 | ID | Priority / status | Observed problem | Direction and completion evidence |
 | --- | --- | --- | --- |
+| TRIAL-JS | Prepared · awaiting owner review | Set up a small interactive JavaScript course to exercise Workflowz later. | Six lessons, two task batches, bounded repairs and independent browser checks. YAML validates (18 steps, zero warnings). Owner clarified setup only; premature live work is inactive and must not resume. |
 | OWNER-1 | High · complete | The owner struggled to find the completed run's graph/map again. | Explicit Finished-row Map/results links and a prominent map/results summary action pass offline browser, keyboard and responsive checks. On 2026-10-23 the owner confirmed navigation is “working and obvious”. |
 | F5 | High · complete | A transport/process failure was presented as an agent report/provider failure. | Technical summaries/details, safe bridge causes and neutral settlement wording pass core and browser regressions, including the real bridge through the fake local API, accepted-report/exit-zero failure and no replay. |
 | F6 | High · complete | Passing API/page checks missed browser CRUD that continually erased input. | Optional executable Chromium recipe covers keyboard input and CRUD at desktop/phone widths, reports precise limits, and passes broken/fixed regressions through ordinary command routing. Seven YAML examples validate. |
@@ -68,6 +70,55 @@ historical evidence stays linked. Follow the verification matrix and local commi
 Sources: [owner walkthrough feedback](docs/evaluations/owner-walkthrough.md#owner-feedback),
 [full trial findings](docs/evaluations/equipment-lending/EVALUATION.md#findings),
 [prioritized critique](docs/evaluations/equipment-lending/EVALUATION.md#prioritized-recommendations-and-limits).
+
+### TRIAL-JS — interactive JavaScript lessons
+
+- **Observed:** the owner proposed a fresh end-to-end exercise and delegated project,
+  harness/model and workflow design. The audience is an experienced systems programmer new
+  to JavaScript/web development. On clarification, the request is **setup only**; the budget
+  answer (up to $10 / roughly 30–60 minutes) was a planning constraint, not execution approval.
+- **Result and scope:** prepared the plan and workflow for six lessons in the ignored
+  `.workbench-trials/javascript-lessons/` directory. `inputs/BRIEF.md` specifies the learner,
+  content schema and interaction contract; `inputs/tasks.md` defines two batches;
+  `workflow.yaml` defines design/inspection, writing/implementation, checks, finite repair
+  paths and independent final audit. Project tools and private runtime evidence remain
+  separate. No Workflowz source or global harness configuration changed.
+- **Selections in the prepared YAML:** Claude/`claude-sonnet-5-5` low for design;
+  Codex/`gpt-6-luna` low for design inspection and medium for implementation/repair;
+  Pi/`openai/gpt-6-luna` off for writing; OMP/`openai-codex/gpt-6-luna` low for audit.
+  Initial OpenCode/`opencode/deepseek-v4.1-flash-free` selection is preserved in
+  `workflow-initial.yaml` with its timeout evidence. No silent substitutions are implied.
+- **Setup acceptance:** YAML validated with 18 steps and zero warnings; checker syntax and
+  project/Node/pinned-Chromium preflight passed. The independent course checker fails on
+  missing `site/lessons.json`, as expected: no lessons/site exist and no course acceptance is
+  claimed. A wording assertion was broadened before implementation to recognize clear
+  “Stopped after…” feedback as well as “timeout”. Tools have a recorded SHA-256 manifest.
+  The trial directory is ignored by Git; referenced setup paths and `git diff --check` pass.
+- **Future acceptance, only when separately authorized:** create/start a fresh run through
+  Workbench, verify acknowledged reports and both completed tasks, and inspect history/Map.
+  Independent Chromium checks cover example/solution execution, retained typed drafts,
+  wrong/right quiz feedback, saved progress, keyboard focus, errors/timeout recovery,
+  actual DOM events and no page overflow at 1280/390/320 px. Review visual and educational
+  quality separately. A time/step bound is not a billing cap.
+- **Premature execution and correction:** I misread intent and started run
+  `run_69e47be0-3df9-4dc2-ac80-bd6de3608d0c`. Claude wrote a design; OpenCode wrote a review
+  but timed out at 240 seconds without an accepted report. Its technical failure settled
+  and paused with no correction/replay. I revised the inspector to fresh Codex/Luna and
+  explicitly resumed; that inspection reported revise. No writer or implementation ran.
+  The generated design and both reviews remain private as premature outputs, not owner
+  approvals. Automatic review rejected one ambiguous Resume locator; a state-checked exact
+  choice was subsequently used. This does not supply the owner's missing run authorization.
+- **Crash/cleanup checkpoint:** after the owner reported a crash, management was unavailable
+  and prior tool process sessions were lost. Using diagnose-crash, recent `coredumpctl` and
+  kernel OOM/segfault checks found no matching entry; cause remains unconfirmed. No restart
+  was attempted. Read-only database inspection confirms paused at `revise_design`, revision 3,
+  four settled attempts (one preflight command, three agent invocations), no active attempt;
+  all four recorded groups are gone, no trial process survives, and discovery is absent.
+  Private state is preserved for evidence. Actual provider charges were not independently
+  reconciled. Do not resume this unintended run or make further live calls.
+- **Decisions remaining:** owner's review of the prepared course/workflow and an explicit
+  future instruction to execute. Do not infer authorization from budget, capability or
+  design discussion. No full product test suite was rerun for setup/documentation changes.
 
 ### UX-2 — compact running controls
 
