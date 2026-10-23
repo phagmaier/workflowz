@@ -130,6 +130,40 @@ describe("visual workflow edits checked by the daemon", () => {
     assert.equal(stepSummary(doc.steps[id] as never), "Codex — no prompt yet.");
   });
 
+  it("explains an unfinished command line with the command parser's guidance", async () => {
+    const base = exampleDoc("commands", "Commands", root);
+    const typed = (argv: unknown) =>
+      ({
+        ...base,
+        steps: { ...base.steps, run_tests: { ...base.steps.run_tests, argv } },
+      }) as Doc;
+    const listed = async (argv: unknown) =>
+      problems((await draft(typed(argv))).diagnostics, typed(argv)).map((p) => [
+        p.text,
+        p.field,
+        p.severity,
+      ]);
+    // Form keeps text it can't split in the model, so the daemon sees a string.
+    assert.deepEqual(await listed('python3 "'), [
+      ["Run tests · command: Close the double quote.", "argv", "error"],
+    ]);
+    assert.deepEqual(await listed("npm test && npm run build"), [
+      [
+        "Run tests · command: Shell operators need an explicit shell. Use sh -c 'your script', or quote a literal argument.",
+        "argv",
+        "error",
+      ],
+    ]);
+    // A hand-written YAML string that would split cleanly still needs to become a list.
+    assert.deepEqual(await listed("npm test"), [
+      [
+        "Run tests · command: write the command as a list of arguments, or retype it in the Command field.",
+        "argv",
+        "error",
+      ],
+    ]);
+  });
+
   it("shows where inherited rules come from", async () => {
     const doc: Doc = {
       ...exampleDoc("single", "Fix", root),

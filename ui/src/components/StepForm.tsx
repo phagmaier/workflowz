@@ -302,17 +302,20 @@ function CommandFields({
   );
   const parsed = parseCommand(text);
   const id = fieldId(stepId, "argv");
+  const invalid = parsed.error
+    ? { "aria-invalid": true as const, "aria-describedby": `${id}-err`, className: "invalid" }
+    : errAttrs(ctx, stepId, "argv");
   return (
     <div className="block command-field">
       <label htmlFor={id}>Command</label>
       <textarea
         id={id}
-        className="mono command-input"
         rows={text.includes("\n") ? 4 : 1}
         value={text}
         placeholder="node --version"
         spellCheck={false}
-        {...errAttrs(ctx, stepId, "argv")}
+        {...invalid}
+        className={`mono command-input ${invalid.className ?? ""}`}
         onChange={(event) => {
           const value = event.target.value;
           setText(value);
@@ -324,8 +327,14 @@ function CommandFields({
           );
         }}
       />
-      {parsed.error ? <span className="field-err">{parsed.error}</span> : null}
-      <FieldProblems ctx={ctx} stepId={stepId} field="argv" />
+      {/* The checker repeats the parser's message for this text; show it here once. */}
+      {parsed.error ? (
+        <span className="field-err" id={`${id}-err`}>
+          {parsed.error}
+        </span>
+      ) : (
+        <FieldProblems ctx={ctx} stepId={stepId} field="argv" />
+      )}
       <span className="hint">
         Quotes group arguments with spaces. This runs the program directly; variables, pipes and
         redirects need an explicit shell, such as{" "}

@@ -103,6 +103,13 @@ test("command lines preserve quoted arguments and unfinished input across views,
   await command.fill("node 'unfinished argument");
   await expect(form).toContainText("Close the single quote");
   await expect(save).toBeDisabled();
+  // The checker carries the parser's guidance, not the schema's type error, and the field says it once.
+  await expect(checker).toContainText("Command · command: Close the single quote.");
+  await expect(checker).not.toContainText("expected array");
+  await expect(form.getByText("Close the single quote.")).toHaveCount(1);
+  await expect(command).toHaveAccessibleDescription("Close the single quote.");
+  await expect(command).toHaveClass(/mono/);
+  await shot(page, "f03a-command-unfinished");
   await checker.getByRole("button", { name: /^Fix:/ }).click();
   await expect(command).toBeFocused();
   await page.getByRole("link", { name: "Graph", exact: true }).click();
@@ -154,6 +161,8 @@ test("command lines preserve quoted arguments and unfinished input across views,
   await command.fill("npm test && npm run build");
   await expect(form).toContainText("Shell operators need an explicit shell");
   await expect(save).toBeDisabled();
+  await expect(checker).toContainText("Command · command: Shell operators need an explicit shell");
+  await expect(checker).not.toContainText("expected array");
   await command.fill("sh -c 'npm test && npm run build'");
   await expect(save).toBeEnabled();
   expect(app.children).toEqual([]);

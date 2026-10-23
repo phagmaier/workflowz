@@ -1,6 +1,8 @@
 # Workflowz improvement backlog
 
-**Checkpoint — 2026-10-23:** F2 (readable route inspection on large graphs) is complete; see
+**Checkpoint — 2026-10-23:** F1 (command checker guidance) is complete. The checker and
+field now use the command parser's message, such as “Close the double quote.”, instead of the
+schema's type error; UI wording only. F2 (readable route inspection on large graphs) is complete; see
 its section below for the change, checks and limits. It is editor-Graph presentation only. The
 selected step's inspector lists Leads to/Reached from as links that walk the graph. The graph
 highlights that step's routes and connected steps, and zoom keeps the step in view. No layout,
@@ -15,9 +17,10 @@ offline scenarios with one worker and left no output or fixture state. The devel
 reference no longer lists the removed `.cursor/skills/` directory. Biome's exclusion of
 bundled skill directories is unchanged and harmless.
 
-**Next independent slice: F1.** Reproduce the checker's array/string schema error for an
-unfinished quoted command offline, then record a bounded proposal under F1 before implementing.
-Record owner feedback on Finished → Map/results (OWNER-1) and, if offered, on F2's route focus.
+**Next independent slice: UX-1.** Reproduce the stale “Resumed… runs again” feedback
+staying visible as execution advances, then record a bounded proposal under UX-1 before
+implementing. Record owner feedback on Finished → Map/results (OWNER-1) and, if offered,
+on F2's route focus.
 
 This is the single active local backlog, including small plans and continuation notes.
 GitHub is primarily repository storage; tickets, labels and PRs are optional when specifically
@@ -58,13 +61,74 @@ historical evidence stays linked. Follow the verification matrix and local commi
 | F6 | High · complete | Passing API/page checks missed browser CRUD that continually erased input. | Optional executable Chromium recipe covers keyboard input and CRUD at desktop/phone widths, reports precise limits, and passes broken/fixed regressions through ordinary command routing. Seven YAML examples validate. |
 | F3 | Medium · complete | Long steps show little activity; 3/3 tasks appeared while integration/audit still remained. | Overview names the task phase (“Run not finished yet” after all tasks), the attempt's recorded stage and time, elapsed with paused time, and Tasks done. Passes unit, focused and full offline Chromium regressions; no live output or progress estimates are implied. |
 | F2 | Medium · complete | Fit shrank an 18-node graph to unreadable 35%; Form was easier to inspect. | Selected-step route focus: readable Leads to/Reached from links walk routes from the inspector; the graph highlights that step's routes and connected steps; zoom keeps it in view. Passes unit, new 18-step Chromium regression and the full offline suite. |
-| F1 | Medium · open | Checker showed an array/string schema error instead of “Close the double quote”. | Carry the useful command-parser message into the checker, suppress duplicate noise and preserve Fix focus. |
+| F1 | Medium · complete | Checker showed an array/string schema error instead of “Close the double quote”. | Checker uses the command parser's message for text it can't split; the field shows it once as its error description; Fix focus unchanged. Passes daemon-checked unit and Chromium regressions. |
 | UX-1 | Low · open | “Foundation runs again” feedback stayed visible during later tasks. | Use past tense or clear transient feedback when execution advances. |
 | UX-2 | Low · open | The large Pause/Stop panel pushes history and results down. | Explore compact normal-running controls with Stop still distinct and accessible. |
 
 Sources: [owner walkthrough feedback](docs/evaluations/owner-walkthrough.md#owner-feedback),
 [full trial findings](docs/evaluations/equipment-lending/EVALUATION.md#findings),
 [prioritized critique](docs/evaluations/equipment-lending/EVALUATION.md#prioritized-recommendations-and-limits).
+
+### F1 — command checker guidance
+
+**Observed:** reproduced on 2026-10-23 with a new unit test through the real daemon `draft`
+operation. The Command field keeps text it can't split as a string in the model, so input
+is never lost. The daemon's schema check then reports `invalid_field` “Invalid input:
+expected array, received string” at `steps.<id>.argv`. The checker shows “Run tests ·
+command: Invalid input: expected array, received string” instead of the parser's “Close the
+double quote.” Per the [evidence](docs/evaluations/equipment-lending/EVALUATION.md), the field
+also shows both lines: the parser's message plus the same schema text. Fix focuses the field
+correctly (covered by the existing `app-form.spec.mjs` command-line scenario).
+
+**Result and scope:** UI wording only. When the daemon rejects a step's `argv` because it is
+a string, the checker uses the command parser's message: an unclosed quote, a trailing
+backslash or shell operators. A string that would split cleanly (only possible from
+hand-written YAML) says to write it as a list or retype it in the Command field. Beside
+the field, the parser's message appears once and is the field's described error. Other
+`argv` diagnostics, the daemon's validation, the model's preservation of unfinished text and
+Fix focus are unchanged.
+
+**Acceptance:**
+
+1. The new unit test (daemon-checked) fails before and passes after for an unclosed quote,
+   shell operators and a cleanly splittable string.
+2. The existing command-line Chromium scenario is extended: for an unfinished quote, the
+   checker shows the parser's message and no “expected array”. The field shows it exactly
+   once, linked as its error description. Fix still focuses the field, and the shell-operator
+   case reads the same way in the checker.
+3. `npm run check` and `app-form.spec.mjs` pass. USER_GUIDE is updated if its checker
+   wording changes.
+
+**Decisions:** none.
+
+**Implemented:** `problems()` in `ui/src/lib/workflow-edit.ts` replaces the daemon's
+`invalid_field` message for a string `argv` with `parseCommand`'s error, or with list/retype
+guidance when the string would split cleanly. Other `argv` diagnostics keep the daemon's
+message. In `StepForm.tsx`, an unsplittable command shows the parser's message once. That
+message is the field's `aria-describedby` error, and the daemon's duplicate is not repeated.
+The field also keeps its monospace class while invalid. Previously the error attributes
+replaced it, a pre-existing defect for this field. No daemon, schema or model change.
+
+**Acceptance passed:**
+
+- New unit test `explains an unfinished command line with the command parser's guidance`
+  failed before (“Run tests · command: Invalid input: expected array, received string”). It
+  passes after for an unclosed quote, shell operators and a cleanly splittable string.
+- The extended `command lines preserve quoted arguments…` Chromium scenario failed on the
+  unchanged UI at the new checker assertion, then passed after the change. The checker reads
+  “Command · command: Close the single quote.” with no “expected array”. The field shows the
+  message exactly once as its accessible description and stays monospace. Fix focus, input
+  preservation across views and failed checks, saving and the shell-operator checker
+  message all pass. The unfinished-command screenshot was visually reviewed.
+- `npm run check`: typecheck, lint (existing CSS warning only) and all 880 core tests pass.
+  Editor Chromium specs (app-form, app-editor, app-editor-states, app-editor-review,
+  app-graph, app-advanced, app-migration, app-workflows): 29/29 pass. The full browser suite
+  was not rerun for this wording-only slice; the owner plans a final full check.
+
+**Limits:** other fields still lose their own classes (such as `mono`) when the shared error
+attributes apply. That is cosmetic and was left unchanged. Diagnostics for non-string `argv`
+values, such as a number or a non-string item, still show the schema's wording, which can
+only come from hand-written YAML.
 
 ### F2 — readable route inspection on large graphs
 

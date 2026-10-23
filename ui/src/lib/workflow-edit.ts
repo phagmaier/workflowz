@@ -12,7 +12,7 @@ import type {
   WorkflowDocument,
   WorkflowStep,
 } from "../types.ts";
-import { formatCommand } from "./command-line.ts";
+import { formatCommand, parseCommand } from "./command-line.ts";
 import { harnessLabel, humanize, outcomeLabel } from "./format.ts";
 
 export type Doc = Omit<WorkflowDocument, "steps"> & { steps: Record<string, WorkflowStep> };
@@ -598,7 +598,17 @@ export function problems(diagnostics: readonly Diagnostic[], doc: Doc | null): P
         text = `${name}: write a prompt.`;
       else if (field === "argv" && /at least the executable|must not be empty/.test(d.message))
         text = `${name}: enter the command to run.`;
-      else if (field && FIELD_LABEL[field]) text = `${name} · ${FIELD_LABEL[field]}: ${d.message}`;
+      else if (field === "argv" && fourth === undefined && d.code === "invalid_field") {
+        // Form keeps text it can't split as a string; the parser explains how to finish it.
+        const argv = (doc?.steps[second] as { argv?: unknown } | undefined)?.argv;
+        if (typeof argv === "string")
+          text = `${name} · command: ${
+            parseCommand(argv).error ??
+            "write the command as a list of arguments, or retype it in the Command field."
+          }`;
+        else text = `${name} · command: ${d.message}`;
+      } else if (field && FIELD_LABEL[field])
+        text = `${name} · ${FIELD_LABEL[field]}: ${d.message}`;
       return { ...base, text, stepId: second, field, outcome, place: "steps" as const };
     }
     if (head === "project" || head === "tasks") {

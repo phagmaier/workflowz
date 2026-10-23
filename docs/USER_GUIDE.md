@@ -140,7 +140,8 @@ deleting a destination leaves visible problems for you to repair.
 
 For a **Command**, enter a program and its arguments on one line, such as
 `node --version`. Quotes group arguments; backslashes escape characters. Unfinished
-quotes or escapes stay in the draft and block saving. The editor does not add a shell:
+quotes or escapes stay in the draft and block saving; the field and Checker say what to
+finish, such as “Close the double quote.” The editor does not add a shell:
 operators such as `|`, `&&` and `>` require an explicit shell command. See the
 [YAML and terminal reference](#reference-yaml-and-terminal-commands) for an example.
 
