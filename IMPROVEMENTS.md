@@ -1,25 +1,15 @@
 # Workflowz improvement backlog
 
-**Checkpoint — 2026-10-23:** OWNER-1's offline manual walkthrough is prepared. Opt-in
-`WF_OWNER_REVIEW=1` pauses the existing regression in a visible browser at Finished after
-navigation checks; Inspector Resume runs normal cleanup. See OWNER-1 below for the launch
-command and owner tasks. A Form-scoped locator resolves an observed setup race. Three
-sequential focused regressions and headed pause/inspection/Resume pass, with cleanup proven;
-desktop/phone screenshots were reviewed. Owner discoverability feedback remains pending.
-Every listed finding except OWNER-1 is complete. A code review of
-`d7d76ee..HEAD` found three issues, now fixed with regressions (see the UX-1 and F2 review
-follow-ups); `npm run check` (882) and the full offline Chromium suite (66/66) pass. UX-2 (compact
-running controls) is the latest: normal running controls are one row with Stop apart on the
-right. After F2, F1, UX-1 and UX-2, `npm run check` (881 tests) and the full offline Chromium
-suite (65/65) pass. UX-1 (stale run-control feedback) is complete. Success messages
-clear once the run moves on. F1 (command checker guidance) is complete. The checker and
-field now use the command parser's message, such as “Close the double quote.”, instead of the
-schema's type error; UI wording only. F2 (readable route inspection on large graphs) is complete; see
-its section below for the change, checks and limits. It is editor-Graph presentation only. The
-selected step's inspector lists Leads to/Reached from as links that walk the graph. The graph
-highlights that step's routes and connected steps, and zoom keeps the step in view. No layout,
-Fit, run Map, schema or server change. F3 is complete. OWNER-1 remains implemented
-and awaiting the owner's Map/results discoverability feedback. F5/F6 are complete.
+**Checkpoint — 2026-10-23:** all listed findings are complete. After the prepared OWNER-1
+walkthrough, the owner confirmed completed-run navigation is “working and obvious”, closing
+the remaining Map/results discoverability acceptance. The optional offline walkthrough is
+retained below for future use. Its three sequential focused regressions and headed
+pause/inspection/Resume passed, with cleanup proven and desktop/phone screenshots reviewed.
+The latest product checks remain `npm run check` (882 tests) and the full offline Chromium
+suite (66/66), including the UX-1 and F2 review follow-ups. This closeout changes documentation
+only: the backlog status, owner feedback and design reference agree; the local link/anchor
+and `git diff --check` checks pass. No product tests or providers were rerun. F2's optional
+owner comparison with Form remains unverified and does not block its completed acceptance.
 
 **Verification setup restored:** commit `86927af` (removing `.cursor/skills`) had also deleted
 `playwright.config.mjs`, which pins the browser suite: one worker, no retries, the `chromium`
@@ -29,10 +19,8 @@ offline scenarios with one worker and left no output or fixture state. The devel
 reference no longer lists the removed `.cursor/skills/` directory. Biome's exclusion of
 bundled skill directories is unchanged and harmless.
 
-**Next action:** launch the OWNER-1 walkthrough below and collect the owner's validation.
-Record feedback on Finished → Map/results (OWNER-1)
-and, if offered, on F2's route focus (whether it beats Form for checking routes). No other
-actionable finding remains; new work needs new owner feedback or a new finding.
+**Next action:** wait for new owner feedback or a new finding; no actionable backlog work
+remains. Record F2 route-focus feedback if offered (whether it beats Form for checking routes).
 
 This is the single active local backlog, including small plans and continuation notes.
 GitHub is primarily repository storage; tickets, labels and PRs are optional when specifically
@@ -49,7 +37,7 @@ and runtime contracts. If blocked, record why and choose independent work within
 Update the row as work moves through investigation/planning, implementation and verification.
 Keep any longer plan directly below the table under its finding ID: observed behavior,
 bounded proposal, acceptance checks and remaining decisions. Planning alone does not close a
-finding. “Implemented; awaiting owner validation” is distinct from complete, especially OWNER-1.
+finding. “Implemented; awaiting owner validation” is distinct from complete.
 Before ending, update the checkpoint with the selected ID, actual changes, checks/results,
 remaining limits and exact next action. Use [AGENTS.md](AGENTS.md) for the working loop.
 
@@ -68,7 +56,7 @@ historical evidence stays linked. Follow the verification matrix and local commi
 
 | ID | Priority / status | Observed problem | Direction and completion evidence |
 | --- | --- | --- | --- |
-| OWNER-1 | High · implemented; awaiting owner validation | The owner struggled to find the completed run's graph/map again. | Explicit Finished-row Map/results links and a prominent map/results summary action pass offline browser, keyboard and responsive checks. Owner discoverability feedback is still required to close. |
+| OWNER-1 | High · complete | The owner struggled to find the completed run's graph/map again. | Explicit Finished-row Map/results links and a prominent map/results summary action pass offline browser, keyboard and responsive checks. On 2026-10-23 the owner confirmed navigation is “working and obvious”. |
 | F5 | High · complete | A transport/process failure was presented as an agent report/provider failure. | Technical summaries/details, safe bridge causes and neutral settlement wording pass core and browser regressions, including the real bridge through the fake local API, accepted-report/exit-zero failure and no replay. |
 | F6 | High · complete | Passing API/page checks missed browser CRUD that continually erased input. | Optional executable Chromium recipe covers keyboard input and CRUD at desktop/phone widths, reports precise limits, and passes broken/fixed regressions through ordinary command routing. Seven YAML examples validate. |
 | F3 | Medium · complete | Long steps show little activity; 3/3 tasks appeared while integration/audit still remained. | Overview names the task phase (“Run not finished yet” after all tasks), the attempt's recorded stage and time, elapsed with paused time, and Tasks done. Passes unit, focused and full offline Chromium regressions; no live output or progress estimates are implied. |
@@ -434,7 +422,12 @@ checked through existing rewritten status reads; there is no live-provider evide
 
 ### OWNER-1 — completed-run navigation
 
-**Walkthrough preparation (2026-10-23):** requested by the owner; validation stays pending.
+**Owner validation (2026-10-23):** after the prepared walkthrough, the owner confirmed:
+“Ya it's working and obvious”. This satisfies the remaining Map/results discoverability
+acceptance; OWNER-1 is complete.
+
+**Walkthrough preparation (2026-10-23):** requested by the owner; validation was pending
+at preparation and is now complete as recorded above.
 
 - **Observed:** the existing `test/browser/owner-walkthrough.spec.mjs` creates and completes
   the preserved greeting fixture, verifies navigation, then immediately tears it down. It
@@ -476,7 +469,7 @@ Owner tasks, before consulting the expected paths:
 3. Return to Finished and find the saved results directly. Optionally repeat with keyboard
    navigation or a narrower window.
 4. Report whether the map/results are easy to find, where you hesitated, and any confusing
-   label. This is the remaining acceptance evidence, not another automated pass.
+   label. This records the owner's discoverability judgment alongside automated evidence.
 
 Expected paths if help is needed: Finished's **Map** link opens the five-step execution map;
 **View results** in its summary returns to history, where Finish's Output says `FINISH OK`.
@@ -509,8 +502,8 @@ links; after entering Map, Tab reaches a step and Up/Down select steps.
   Referenced paths and command options were checked; no workflow example or product contract
   changed. Temporary verification scripts, screenshots and diagnostic output were removed.
 
-**Remaining:** owner feedback is still required. Automated navigation evidence cannot establish
-the owner's discoverability judgment. Preparation browsers and daemons are closed.
+**Remaining:** none for OWNER-1. Owner validation is recorded above. Preparation browsers
+and daemons were closed after verification.
 
 Reproduced with the preserved owner-walkthrough Chromium fixture: after completion the
 summary offers Refresh run and Open workflow, while Map is a quieter tab below the summary.
@@ -537,12 +530,10 @@ Acceptance checks passed:
 - Local links/anchors resolve in the three updated documents. Disposable fixture owners,
   children, listeners and state are cleaned up.
 
-Remaining acceptance: the owner must confirm that Map/results are now easy to find. The
+Acceptance is complete, including the owner's 2026-10-23 discoverability confirmation. The
 completed path uses real local commands and a scripted agent; stopped states use the
-existing rewritten read fixtures. The full browser suite and live providers were not rerun.
-On 2026-10-22 the owner said they have not tried the updated navigation yet. Keep OWNER-1
-pending until discoverability feedback is recorded. F5/F6 are complete; independent work can
-proceed with F3.
+existing rewritten read fixtures. Owner feedback does not add live-provider or additional
+browser coverage; the recorded automated checks above retain their stated scope.
 
 ### F5 — technical failure attribution
 

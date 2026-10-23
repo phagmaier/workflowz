@@ -52,8 +52,9 @@ Finished rows expose **View results** and **Map** directly. A completed or stopp
 status summary gives **View map** a prominent action; while on Map, that action becomes
 **View results**. It opens the chosen view and moves keyboard focus into its content.
 The existing History/Map links, inspected result and per-attempt output choice persist
-when switching views within the run. These are read-only navigation actions. OWNER-1's
-owner discoverability check remains tracked in [the backlog](../IMPROVEMENTS.md#owner-1--completed-run-navigation).
+when switching views within the run. These are read-only navigation actions. The owner
+confirmed navigation is “working and obvious” on 2026-10-23, completing
+[OWNER-1's discoverability check](../IMPROVEMENTS.md#owner-1--completed-run-navigation).
 
 The run overview keeps task progress, step activity and run time separate. Task names the
 task-loop phase and says **Run not finished yet** once every task is done but the run
