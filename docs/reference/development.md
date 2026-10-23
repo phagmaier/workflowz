@@ -148,7 +148,6 @@ redaction cannot identify every secret loaded by harnesses or tools.
 | `test/browser/` | Disposable daemon/Chromium scenarios |
 | `examples/` | Valid sample definitions and illustrative task inputs |
 | `docs/` | User/design guides, technical references and archived evaluations/history |
-| `.cursor/skills/` | Bundled third-party guidance; use only when relevant to the selected task |
 
 `src/architecture.test.ts` verifies import boundaries. SQLite uses built-in `node:sqlite`; core
 unit/integration tests use `node:test`. Dependency versions are authoritative in `package.json`

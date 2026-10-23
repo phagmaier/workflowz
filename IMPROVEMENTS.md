@@ -6,13 +6,13 @@ separates the task phase, the active attempt's recorded stage/time, elapsed time
 portion, and tasks done. No server, event, schema or polling change. OWNER-1 remains implemented
 and awaiting the owner's Map/results discoverability feedback. F5/F6 are complete.
 
-**Verification setup note:** the owner's commit `86927af` (removing `.cursor/skills`) also
-deleted `playwright.config.mjs`. Without it, `npm run test:browser` loses the pinned settings:
-one worker, no retries, `chromium` channel, timeouts, `WF_BROWSER_OUTPUT` and no traces.
-F3's browser checks ran with the last committed config's settings, copied to a private scratch
-path with an absolute `testDir` and no import, and supplied via `--config`. The repository was not changed. Ask the owner whether to
-restore the file before relying on the bare command. `biome.json` and the development
-reference still mention `.cursor/skills`.
+**Verification setup restored:** commit `86927af` (removing `.cursor/skills`) had also deleted
+`playwright.config.mjs`, which pins the browser suite: one worker, no retries, the `chromium`
+channel, timeouts, `WF_BROWSER_OUTPUT` and no traces. With the owner's go-ahead the file was
+restored byte-for-byte from `86927af^`. The bare `npm run test:browser` then passed all 64
+offline scenarios with one worker and left no output or fixture state. The development
+reference no longer lists the removed `.cursor/skills/` directory. Biome's exclusion of
+bundled skill directories is unchanged and harmless.
 
 **Next independent slice: F2.** Reproduce Fit on a realistic 18-node task/review/repair graph
 offline, then record a bounded proposal for readable selected-path/node focus or collapsed
