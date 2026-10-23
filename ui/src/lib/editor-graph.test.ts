@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { GRAPH_NODE_WIDTH, graphRows, layoutEditorGraph } from "./editor-graph.ts";
+import type { BrowserDraft, ResolvedTransition } from "../types.ts";
+import { GRAPH_NODE_WIDTH, graphRows, incomingRoutes, layoutEditorGraph } from "./editor-graph.ts";
 import { type Doc, exampleDoc } from "./workflow-edit.ts";
 
 test("layout handles branches, joins, self loops, disconnected nodes and dangling routes without overlap", () => {
@@ -77,4 +78,62 @@ test("every return lane stays inside the canvas, including fourth and later outc
       assert.ok(Number(y) > 0 && Number(y) < layout.height, `${edge.from}:${edge.port} y=${y}`);
     }
   }
+});
+
+test("incoming routes list every drawn route into a step, including shared rules and self loops", () => {
+  const doc: Doc = {
+    version: 1,
+    name: "Routes",
+    project: { root: "/tmp" },
+    start: "check",
+    policies: [{ match: { step_ids: ["check"] }, on: { failed: { goto: "fix" } } }],
+    steps: {
+      check: { kind: "command", argv: ["make", "check"], on: { complete: { goto: "done" } } },
+      fix: {
+        kind: "agent",
+        harness: "codex",
+        session: "fresh",
+        prompt: "Fix it",
+        outcomes: ["complete", "blocked", "again"],
+        on: { complete: { goto: "check" }, blocked: { pause: true }, again: { goto: "fix" } },
+      },
+      stray: {
+        kind: "command",
+        argv: ["true"],
+        on: { complete: { goto: "gone" }, failed: { goto: "done" } },
+      },
+      done: { kind: "end" },
+    },
+  } as Doc;
+  const shared = {
+    outcome: "failed",
+    action: { kind: "goto", target: "fix" },
+    source: { level: "step_id_policy", policyIndex: 0 },
+    viaSystemError: false,
+  } as ResolvedTransition;
+  const checked = { transitions: { check: [shared] }, diagnostics: [] } as unknown as BrowserDraft;
+  const rows = new Map(Object.keys(doc.steps).map((id) => [id, graphRows(doc, checked, id)]));
+  assert.deepEqual(incomingRoutes(rows, "fix"), [
+    { from: "check", outcome: "failed", inherited: true },
+    { from: "fix", outcome: "again", inherited: false },
+  ]);
+  assert.deepEqual(incomingRoutes(rows, "done"), [
+    { from: "check", outcome: "complete", inherited: false },
+    { from: "stray", outcome: "failed", inherited: false },
+  ]);
+  assert.deepEqual(incomingRoutes(rows, "check"), [
+    { from: "fix", outcome: "complete", inherited: false },
+  ]);
+  // Pause/retry outcomes and missing destinations are not routes into any step.
+  assert.deepEqual(incomingRoutes(rows, "gone"), []);
+  assert.equal(
+    [...rows.keys()].flatMap((id) => incomingRoutes(rows, id)).length,
+    5,
+    "check→done, check→fix, fix→check, fix→fix, stray→done",
+  );
+  // Before the daemon check, the shared route isn't drawn and isn't listed either.
+  const unchecked = new Map(Object.keys(doc.steps).map((id) => [id, graphRows(doc, null, id)]));
+  assert.deepEqual(incomingRoutes(unchecked, "fix"), [
+    { from: "fix", outcome: "again", inherited: false },
+  ]);
 });

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { noSideScroll, pairApp, shot, WORKFLOW, watchPolicy } from "./app-helpers.mjs";
 import { expect, test } from "./fixture.mjs";
 
@@ -55,6 +56,145 @@ test("fourth-outcome self loops and returns to the first column fit inside the g
   await page.keyboard.press("ArrowDown");
   await noSideScroll(page);
   await shot(page, "g08-graph-fourth-outcome-returns-phone");
+  expect(app.children).toEqual([]);
+  await policy();
+});
+
+test("route focus keeps a large graph's routes readable and walkable at Fit", async ({
+  page,
+  app,
+}) => {
+  const policy = await watchPolicy(page);
+  await page.setViewportSize({ width: 1440, height: 1009 });
+  await pairApp(page, app, "#/workflows/import");
+  // The archived 18-step task/review/repair workflow whose Fit was unreadable (F2).
+  const baseline = new URL(
+    "../../docs/evaluations/equipment-lending/workflows/baseline.yaml",
+    import.meta.url,
+  );
+  await importText(page, app, readFileSync(baseline, "utf8"));
+  const graph = page.getByRole("region", { name: "Workflow graph", exact: true });
+  const panel = page.getByRole("region", { name: "Selected step", exact: true });
+  const routes = panel.getByRole("region", { name: "Routes", exact: true });
+  await expect(graph.locator("[data-node]")).toHaveCount(18);
+  // Shared-rule routes are drawn once the daemon check returns.
+  await expect(
+    graph.getByRole("button", { name: "Slice check: failed → Go to Check repair" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Fit", exact: true }).click();
+  await expect(page.locator(".graph-toolbar")).toContainText("35%");
+
+  const inView = (id) =>
+    graph.evaluate((box, id) => {
+      const outer = box.getBoundingClientRect();
+      const node = document.getElementById(`node-${id}`).getBoundingClientRect();
+      return (
+        node.left >= outer.left - 1 &&
+        node.right <= outer.right + 1 &&
+        node.top >= outer.top - 1 &&
+        node.bottom <= outer.bottom + 1
+      );
+    }, id);
+  const marked = () =>
+    graph.evaluate((box) => ({
+      linked: [...box.querySelectorAll(".graph-node.linked")].map((n) => n.dataset.node).sort(),
+      active: box.querySelectorAll(".graph-wire.active").length,
+    }));
+
+  await graph.getByRole("button", { name: "Configure Unsuccessful", exact: true }).press("Enter");
+  const from = routes.getByRole("list", { name: "Reached from" });
+  const sources = [
+    ["Foundation", "blocked"],
+    ["Foundation repair", "blocked"],
+    ["Foundation recheck", "failed · shared rule"],
+    ["Implement", "blocked"],
+    ["Finalize", "blocked"],
+    ["Repair", "blocked"],
+    ["Check repair", "blocked"],
+    ["Slice recheck", "failed · shared rule"],
+    ["Integrate", "blocked"],
+    ["Audit", "blocked"],
+    ["Acceptance", "failed · shared rule"],
+  ];
+  await expect(from.getByRole("listitem")).toHaveText(
+    sources.map(([step, outcome]) => `${step}${outcome}`),
+  );
+  await expect(routes).toContainText("Nothing. The workflow completes here.");
+  // The route list is full-size text even though the graph is at 35%.
+  const size = await from
+    .getByRole("listitem")
+    .first()
+    .evaluate((li) => li.getBoundingClientRect().height);
+  expect(size).toBeGreaterThanOrEqual(16);
+  expect(await marked()).toEqual({
+    linked: [
+      "acceptance",
+      "audit",
+      "check_repair",
+      "finalize",
+      "foundation",
+      "foundation_recheck",
+      "foundation_repair",
+      "implement",
+      "integrate",
+      "repair",
+      "slice_recheck",
+    ],
+    active: 11,
+  });
+  expect(await inView("unsuccessful")).toBe(true);
+  await shot(page, "g09-route-focus-fit");
+
+  // Walk routes with the keyboard: back along an incoming route, then forward along an outcome.
+  await from.getByRole("button", { name: "Foundation repair", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(graph.locator('[data-node="foundation_repair"]')).toHaveClass(/selected/);
+  await expect(page.locator("#graph-routes")).toBeFocused();
+  await expect(routes.getByRole("list", { name: "Leads to" }).getByRole("listitem")).toHaveText([
+    "completeFoundation recheck",
+    "blockedUnsuccessful",
+  ]);
+  expect(await inView("foundation_repair")).toBe(true);
+  await page.keyboard.press("Tab");
+  await expect(routes.getByRole("button", { name: "Foundation recheck" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(graph.locator('[data-node="foundation_recheck"]')).toHaveClass(/selected/);
+  await expect(page.locator("#graph-routes")).toBeFocused();
+  await expect(routes.getByRole("list", { name: "Leads to" }).getByRole("listitem")).toHaveText([
+    "completePick task",
+    "failedUnsuccessful · shared rule",
+  ]);
+  expect(await marked()).toEqual({
+    linked: ["foundation_repair", "pick_task", "unsuccessful"],
+    active: 3,
+  });
+
+  // Zooming keeps the selected step in view.
+  for (let i = 0; i < 3; i++) {
+    await page.getByRole("button", { name: "Zoom in" }).click();
+    expect(await inView("foundation_recheck")).toBe(true);
+  }
+  await expect(page.locator(".graph-toolbar")).toContainText("80%");
+  await shot(page, "g10-route-focus-zoomed");
+
+  await routes.getByRole("button", { name: "Pick task" }).click();
+  await routes
+    .getByRole("list", { name: "Reached from" })
+    .getByRole("button", { name: "Foundation check" })
+    .click();
+  await routes
+    .getByRole("list", { name: "Reached from" })
+    .getByRole("button", { name: "Foundation" })
+    .click();
+  await expect(routes).toContainText("The run starts here.");
+  await expect(routes.getByRole("list", { name: "Reached from" })).toHaveCount(0);
+  await noSideScroll(page);
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(routes.getByRole("list", { name: "Leads to" })).toBeVisible();
+    await noSideScroll(page);
+    await shot(page, `g11-route-focus-${width}`);
+  }
   expect(app.children).toEqual([]);
   await policy();
 });

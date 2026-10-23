@@ -1,9 +1,10 @@
 # Workflowz improvement backlog
 
-**Checkpoint — 2026-10-23:** F3 (progress and timing during long steps) is complete; see
-its section below for the change, checks and limits. It is presentation only: the run overview
-separates the task phase, the active attempt's recorded stage/time, elapsed time with its paused
-portion, and tasks done. No server, event, schema or polling change. OWNER-1 remains implemented
+**Checkpoint — 2026-10-23:** F2 (readable route inspection on large graphs) is complete; see
+its section below for the change, checks and limits. It is editor-Graph presentation only. The
+selected step's inspector lists Leads to/Reached from as links that walk the graph. The graph
+highlights that step's routes and connected steps, and zoom keeps the step in view. No layout,
+Fit, run Map, schema or server change. F3 is complete. OWNER-1 remains implemented
 and awaiting the owner's Map/results discoverability feedback. F5/F6 are complete.
 
 **Verification setup restored:** commit `86927af` (removing `.cursor/skills`) had also deleted
@@ -14,9 +15,9 @@ offline scenarios with one worker and left no output or fixture state. The devel
 reference no longer lists the removed `.cursor/skills/` directory. Biome's exclusion of
 bundled skill directories is unchanged and harmless.
 
-**Next independent slice: F2.** Reproduce Fit on a realistic 18-node task/review/repair graph
-offline, then record a bounded proposal for readable selected-path/node focus or collapsed
-repair routes before implementing. Record owner feedback on Finished → Map/results when available.
+**Next independent slice: F1.** Reproduce the checker's array/string schema error for an
+unfinished quoted command offline, then record a bounded proposal under F1 before implementing.
+Record owner feedback on Finished → Map/results (OWNER-1) and, if offered, on F2's route focus.
 
 This is the single active local backlog, including small plans and continuation notes.
 GitHub is primarily repository storage; tickets, labels and PRs are optional when specifically
@@ -56,7 +57,7 @@ historical evidence stays linked. Follow the verification matrix and local commi
 | F5 | High · complete | A transport/process failure was presented as an agent report/provider failure. | Technical summaries/details, safe bridge causes and neutral settlement wording pass core and browser regressions, including the real bridge through the fake local API, accepted-report/exit-zero failure and no replay. |
 | F6 | High · complete | Passing API/page checks missed browser CRUD that continually erased input. | Optional executable Chromium recipe covers keyboard input and CRUD at desktop/phone widths, reports precise limits, and passes broken/fixed regressions through ordinary command routing. Seven YAML examples validate. |
 | F3 | Medium · complete | Long steps show little activity; 3/3 tasks appeared while integration/audit still remained. | Overview names the task phase (“Run not finished yet” after all tasks), the attempt's recorded stage and time, elapsed with paused time, and Tasks done. Passes unit, focused and full offline Chromium regressions; no live output or progress estimates are implied. |
-| F2 | Medium · open | Fit shrank an 18-node graph to unreadable 35%; Form was easier to inspect. | Explore readable selected-path/node focus or collapsed repair sections, keeping every route inspectable. Test the proposed interaction. |
+| F2 | Medium · complete | Fit shrank an 18-node graph to unreadable 35%; Form was easier to inspect. | Selected-step route focus: readable Leads to/Reached from links walk routes from the inspector; the graph highlights that step's routes and connected steps; zoom keeps it in view. Passes unit, new 18-step Chromium regression and the full offline suite. |
 | F1 | Medium · open | Checker showed an array/string schema error instead of “Close the double quote”. | Carry the useful command-parser message into the checker, suppress duplicate noise and preserve Fix focus. |
 | UX-1 | Low · open | “Foundation runs again” feedback stayed visible during later tasks. | Use past tense or clear transient feedback when execution advances. |
 | UX-2 | Low · open | The large Pause/Stop panel pushes history and results down. | Explore compact normal-running controls with Stop still distinct and accessible. |
@@ -64,6 +65,83 @@ historical evidence stays linked. Follow the verification matrix and local commi
 Sources: [owner walkthrough feedback](docs/evaluations/owner-walkthrough.md#owner-feedback),
 [full trial findings](docs/evaluations/equipment-lending/EVALUATION.md#findings),
 [prioritized critique](docs/evaluations/equipment-lending/EVALUATION.md#prioritized-recommendations-and-limits).
+
+### F2 — readable route inspection on large graphs
+
+**Observed:** reproduced on 2026-10-23 offline in Chromium by importing the archived
+18-step [baseline workflow](docs/evaluations/equipment-lending/workflows/baseline.yaml) at
+1440×1009. The laid-out canvas is 3344×1274 px. Fit reaches its 35% floor and still overflows
+the 1142 px viewport. Outcome text renders at about 4 px (11 px × 0.35). Thirteen of 31 routes
+are back or skip routes drawn through shared dashed lanes below the nodes, where they can't
+be told apart. Selecting a step outlines its own wires, but there is no readable way to
+see which routes reach a step. Unsuccessful is reached from 11 routes across the whole canvas,
+some through shared rules. At 100% the outcome text is readable, but only about three columns
+are visible. Following a route then means scrolling along a lane. The run Map uses its own
+vertical layout with full-size labels and was not part of the evidence.
+
+**Result and scope:** at any zoom, the selected step's routes are readable and can be followed
+from the Graph alone. Every route remains drawn; nothing is hidden or collapsed.
+
+- The step inspector starts with a **Routes** section. **Leads to** lists each outcome and
+  its destination. **Reached from** lists each incoming route (source step and outcome,
+  marked when it comes from a shared rule) and notes when the run starts here. A destination
+  or source step is a button that selects that step, keeps it in view and moves focus to that
+  step's Routes, so keyboard users can walk the graph route by route.
+- In the graph, the selected step's routes stay highlighted, other routes fade and connected
+  steps are outlined. This makes the selected step's neighbourhood visible even at Fit.
+- Zooming with a step selected keeps that step in view.
+- Excluded: run Map changes, collapsing repair sections (which would hide routes and need
+  grouping rules), layout algorithm or Fit floor changes, manual placement, and Form view
+  changes. Selecting a step from a route doesn't change the document or execution.
+
+**Acceptance:**
+
+1. A new `app-graph.spec.mjs` scenario imports the archived baseline at 1440 px and fails
+   before the change. After Fit, selecting Unsuccessful lists all 11 incoming routes,
+   including shared-rule routes, at normal text size. Activating a Reached from entry selects
+   that step, keeps its node in view and moves focus to its Routes. Leads to returns to the
+   destination. The graph marks exactly the selected step's routes and connected steps. Zoom
+   keeps the selected step in view. Keyboard-only use works, the start step says the run starts
+   there, there is no page overflow at 1440/390/320 px, and screenshots are visually reviewed.
+2. A unit test derives Reached from from route rows of an independent example, covering self
+   loops, missing destinations, pause outcomes, shared rules before and after the daemon check.
+3. Existing graph scenarios and `npm run check` pass. The full offline Chromium suite passes
+   sequentially, because the inspector is shared editor UI. DESIGN and USER_GUIDE describe
+   the behavior.
+
+**Decisions:** none blocking. Route focus is an additive inspection aid within the approved
+Graph and automatic layout. If the owner still finds large graphs hard to read after
+trying it, collapsible repair sections or a different Fit remain open options.
+
+**Implemented:** `incomingRoutes` in `ui/src/lib/editor-graph.ts` derives Reached from from the
+same rows that draw the wires, so lists and wires agree (shared-rule routes appear once the
+daemon check returns). `GraphTab.tsx` adds the inspector's Routes section, marks connected
+steps (`linked`) and fades other wires while a step is selected. It also re-runs the
+keep-in-view scroll when the zoom changes. Step links reuse the existing selection and focus
+the Routes heading. No layout, Fit floor, Form, run Map, schema or server change.
+
+**Acceptance passed:**
+
+- New scenario `route focus keeps a large graph's routes readable and walkable at Fit` failed
+  on the unchanged UI (no Reached from list) and passes after. At Fit (35%), Unsuccessful lists
+  all 11 incoming routes in authored order. That includes three shared-rule `failed` routes,
+  rendered at full size. Exactly 11 wires and the 11 source steps are marked, and the step
+  stays in view. Keyboard Enter/Tab walk Unsuccessful → Foundation repair → Foundation
+  recheck, with focus on Routes each time. Three zoom-ins keep the selected node inside the
+  viewport. Foundation reports “The run starts here.” There is no overflow at 1440/390/320 px,
+  no owned children and no CSP violation. Fit, zoomed and phone screenshots were visually
+  reviewed, along with the existing graph screenshots.
+- Unit test `incoming routes list every drawn route into a step…` passes. It covers shared rules
+  before/after the check, self loop, pause outcome and missing destination.
+- `npm run check`: typecheck, lint (the existing CSS warning only) and all 879 offline core
+  tests pass. `npm run test:browser`, run sequentially afterwards: all 65 offline Chromium
+  scenarios pass (4.1 min). No provider was called; fixture state and listeners were removed.
+
+**Limits:** at Fit the graph itself is still too small to read, and the 35% floor still
+overflows the viewport for this graph. Readability comes from the inspector, not the canvas.
+Shared lanes below the nodes remain hard to follow without a selection. Route lists show
+direct neighbours only, not whole multi-step paths. Owner use has not yet confirmed this is
+easier than Form for checking routes.
 
 ### F3 — progress and timing during long steps
 

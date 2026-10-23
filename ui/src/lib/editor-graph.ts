@@ -33,6 +33,23 @@ export function graphRows(doc: Doc, checked: BrowserDraft | null, id: string) {
   });
 }
 
+export type GraphRow = ReturnType<typeof graphRows>[number];
+export interface GraphRoute {
+  from: string;
+  outcome: string;
+  inherited: boolean;
+}
+
+/** Routes that reach a step, in authored step and outcome order, matching the drawn wires. */
+export function incomingRoutes(rows: ReadonlyMap<string, readonly GraphRow[]>, id: string) {
+  const routes: GraphRoute[] = [];
+  for (const [from, list] of rows)
+    for (const row of list)
+      if (row.target === id && !row.missing)
+        routes.push({ from, outcome: row.outcome, inherited: row.inherited });
+  return routes;
+}
+
 export interface GraphMeasure {
   height: number;
   ports: number[];

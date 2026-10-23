@@ -2267,6 +2267,11 @@ button.problem:hover {
 .graph-wire.loop {
   stroke-dasharray: 5 3;
 }
+/* A selected step's routes stand out from the rest of the graph, even at Fit. */
+.graph-canvas.focused .graph-wire:not(.active) {
+  stroke: var(--edge-faint);
+  opacity: 0.45;
+}
 .graph-arrow {
   fill: var(--accent);
 }
@@ -2282,6 +2287,9 @@ button.problem:hover {
   box-shadow:
     0 0 0 2px var(--accent-soft),
     0 5px 18px #0004;
+}
+.graph-node.linked {
+  border-color: var(--ok-line);
 }
 .graph-node.has-problem {
   border-color: var(--warn-strong);
@@ -2404,6 +2412,45 @@ button.problem:hover {
   z-index: 1;
   border-bottom: 1px solid var(--line);
   margin-bottom: 14px;
+}
+.graph-routes {
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.graph-routes .h3 {
+  margin-top: 0;
+}
+.graph-routes h4 {
+  margin: 12px 0 6px;
+}
+.graph-routes ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.graph-route {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+.graph-route-outcome {
+  color: var(--muted-strong);
+}
+.graph-routes .link {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.graph-routes small {
+  color: var(--faint);
+}
+.graph-route.missing {
+  color: var(--warn);
+}
+.graph-routes .hint {
+  margin: 0 0 4px;
 }
 .graph-inspector .form-head {
   display: block;

@@ -4,7 +4,10 @@ import {
   GRAPH_KIND,
   GRAPH_NODE_WIDTH,
   type GraphMeasure,
+  type GraphRoute,
+  type GraphRow,
   graphRows,
+  incomingRoutes,
   layoutEditorGraph,
 } from "../lib/editor-graph.ts";
 import { humanize } from "../lib/format.ts";
@@ -43,6 +46,11 @@ export function GraphTab({
     doc.start,
     measured,
   );
+  const incoming = selected ? incomingRoutes(rows, selected) : [];
+  const linked = new Set([
+    ...incoming.map((route) => route.from),
+    ...(selected ? (rows.get(selected) ?? []).map((row) => row.target) : []),
+  ]);
 
   // Measure real wrapped text, including long labels, instead of clipping node content.
   // biome-ignore lint/correctness/useExhaustiveDependencies: new nodes need observing after model edits.
@@ -68,12 +76,14 @@ export function GraphTab({
     return () => observer.disconnect();
   }, [doc, state.draft]);
 
+  // Zooming or fitting keeps the selected step in view.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scale moves the node within the viewport.
   useLayoutEffect(() => {
     if (selected)
       document
         .getElementById(`node-${selected}`)
         ?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [selected]);
+  }, [selected, scale]);
 
   const select = (id: string, focus = true, field = "step-title") => {
     session.set({ selected: id || null });
@@ -168,7 +178,7 @@ export function GraphTab({
           >
             <div style={{ width: layout.width * scale, height: layout.height * scale }}>
               <div
-                className="graph-canvas"
+                className={`graph-canvas ${selected ? "focused" : ""}`}
                 ref={canvas}
                 style={{ width: layout.width, height: layout.height, transform: `scale(${scale})` }}
               >
@@ -212,7 +222,7 @@ export function GraphTab({
                     <article
                       key={node.id}
                       data-node={node.id}
-                      className={`graph-node ${node.id === selected ? "selected" : ""} ${errors ? "has-problem" : ""}`}
+                      className={`graph-node ${node.id === selected ? "selected" : linked.has(node.id) ? "linked" : ""} ${errors ? "has-problem" : ""}`}
                       style={{ left: node.x, top: node.y, width: GRAPH_NODE_WIDTH }}
                       aria-label={`Step ${humanize(node.id)}`}
                     >
@@ -297,6 +307,13 @@ export function GraphTab({
                 Close settings
               </button>
             </div>
+            <StepRoutes
+              doc={doc}
+              stepId={selected}
+              outgoing={rows.get(selected) ?? []}
+              incoming={incoming}
+              onFollow={(id) => select(id, true, "graph-routes")}
+            />
             <StepForm
               key={`${state.opened}:${selected}`}
               ctx={ctx}
@@ -312,6 +329,71 @@ export function GraphTab({
           </section>
         ) : null}
       </div>
+    </section>
+  );
+}
+
+/** Readable routes for the selected step at any zoom; each step link moves the selection along it. */
+function StepRoutes({
+  doc,
+  stepId,
+  outgoing,
+  incoming,
+  onFollow,
+}: {
+  doc: Doc;
+  stepId: string;
+  outgoing: readonly GraphRow[];
+  incoming: readonly GraphRoute[];
+  onFollow: (id: string) => void;
+}) {
+  const step = (id: string) => (
+    <button type="button" className="link" onClick={() => onFollow(id)}>
+      {humanize(id)}
+    </button>
+  );
+  return (
+    <section className="graph-routes" aria-labelledby="graph-routes">
+      <h3 className="h3" id="graph-routes" tabIndex={-1}>
+        Routes
+      </h3>
+      <h4 className="kind-label" id="graph-routes-out">
+        Leads to
+      </h4>
+      {outgoing.length ? (
+        <ul aria-labelledby="graph-routes-out">
+          {outgoing.map((row) => (
+            <li key={row.outcome} className={`graph-route ${row.missing ? "missing" : ""}`}>
+              <code className="graph-route-outcome">{row.outcome}</code>
+              <span>
+                {row.target && !row.missing ? step(row.target) : row.label}
+                {row.inherited && !row.missing ? <small> · shared rule</small> : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="hint">Nothing. The workflow completes here.</p>
+      )}
+      <h4 className="kind-label" id="graph-routes-in">
+        Reached from
+      </h4>
+      {doc.start === stepId ? <p className="hint">The run starts here.</p> : null}
+      {incoming.length ? (
+        <ul aria-labelledby="graph-routes-in">
+          {incoming.map((route) => (
+            <li key={`${route.from}:${route.outcome}`} className="graph-route">
+              <span>{step(route.from)}</span>
+              <span>
+                <code className="graph-route-outcome">{route.outcome}</code>
+                {route.inherited ? <small> · shared rule</small> : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : doc.start !== stepId ? (
+        <p className="hint">No step leads here yet.</p>
+      ) : null}
     </section>
   );
 }

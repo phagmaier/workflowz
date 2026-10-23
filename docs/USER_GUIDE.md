@@ -115,6 +115,14 @@ what happens after that result. **Tidy up**, **Fit** and the zoom controls help 
 branches and loops. Layout is automatic; scroll inside a large graph if Fit makes labels
 too small.
 
+A selected step's settings start with **Routes**, in normal-size text at any zoom.
+**Leads to** lists each Outcome and where it goes. **Reached from** lists every step and
+Outcome that leads to this step, including routes from shared rules, and says when the
+run starts here. Select a step name in either list to move to that step; focus moves to
+its Routes, so you can follow a path with the keyboard. In the graph, the selected step's
+routes stay highlighted, other routes fade, and the steps it connects to are outlined.
+Zooming keeps the selected step in view. Selecting steps never edits the workflow.
+
 In **Form**, select a step in the table to configure it beside the table. Outcome buttons
 take you to the matching destination field. On smaller screens, settings appear below
 the steps; **Back to steps** returns you to the list. With a step's table button focused,

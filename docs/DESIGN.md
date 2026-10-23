@@ -123,6 +123,12 @@ preserve the engine contracts.
   (the run stays paused), then Resume; "Stop the run" is a single action.
 - **2026-10-21:** Graph layout is automatic with a Tidy up action. Manual placement is deferred;
   it would need saved node positions, which the workflow format does not have.
+- **2026-10-23:** Implemented for F2 (not a separate owner decision): large graphs are inspected
+  through route focus rather than a larger Fit or collapsed sections. The selected step's inspector lists Leads to and Reached from in
+  readable text, with step links that move the selection along a route. The graph highlights
+  that step's routes, fades the others and outlines connected steps; zoom keeps it in view.
+  Every route stays drawn. Collapsing repair sections remains an option only if owner use
+  shows route focus is insufficient. The run Map's separate vertical layout is unchanged.
 - **2026-10-21:** Project folders are pasted as paths in the browser-served UI during development.
   The desktop app must use the operating system's folder picker; this is required, not optional.
   The browser UI does not gain daemon filesystem browsing.
