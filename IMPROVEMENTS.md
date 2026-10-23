@@ -1,6 +1,7 @@
 # Workflowz improvement backlog
 
-**Checkpoint — 2026-10-23:** F1 (command checker guidance) is complete. The checker and
+**Checkpoint — 2026-10-23:** UX-1 (stale run-control feedback) is complete. Success messages
+clear once the run moves on. F1 (command checker guidance) is complete. The checker and
 field now use the command parser's message, such as “Close the double quote.”, instead of the
 schema's type error; UI wording only. F2 (readable route inspection on large graphs) is complete; see
 its section below for the change, checks and limits. It is editor-Graph presentation only. The
@@ -17,8 +18,8 @@ offline scenarios with one worker and left no output or fixture state. The devel
 reference no longer lists the removed `.cursor/skills/` directory. Biome's exclusion of
 bundled skill directories is unchanged and harmless.
 
-**Next independent slice: UX-1.** Reproduce the stale “Resumed… runs again” feedback
-staying visible as execution advances, then record a bounded proposal under UX-1 before
+**Next independent slice: UX-2.** Reproduce the large Pause/Stop panel pushing history and
+results down during normal running, then record a bounded proposal under UX-2 before
 implementing. Record owner feedback on Finished → Map/results (OWNER-1) and, if offered,
 on F2's route focus.
 
@@ -62,12 +63,66 @@ historical evidence stays linked. Follow the verification matrix and local commi
 | F3 | Medium · complete | Long steps show little activity; 3/3 tasks appeared while integration/audit still remained. | Overview names the task phase (“Run not finished yet” after all tasks), the attempt's recorded stage and time, elapsed with paused time, and Tasks done. Passes unit, focused and full offline Chromium regressions; no live output or progress estimates are implied. |
 | F2 | Medium · complete | Fit shrank an 18-node graph to unreadable 35%; Form was easier to inspect. | Selected-step route focus: readable Leads to/Reached from links walk routes from the inspector; the graph highlights that step's routes and connected steps; zoom keeps it in view. Passes unit, new 18-step Chromium regression and the full offline suite. |
 | F1 | Medium · complete | Checker showed an array/string schema error instead of “Close the double quote”. | Checker uses the command parser's message for text it can't split; the field shows it once as its error description; Fix focus unchanged. Passes daemon-checked unit and Chromium regressions. |
-| UX-1 | Low · open | “Foundation runs again” feedback stayed visible during later tasks. | Use past tense or clear transient feedback when execution advances. |
+| UX-1 | Low · complete | “Foundation runs again” feedback stayed visible during later tasks. | A control's success message clears once the run moves to another step or state; errors stay. Passes unit and extended Chromium regressions. |
 | UX-2 | Low · open | The large Pause/Stop panel pushes history and results down. | Explore compact normal-running controls with Stop still distinct and accessible. |
 
 Sources: [owner walkthrough feedback](docs/evaluations/owner-walkthrough.md#owner-feedback),
 [full trial findings](docs/evaluations/equipment-lending/EVALUATION.md#findings),
 [prioritized critique](docs/evaluations/equipment-lending/EVALUATION.md#prioritized-recommendations-and-limits).
+
+### UX-1 — stale run-control feedback
+
+**Observed:** in `RunControls.tsx`, a control's success message stays in the controls panel
+until another control is sent. Running shows any result other than Pause/Stop; paused shows
+any result other than its own decisions. So “Started…” and “Resumed. Foundation runs again
+from the beginning.” stay visible while later steps run (the evaluation's
+[task-2 screenshot](docs/evaluations/equipment-lending/evidence/32-task-one-repaired.png)).
+“Pause requested. The current step finishes first…” also stays visible after the run has
+paused. The F3 Chromium scenario (start → pause → resume → Integrate) exercises this path.
+
+**Result and scope:** a successful control message stays visible only while it still
+describes the run. That is the same step while it starts or runs after Start/Resume, the same
+step while pausing after Pause, and the same paused state after Apply. It also covers a
+finished run's Stop result. Once the run moves to another step or state, the message goes;
+the heading, overview and History show what happened. Pending, failed and unknown results
+are unchanged, as are wording, controls, requests and polling.
+
+**Acceptance:**
+
+1. A unit test covers the visibility rule for Start, Pause → pausing/paused, Resume with the
+   same or a later step, Apply while still paused (including a moved cursor) and a stopped run.
+2. The F3 scenario is extended and fails before the change. It checks that “Pause
+   requested” shows while pausing and is gone once paused. “Resumed” is gone once the run is
+   at Integrate, and only Start/Pause/Resume are sent.
+3. `npm run check` and the run-control browser specs (run-details, run-review, intervene,
+   runs) pass, including the existing paused Apply/Resume feedback scenarios.
+
+**Decisions:** none.
+
+**Implemented:** `useControl` (in `RunControls.tsx`) records the run's status and current
+step when a control is sent. The pure `feedbackCurrent` in `ui/src/lib/run-copy.ts` decides
+whether a success result still applies. It applies at the same step while it starts, runs or
+pauses; in the same paused state after Apply, even when the next step moved; and for a
+stopped or completed run. Stale success results are no longer returned. Pending, error and
+unknown results, wording, requests and polling are unchanged.
+
+**Acceptance passed:**
+
+- New unit test `keeps a success message only while the run is where the message describes`
+  covers Start, Pause → pausing/paused, Resume to the same or a later step, Apply with a moved
+  cursor, interruption and stopped/completed runs.
+- The extended F3 scenario failed on the unchanged UI: “Pause requested.” was still shown
+  after “Paused at your request”. After the change it passes. “Started.” shows while Foundation
+  runs, “Pause requested.” while pausing and neither once paused. At Integrate there is no
+  “Resumed.”/“Started.”, and only Start/Pause/Resume are sent.
+- `npm run check`: typecheck, lint (existing CSS warning only) and all 881 core tests pass.
+  Run-control Chromium specs (run-details, run-review, intervene, runs, runs-groups, review,
+  revise, session-review, failures, lifetime, owner-walkthrough): 34/34 pass. app-migration:
+  4/4 pass, including the existing “Still paused” Apply confirmations.
+
+**Limits:** if the run has already moved past the resumed step before the next poll, the
+Resume confirmation may never appear; the heading and History then show the change. A step
+that loops back to itself keeps its message. The full browser suite was not rerun for this slice.
 
 ### F1 — command checker guidance
 

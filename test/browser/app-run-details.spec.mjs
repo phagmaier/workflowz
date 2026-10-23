@@ -571,14 +571,19 @@ test("long steps show their activity and attempt time; finished tasks don't read
   await expect(fact("Elapsed")).toContainText("since start");
   await expect(fact("Elapsed")).not.toContainText("paused");
   await expect(detail(page, "Foundation")).toContainText("Workflowz doesn't show live output");
+  await expect(page.getByText("Started. It keeps going if you close this browser.")).toBeVisible();
   await takeShot(page, "progress-foundation");
 
   // Pause after the step, then resume: paused time is named, not hidden inside elapsed.
   await page.getByRole("button", { name: "Pause after this step", exact: true }).click();
   await expect(heading).toContainText("Pausing after Foundation finishes");
   await expect(fact("Current step")).toContainText("Command running");
+  const pauseFeedback = page.getByText(/^Pause requested\./);
+  await expect(pauseFeedback).toBeVisible();
   writeFileSync(path.join(app.root, "release-foundation"), "release\n");
   await expect(heading).toContainText("Paused at your request");
+  // Control feedback describes where the run was; once it moves on, it doesn't linger (UX-1).
+  await expect(pauseFeedback).toHaveCount(0);
   await expect(fact("Next step")).toHaveText("Pick · Pick the next task");
   const refresh = page.getByRole("button", { name: "Refresh run", exact: true });
   await expect(async () => {
@@ -591,6 +596,8 @@ test("long steps show their activity and attempt time; finished tasks don't read
 
   // All tasks done while integration continues: the run is clearly not finished.
   await expect(heading).toContainText("Running — Integrate");
+  await expect(page.getByText(/^Resumed\./)).toHaveCount(0);
+  await expect(page.getByText(/^Started\./)).toHaveCount(0);
   await expect(fact("Task")).toHaveText(/^All 2 done\s*Run not finished yet$/);
   await expect(fact("Tasks done")).toContainText("2/2");
   await expect(page.locator(".lede").first()).toContainText(

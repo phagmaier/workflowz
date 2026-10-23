@@ -3,6 +3,7 @@ import { ApiError, describeFailure } from "../api.ts";
 import { useConnection } from "../connection.tsx";
 import { harnessLabel, humanize } from "../lib/format.ts";
 import type { HistoryItem } from "../lib/history.ts";
+import { feedbackCurrent, type RunPlace } from "../lib/run-copy.ts";
 import { runHref } from "../route.ts";
 import type { RunData } from "../run-data.ts";
 import { useRuns } from "../runs-data.tsx";
@@ -13,18 +14,23 @@ type Control = Extract<BrowserRequest, { expectedEventId: number }>;
 export interface LastResult {
   key: string;
   value: FeedbackState;
+  sent?: RunPlace | null;
 }
 
+const placeOf = (status: BrowserRunStatus | null): RunPlace | null =>
+  status ? { status: status.run.status, cursor: status.run.cursorStepId } : null;
+
 /** Sends one deliberate control and reports the result where it was taken. Never retried. */
-export function useControl(runId: string, refresh: () => void) {
+export function useControl(runId: string, refresh: () => void, status: BrowserRunStatus | null) {
   const { mutate } = useConnection();
   const runs = useRuns();
   const [result, setResult] = useState<LastResult>({ key: "", value: null });
   const send = async (key: string, request: Control, pending: string, done: string) => {
+    const sent = placeOf(status);
     setResult({ key, value: { kind: "pending", text: pending } });
     try {
       await mutate(key, request);
-      setResult({ key, value: { kind: "ok", text: done } });
+      setResult({ key, value: { kind: "ok", text: done }, sent });
       return true;
     } catch (error) {
       const unknown = error instanceof ApiError && error.kind === "unreachable";
@@ -39,7 +45,10 @@ export function useControl(runId: string, refresh: () => void) {
       runs.refresh();
     }
   };
-  return { result, send, runId };
+  const now = placeOf(status);
+  const stale =
+    result.value?.kind === "ok" && result.sent && now && !feedbackCurrent(result.sent, now);
+  return { result: stale ? { key: "", value: null } : result, send, runId };
 }
 type Controller = ReturnType<typeof useControl>;
 

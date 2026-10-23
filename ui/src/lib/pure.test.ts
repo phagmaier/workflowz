@@ -9,6 +9,7 @@ import { layoutMap } from "./map-layout.ts";
 import {
   attemptActivity,
   describeRun,
+  feedbackCurrent,
   needsAttention,
   pausedMs,
   RUN_GROUPS,
@@ -111,6 +112,30 @@ describe("map layout", () => {
     assert.equal(edge("b", "a")?.lane, 0);
     assert.equal(edge("c", "a")?.lane, 1);
     for (const e of layout.edges) assert.ok(e.labelX >= 0 && e.labelX <= layout.width, e.label);
+  });
+});
+
+describe("control feedback", () => {
+  it("keeps a success message only while the run is where the message describes", () => {
+    const at = (status: RunStatus, cursor: string) => ({ status, cursor });
+    // Start: shown while the first step starts and runs, gone once a later step runs.
+    assert.equal(feedbackCurrent(at("ready", "build"), at("ready", "build")), true);
+    assert.equal(feedbackCurrent(at("ready", "build"), at("running", "build")), true);
+    assert.equal(feedbackCurrent(at("ready", "build"), at("running", "test")), false);
+    // Pause: shown while pausing after the step, gone once paused.
+    assert.equal(feedbackCurrent(at("running", "build"), at("pausing", "build")), true);
+    assert.equal(feedbackCurrent(at("running", "build"), at("paused", "build")), false);
+    assert.equal(feedbackCurrent(at("running", "build"), at("paused", "test")), false);
+    // Resume: the resumed step runs again or next; a later step or pause makes it history.
+    assert.equal(feedbackCurrent(at("paused", "build"), at("running", "build")), true);
+    assert.equal(feedbackCurrent(at("paused", "pick"), at("running", "integrate")), false);
+    assert.equal(feedbackCurrent(at("paused", "build"), at("paused", "build")), true);
+    assert.equal(feedbackCurrent(at("paused", "build"), at("interrupted", "build")), false);
+    // Apply keeps the run paused even when it moves the next step.
+    assert.equal(feedbackCurrent(at("paused", "build"), at("paused", "deploy")), true);
+    // A stopped or completed run keeps its final result.
+    assert.equal(feedbackCurrent(at("running", "build"), at("stopped", "build")), true);
+    assert.equal(feedbackCurrent(at("paused", "build"), at("completed", "done")), true);
   });
 });
 

@@ -138,7 +138,7 @@ function ReadyPlan({ data }: { data: RunData }) {
 export function RunPage({ runId, tab }: { runId: string; tab: "details" | "map" }) {
   const data = useRunData(runId);
   const { names, refresh: refreshRuns } = useRuns();
-  const control = useControl(runId, data.refresh);
+  const control = useControl(runId, data.refresh, data.status);
   const { status, events, reports } = data;
   const runStatus = status?.run.status;
   useEffect(() => {

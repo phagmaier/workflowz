@@ -303,6 +303,10 @@ While running, **Pause after this step** lets the current step finish and settle
 pausing. **Pausing** means the service is still waiting for that settlement. A workflow
 Outcome can also pause the run for you.
 
+A confirmation such as “Pause requested” or “Resumed” stays beside the controls while it
+still describes the run. Once the run moves to another step or state, it disappears; the
+heading and History show what happened. Errors stay until you act again.
+
 A paused run offers choices under **What should happen next?**. Available choices depend
 on its current step and task state. Every manual decision needs a reason, saved in History.
 
